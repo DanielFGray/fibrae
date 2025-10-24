@@ -1,0 +1,28 @@
+id: no-console-log
+language: TypeScript
+message: Use Effect.log() instead of console.log() for Effect-based programs
+severity: error
+note: "Import with: `import { Effect } from 'effect'`; do not bypass or you will not be able to read the logs since they will not be intercepted and sent to the dev server"
+rule:
+  pattern: console.log($$$ARGS)
+fix: Effect.log($$$ARGS)
+---
+
+id: no-console-info
+language: TypeScript
+message: Use Effect.logInfo() instead of console.info() for Effect-based programs
+severity: error
+note: "Import with: `import { Effect } from 'effect'`; do not bypass or you will not be able to read the logs since they will not be intercepted and sent to the dev server"
+rule:
+  pattern: console.info($$$ARGS)
+fix: Effect.logInfo($$$ARGS)
+---
+
+id: no-console-debug
+language: TypeScript
+message: Use Effect.logDebug() instead of console.debug() for Effect-based programs
+severity: error
+note: "Import with: `import { Effect } from 'effect'`; do not bypass or you will not be able to read the logs since they will not be intercepted and sent to the dev server"
+rule:
+  pattern: console.debug($$$ARGS)
+fix: Effect.logDebug($$$ARGS)

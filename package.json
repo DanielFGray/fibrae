@@ -1,0 +1,33 @@
+{
+  "name": "didact",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": {
+    "packages": [
+      "packages/*"
+    ],
+    "catalog": {
+      "@effect/language-service": "^0.51.1",
+      "@effect/platform-browser": "^0.72.0",
+      "@effect/platform-node": "^0.98.4",
+      "effect": "^3.18.4",
+      "typescript": "^5.9.3"
+    }
+  },
+  "scripts": {
+    "dev": "mprocs zsh 'bun dev:demo' 'bun run test' 'bun types:watch'",
+    "dev:demo": "bun --filter demo dev:server",
+    "test": "bun --filter demo cypress:open --e2e --browser=chromium",
+    "cypress:run": "cypress run",
+    "cypress:open": "cypress open",
+    "build": "run-s build:core",
+    "build:core": "bun --filter @didact/core build",
+    "types:check": "bun --filter '@didact/core' --filter 'demo' types:check",
+    "types:watch": "bun --filter '@didact/core' --filter 'demo' types:watch"
+  },
+  "dependencies": {
+    "mprocs": "^0.7.3",
+    "npm-run-all": "^4.1.5"
+  }
+}

@@ -1,0 +1,15 @@
+id: no-as-any
+language: TypeScript
+message: never cast to `any`, rethink whatever you're doing
+severity: error
+rule:
+  any:
+    - pattern: "let $VAR: any"
+    - pattern: "function $FUNC($ARG: any) { $$$ }"
+    - pattern: "const $VAR: any = $VALUE"
+    - pattern: "class $CLASS { $PROP: any; $$$ }"
+    - pattern: "interface $INTERFACE { $PROP: any; $$$ }"
+    - pattern: "($EXPR as any)"
+
+ignores:
+  - src/didact.ts

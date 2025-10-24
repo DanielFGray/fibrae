@@ -1,0 +1,35 @@
+id: prefer-option
+language: TypeScript
+message: Use Option from Effect for nullable values instead of ? or !. See https://effect.website/docs/data-types/option
+severity: error
+note: |
+  Instead of:
+    const value: string | undefined
+    obj?.prop
+    value!
+  
+  Use:
+    const value: Option.Option<string>
+    Option.fromNullable(obj.prop)
+    Option.getOrThrow(value)
+rule:
+  any:
+    - pattern: "$EXPR!"
+      kind: non_null_expression
+    - pattern: "$EXPR?.$PROP"
+      kind: optional_chain
+    - pattern: "type $TYPE = $A | undefined"
+    - pattern: "type $TYPE = $A | null"
+    - pattern: "const $VAR: $TYPE | undefined"
+    - pattern: "const $VAR: $TYPE | null"
+    - pattern: "let $VAR: $TYPE | undefined"
+    - pattern: "let $VAR: $TYPE | null"
+    - pattern: "function $FUNC($$$BEFORE, $ARG: $TYPE | undefined, $$$AFTER)"
+    - pattern: "function $FUNC($$$BEFORE, $ARG: $TYPE | null, $$$AFTER)"
+    - pattern: "function $FUNC($$$BEFORE, $ARG?: $TYPE, $$$AFTER)"
+    - pattern: "($$$BEFORE, $ARG: $TYPE | undefined, $$$AFTER) => $BODY"
+    - pattern: "($$$BEFORE, $ARG: $TYPE | null, $$$AFTER) => $BODY"
+    - pattern: "($$$BEFORE, $ARG?: $TYPE, $$$AFTER) => $BODY"
+
+ignores:
+  - src/didact.ts

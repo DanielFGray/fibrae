@@ -1,0 +1,8 @@
+id: no-run-promise
+language: TypeScript
+message: Avoid Effect.runPromise - use Effect.runFork or Effect.runPromiseExit for better error handling
+severity: error
+note: "runPromise throws unhandled errors. Prefer runFork for fire-and-forget or runPromiseExit to handle failures."
+rule:
+  pattern: Effect.runPromise($EFFECT)
+fix: Effect.runFork($EFFECT)

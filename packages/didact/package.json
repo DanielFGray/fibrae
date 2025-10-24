@@ -1,0 +1,36 @@
+{
+  "name": "@didact/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "dev:server": "vite dev",
+    "build:ts": "tsc -p .",
+    "build": "run-s build:ts",
+    "types:watch": "tsc -p . --noEmit --watch",
+    "types:check": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "@effect-atom/atom": "^0.3.4"
+  },
+  "peerDependencies": {
+    "@effect/platform-browser": "catalog:",
+    "@effect/platform-node": "catalog:",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/language-service": "catalog:",
+    "typescript": "catalog:"
+  }
+}

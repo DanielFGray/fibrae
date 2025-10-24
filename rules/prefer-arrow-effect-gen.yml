@@ -1,0 +1,29 @@
+id: prefer-arrow-effect-gen-typed
+language: TypeScript
+message: Use arrow functions for Effect.gen patterns instead of function declarations (with return type)
+severity: warning
+note: "Arrow functions are preferred for Effect.gen patterns to maintain consistency with functional style"
+rule:
+  pattern: |
+    function $NAME($$$ARGS): $TYPE {
+      return Effect.gen($GENERATOR);
+    }
+fix: |
+  const $NAME = ($$$ARGS): $TYPE =>
+    Effect.gen($GENERATOR);
+
+---
+
+id: prefer-arrow-effect-gen
+language: TypeScript
+message: Use arrow functions for Effect.gen patterns instead of function declarations
+severity: warning
+note: "Arrow functions are preferred for Effect.gen patterns to maintain consistency with functional style"
+rule:
+  pattern: |
+    function $NAME($$$ARGS) {
+      return Effect.gen($GENERATOR);
+    }
+fix: |
+  const $NAME = ($$$ARGS) =>
+    Effect.gen($GENERATOR);

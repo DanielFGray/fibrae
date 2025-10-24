@@ -1,0 +1,22 @@
+id: no-arbitrary-cy-get
+language: TypeScript
+message: Add data-cy attribute to element and use cy.getCy() instead of cy.get() with arbitrary selectors
+severity: warning
+note: |
+  Add data-cy="meaningful-name" to the target element, then use cy.getCy("meaningful-name") for semantic selectors that won't break when UI text changes
+
+rule:
+  pattern: cy.get($SELECTOR)
+
+constraints:
+  SELECTOR:
+    not:
+      any:
+        # Allow specific id selectors like '#root' or any '#id'
+        - regex: ^["\']#[^"']+["\']$
+        # Allow top-level document/body grabs
+        - regex: ^["\'](?:body|html)["\']$
+
+ignores:
+  - cypress/support/commands.ts
+

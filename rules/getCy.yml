@@ -1,0 +1,16 @@
+id: use-get-cy-helper
+language: TypeScript
+message: Use cy.getCy(...) helper instead of cy.get('[data-cy="..."]')
+severity: error
+rule:
+  pattern: cy.get($SELECTOR)
+  regex: 'data-cy='
+transform:
+  NAME:
+    replace:
+      source: $SELECTOR
+      replace: "^['\"]\\[data-cy=\"([^\"]+)\"\\]['\"]$"
+      by: '"$1"'
+fix: cy.getCy($NAME)
+ignores:
+  - cypress/support/commands.ts
