@@ -40,26 +40,29 @@ const Counter: Component = (props) => {
 
 ## Commands
   - Build: `bun run build` (tsc)
-  - E2E Tests: `bun cypress:run` (headless Cypress E2E tests)
-    - Single test: `bun cypress:run -- --spec cypress/e2e/<test-name>.cy.ts`
-  - Unit Tests: `bun --filter demo test:run` (vitest with @effect/vitest integration)
-    - Watch mode: `bun --filter demo test`
+  - E2E Tests: `bun --filter demo cypress:run` (headless Cypress E2E tests)
+    - Single test: `bun --filter demo cypress:run -- --spec cypress/e2e/<test-name>.cy.ts`
 
 Assume the vite dev server is already running. Do not try to run it with `bun dev`,
-I am running the dev server, and the test runner re-runs on edits. You can safely inspect the log output after sleeping 3 seconds after editing without running tests manually.
+I am running the dev server, and tests re-run on edits. You can safely inspect the log output after sleeping 3 seconds after editing without running tests manually.
 
 ## Current State
-  - ⏳ Basic reactive Atom tracking
+  - ✅ Basic reactive Atom tracking
   - ⏳ Fine-grained re-renders
-  - ⏳ Boundary component (async/error handling)
-  - ⏳ Stream support for manual control
+  - ⏳ Error Boundary component (error handling)
+  - ✅ Suspense component (async fallback)
+  - ✅ Stream support for manual control
   - ⏳ Performance profiling/optimization
+
+## Roadmap
+  - Error Boundary component: catch component/stream failures and render fallback; optional `onError`.
+  - Stream errors: surface pre-first-emission failures to boundary; terminate subscription on later failures and trigger boundary.
+  - Interaction with Suspense: error state takes precedence over fallback.
+  - Logging: keep structured `Effect.log`, but expose minimal error UI via boundary.
+  - Tests: add E2E for thrown component error, failing event Effect, failing Stream.
 
 # Tools  
   - `ast-grep` is installed, *use it as much as possible* when editing, see ./docs/ast-grep-guide.md
-  - `@effect/vitest` is configured for unit testing Effect programs
-    - Use `it.effect()` for tests that return Effects
-    - Tests automatically run Effects and handle errors
-    - See `packages/demo/src/example.test.ts` for examples
+  - Cypress is used for all E2E testing in `packages/demo/cypress/e2e/`
 
 > Remember, though it is inspired by React, this is not recreating React nor implementing React APIs

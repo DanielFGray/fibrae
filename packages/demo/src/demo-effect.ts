@@ -1,20 +1,22 @@
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as Schedule from "effect/Schedule";
 import { pipe } from "effect/Function";
 import * as BrowserPlatform from "@effect/platform-browser";
-import { render, h, Atom, AtomRegistry } from "@didact/core";
+import { render, h, Atom, Suspense, type VElement } from "@didact/core";
 import { ViteDevServerDebugger } from "./tracing.js";
 
 const Counter = ({ label }: { label: string }) => {
-  const count = Atom.make(0);
   return Effect.gen(function*() {
-    const value = yield* Atom.get(count);
+    const count = yield* Atom.make(0);
+    const value = yield* count.get();
 
     return h(
       "div",
       {
-        "data-cy": label === "Counter A" ? "counter-a" : "counter-b",
+        "data-cy": label.toLowerCase().replace(" ", "-"),
         style:
           "padding: 1rem; border: 2px solid #666; border-radius: 8px; margin: 1rem 0;",
       },
@@ -26,10 +28,7 @@ const Counter = ({ label }: { label: string }) => {
             "button",
             {
               "data-cy": "counter-increment",
-              onClick: () => Effect.gen(function*() {
-                const registry = yield* AtomRegistry.AtomRegistry;
-                registry.update(count, (n: number) => n + 1);
-              }),
+              onClick: () => count.update((n: number) => n + 1),
             },
             ["+"],
           ),
@@ -37,10 +36,7 @@ const Counter = ({ label }: { label: string }) => {
             "button",
             {
               "data-cy": "counter-decrement",
-              onClick: () => Effect.gen(function*() {
-                const registry = yield* AtomRegistry.AtomRegistry;
-                registry.update(count, (n: number) => n - 1);
-              }),
+              onClick: () => count.update((n: number) => n - 1),
             },
             ["-"],
           ),
@@ -48,10 +44,7 @@ const Counter = ({ label }: { label: string }) => {
             "button",
             {
               "data-cy": "counter-reset",
-              onClick: () => Effect.gen(function*() {
-                const registry = yield* AtomRegistry.AtomRegistry;
-                registry.set(count, 0);
-              }),
+              onClick: () => count.set(0),
             },
             ["Reset"],
           ),
@@ -61,18 +54,55 @@ const Counter = ({ label }: { label: string }) => {
   });
 };
 
+const StreamCounter = () => {
+  // Component that returns a stream with multiple emissions
+  // Suspense will handle the "Loading..." fallback
+  return Stream.make(
+    h("div", {
+      "data-cy": "stream-counter",
+      style: "padding: 1rem; border: 2px solid #ff6600; border-radius: 8px; margin: 1rem 0;"
+    }, [
+      h("h3", {}, ["Stream Counter"]),
+      h("p", { "data-cy": "stream-status" }, ["Ready: 3"])
+    ]),
+    h("div", {
+      "data-cy": "stream-counter",
+      style: "padding: 1rem; border: 2px solid #ff6600; border-radius: 8px; margin: 1rem 0;"
+    }, [
+      h("h3", {}, ["Stream Counter"]),
+      h("p", { "data-cy": "stream-status" }, ["Ready: 2"])
+    ]),
+    h("div", {
+      "data-cy": "stream-counter",
+      style: "padding: 1rem; border: 2px solid #ff6600; border-radius: 8px; margin: 1rem 0;"
+    }, [
+      h("h3", {}, ["Stream Counter"]),
+      h("p", { "data-cy": "stream-status" }, ["Ready: 1"])
+    ]),
+    h("div", {
+      "data-cy": "stream-counter",
+      style: "padding: 1rem; border: 2px solid #00ff00; border-radius: 8px; margin: 1rem 0;"
+    }, [
+      h("h3", {}, ["Stream Counter"]),
+      h("p", { "data-cy": "stream-status" }, ["Complete!"])
+    ])
+  ).pipe(
+    Stream.schedule(Schedule.spaced("500 millis"))
+  );
+};
+
 const TodoItem = ({
   text,
   onRemove,
 }: {
   text: string;
-  onRemove: (text: string) => Effect.Effect<void, never, AtomRegistry.AtomRegistry>;
+  onRemove: (text: string) => void;
 }) => {
-  const completed = Atom.make(false);
-  const testCount = Atom.make(0);
   return Effect.gen(function*() {
-    const isCompleted = yield* Atom.get(completed);
-    const testValue = yield* Atom.get(testCount);
+    const completed = yield* Atom.make(false);
+    const testCount = yield* Atom.make(0);
+    const isCompleted = yield* completed.get();
+    const testValue = yield* testCount.get();
 
     return h(
       "li",
@@ -88,10 +118,7 @@ const TodoItem = ({
             "data-cy": "todo-checkbox",
             type: "checkbox",
             checked: isCompleted,
-            onChange: () => Effect.gen(function*() {
-              const registry = yield* AtomRegistry.AtomRegistry;
-              registry.update(completed, (v: boolean) => !v);
-            }),
+            onChange: () => completed.update((v: boolean) => !v),
           },
           [],
         ),
@@ -110,10 +137,7 @@ const TodoItem = ({
           {
             "data-cy": "todo-test-button",
             type: "button",
-            onClick: () => Effect.gen(function*() {
-              const registry = yield* AtomRegistry.AtomRegistry;
-              registry.update(testCount, (n: number) => n + 1);
-            }),
+            onClick: () => testCount.update((n: number) => n + 1),
             style: "margin-left: 0.5rem; background: orange;",
           },
           [`Test: ${testValue}`],
@@ -134,22 +158,18 @@ const TodoItem = ({
 };
 
 const TodoList = () => {
-  const todos = Atom.make<string[]>([]);
-
-  const addTodo = (currentInput: string) => Effect.gen(function*() {
-    const registry = yield* AtomRegistry.AtomRegistry;
-    registry.update(todos, (list: string[]) => list.concat(currentInput));
-  });
-
-  const removeTodo = (todoToRemove: string) => Effect.gen(function*() {
-    const registry = yield* AtomRegistry.AtomRegistry;
-    registry.update(todos, (list: string[]) =>
-      list.filter((todo: string) => todo !== todoToRemove),
-    );
-  });
-
   return Effect.gen(function*() {
-    const todoList = yield* Atom.get(todos);
+    const todos = yield* Atom.make<string[]>([]);
+
+    const addTodo = (currentInput: string) => {
+      return todos.update((list: string[]) => list.concat(currentInput));
+    };
+
+    const removeTodo = (todoToRemove: string) => {
+      return todos.update((list: string[]) => list.filter((todo: string) => todo !== todoToRemove));
+    };
+
+    const todoList = yield* todos.get();
 
     return h(
       "form",
@@ -204,41 +224,70 @@ const TodoList = () => {
   });
 };
 
-const App = () =>
-  Effect.gen(function*() {
-    return h(
-      "div",
-      { style: "max-width: 800px; margin: 2rem auto; font-family: system-ui;" },
-      [
-        h("h1", { "data-cy": "app-title", style: "text-align: center;" }, [
-          "🚀 Didact Effect Demo",
-        ]),
-        h(
-          "p",
-          {
-            "data-cy": "app-subtitle",
-            style: "text-align: center; color: #666;",
-          },
-          ["Effect-first reactive JSX with @effect/platform-browser integration"],
-        ),
-        h(
-          "div",
-          { "data-cy": "components-grid", style: "display: grid; gap: 1rem;" },
-          [
-            h(Counter, { label: "Counter A" }),
-            h(Counter, { label: "Counter B" }),
-            h(TodoList, {}),
-          ],
-        ),
-      ],
-    );
-  });
+const Subtitle = ({ children }: { children: VElement[] }) => h(
+  "p",
+  {
+    "data-cy": "app-subtitle",
+    style: "text-align: center; color: #666;",
+  },
+  children
+);
 
-pipe(
-  document.getElementById("root"),
-  Option.fromNullable,
-  Option.getOrThrow,
-  render(h(App, {}, [])),
+const StaticHeader = () =>
+  h(
+    "div",
+    { style: "max-width: 800px; margin: 2rem auto; font-family: system-ui;" },
+    [
+      h("h1", { "data-cy": "app-title", style: "text-align: center;" }, [
+        "🚀 Didact Effect Demo",
+      ]),
+      h(Subtitle, {}, ["Effect-first reactive JSX with @effect/platform-browser integration"]),
+    ],
+  );
+
+Effect.gen(function*() {
+  const root = pipe(document.getElementById("root"), Option.fromNullable, Option.getOrThrow)
+
+  // for testing purposes we are doing independent renderers to avoid crashing the whole app for one broken part
+  // TODO: add error boundaries so we dont need this
+
+  const staticContainer = document.createElement("div");
+  staticContainer.setAttribute('id', "static-container");
+  root.appendChild(staticContainer)
+
+  const counterContainer = document.createElement("div");
+  counterContainer.setAttribute('id', "counter-container");
+  root.appendChild(counterContainer)
+
+  const todoContainer = document.createElement("div");
+  todoContainer.setAttribute('id', "todo-container");
+  root.appendChild(todoContainer)
+
+  const streamContainer = document.createElement("div");
+  streamContainer.setAttribute('id', "stream-container");
+  root.appendChild(streamContainer);
+
+  // Fork each render independently since render() returns Effect.never
+  yield* Effect.fork(render(h(StaticHeader), staticContainer));
+  yield* Effect.fork(render(
+    h(Suspense, {
+      fallback: h("div", {
+        "data-cy": "stream-counter",
+        style: "padding: 1rem; border: 2px solid #999; border-radius: 8px; margin: 1rem 0;"
+      }, [
+        h("h3", {}, ["Stream Counter"]),
+        h("p", { "data-cy": "stream-status" }, ["Loading..."])
+      ])
+    }, [h(StreamCounter)])
+    , streamContainer));
+  yield* Effect.fork(render(h("div", {}, [
+    h(Counter, { label: "Counter A" }),
+    h(Counter, { label: "Counter B" }),
+  ]), counterContainer));
+  yield* Effect.fork(render(h(TodoList), todoContainer));
+
+  return yield* Effect.never;
+}).pipe(
   Effect.catchAllDefect((e) => Effect.log(e)),
   Effect.provide(ViteDevServerDebugger),
   BrowserPlatform.BrowserRuntime.runMain,

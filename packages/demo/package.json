@@ -10,12 +10,11 @@
     "types:check": "tsc -p .",
     "preview": "vite preview",
     "cypress:open": "cypress open",
-    "cypress:run": "cypress run",
-    "test": "vitest",
-    "test:run": "vitest run"
+    "cypress:run": "cypress run"
   },
   "dependencies": {
     "@didact/core": "workspace:*",
+    "@effect-atom/atom": "^0.3.4",
     "@effect/opentelemetry": "^0.58.0",
     "@effect/platform-browser": "catalog:",
     "@opentelemetry/api": "^1.9.0",
@@ -30,13 +29,9 @@
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",
-    "@effect/vitest": "^0.26.0",
     "cypress": "^15.5.0",
-    "happy-dom": "^20.0.10",
-    "jsdom": "^27.1.0",
     "typescript": "catalog:",
-    "vite": "npm:rolldown-vite@7.1.14",
-    "vitest": "^4.0.6"
+    "vite": "npm:rolldown-vite@7.1.14"
   },
   "overrides": {
     "vite": "npm:rolldown-vite@7.1.14"

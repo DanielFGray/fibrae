@@ -107,10 +107,10 @@ let batchTimer = -1;
 
 const flushLogs = () => {
   if (logBatch.length === 0) return;
-  
+
   const batchToSend = [...logBatch];
   logBatch = [];
-  
+
   fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -138,7 +138,7 @@ const networkLogger = Logger.make(
     };
 
     logBatch.push(logData);
-    
+
     // Schedule batch send if not already scheduled
     if (batchTimer === -1) {
       batchTimer = globalThis.setTimeout(() => {

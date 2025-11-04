@@ -1,7 +1,7 @@
-describe("can click counters", () => {
-  beforeEach(() => {
-    cy.visit("/");
-  });
+beforeEach(() => {
+  cy.visit("/");
+});
+it("can click counters", () => {
 
   it("automatically executes Effects from counter buttons", () => {
     cy.getCy("counter-a").within(() => {
@@ -33,10 +33,7 @@ describe("can click counters", () => {
   });
 })
 
-describe("Todo List Functionality", () => {
-  beforeEach(() => {
-    cy.visit("/");
-  });
+it("Todo List Functionality", () => {
   it("todo list adds and removes items", () => {
     cy.getCy("todo-input").type("Test todo 1");
     cy.getCy("todo-add").click();
@@ -124,7 +121,7 @@ describe("Todo List Functionality", () => {
 
     // Click remove on second todo (now it's the first/only one)
     cy.getCy("todo-remove").first().click();
-    
+
     // After removing all todos, there should be no todo-text elements
     cy.getCy("todo-text").should("not.exist");
   });
