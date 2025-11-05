@@ -1,7 +1,7 @@
 beforeEach(() => {
   cy.visit("/");
 });
-it("can click counters", () => {
+describe("can click counters", () => {
 
   it("automatically executes Effects from counter buttons", () => {
     cy.getCy("counter-a").within(() => {
@@ -33,7 +33,7 @@ it("can click counters", () => {
   });
 })
 
-it("Todo List Functionality", () => {
+describe("Todo List Functionality", () => {
   it("todo list adds and removes items", () => {
     cy.getCy("todo-input").type("Test todo 1");
     cy.getCy("todo-add").click();
