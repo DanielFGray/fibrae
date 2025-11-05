@@ -1,423 +1,227 @@
-# Effect APIs for didact-effect
+# Effect Idioms & APIs for didact
 
-This document contains Effect.ts APIs that are relevant for building the didact-effect JSX renderer.
+**Core principle**: Effect has built-in APIs for common patterns. Use them instead of manual implementations.
 
-## Core Runtime APIs
+See also: `./effect-atom-core.md` for Atom/AtomRegistry APIs
 
-### FiberSet.makeRuntime
+## Data Types - Use instead of null/undefined!
 
-**Purpose**: Create an Effect run function that is backed by a FiberSet.
+**Option** - Represents optional values: `Some(value)` or `None`
+  - `Option.some(value)` / `Option.none()` - constructors
+  - `Option.isSome/isNone` - guards
+  - `Option.match(opt, { onNone, onSome })` - pattern matching
+  - `Option.map/flatMap/filter` - transformations
+  - `Option.getOrElse(opt, () => default)` - extract with fallback
+  - `Option.fromNullable(value)` - convert from null/undefined
+  - Use in generator: `const value = yield* option` (short-circuits on None)
+  
+**Either** - Represents success (Right) or failure (Left)
+  - `Either.right(value)` / `Either.left(error)` - constructors
+  - `Either.isLeft/isRight` - guards
+  - `Either.match(either, { onLeft, onRight })` - pattern matching
+  - `Either.map/mapLeft/mapBoth` - transformations
+  - `Either.getOrElse(either, () => default)` - extract with fallback
+  - Works as subtype of Effect: `Left<E>` → `Effect<never, E>`, `Right<A>` → `Effect<A>`
+  - Use in generator: `const value = yield* either` (short-circuits on Left)
 
-```typescript
-declare const makeRuntime: <
-  R = never,
-  A = unknown,
-  E = unknown,
->() => Effect.Effect<
-  <XE extends E, XA extends A>(
-    effect: Effect.Effect<XA, XE, R>,
-    options?: Runtime.RunForkOptions | undefined,
-  ) => Fiber.RuntimeFiber<XA, XE>,
-  never,
-  Scope.Scope | R
->
-```
+## State & Services
 
-**Use case for didact-effect**: This will be essential for creating a runtime that can manage component fibers. EventHandler will need to run as their own fibers, and the FiberSet helps manage the collection of all component fibers.
+**Atom** (@effect-atom/atom) - `Atom.make/get/set/update` - reactive state with auto-subscriptions (NOT Ref!)
+**Ref** - ONLY for internal non-reactive runtime state (e.g. DOM nodes, cache)
+  - `Ref.make(initial)` - create mutable reference
+  - `Ref.get/set/update/modify` - operations (all return Effect)
+**Effect.Service** - Define services with `class X extends Effect.Service<X>()("X", { scoped: ... })`
+  - Use `scoped` option for lifecycle management
+  - Use `accessors: true` for convenience methods
+  - Services accessed via `yield* ServiceName` in generators
+**Effect.provide(layer)** - Provide service implementation to effect
+**Effect.provideService(tag, impl)** - Provide single service inline
 
-## Service Management
+## Collections & Data
 
-### Effect.Service
+**HashMap** - Immutable map: `HashMap.empty/make/get/set/has/remove/keys/values/entries`
+  - Use for props, component IDs, caching (NOT `Map` or `{}`)
+  - Returns `Option` for `get` operations
+**Chunk** - Immutable array: returned by `Queue.takeAll`, `Stream` operations
+  - `Chunk.toReadonlyArray` if you need array operations
+  - More efficient than arrays for Effect operations
 
-**Purpose**: Simplifies the creation and management of services in Effect by defining both a `Tag` and a `Layer`.
+## Control Flow
 
-**Key features**:
-- Combines the definition of a `Context.Tag` and a `Layer` in a single step
-- Supports various ways of providing service implementation:
-  - Using an `effect` to define the service dynamically
-  - Using `sync` or `succeed` to define the service statically  
-  - Using `scoped` to create services with lifecycle management
-- Allows specifying dependencies for the service
-- Can generate accessors for convenience
+**Effect.if(predicate, { onTrue, onFalse })** - Conditional with effectful predicate
+**Effect.when(condition)** - Execute effect only if condition true (returns `Option`)
+**Effect.whenEffect(predicateEffect)** - Like `when` but condition is an Effect
+**Effect.unless/unlessEffect** - Opposite of when (execute if condition false)
 
-**Example**:
-```typescript
-class DidactRuntime extends Effect.Service<DidactRuntime>()("DidactRuntime", {
-  accessors: true,
-  scoped: Effect.gen(function*() {
-    const registry = yield* AtomRegistry.AtomRegistry;
-    return {
-      nextUnitOfWork: Option.none<Fiber>(),
-      currentRoot: Option.none<Fiber>(),
-      wipRoot: Option.none<Fiber>(),
-      deletions: [] as Fiber[],
-    };
-  }),
-}) {}
+## Async Coordination
 
-```
+**Queue** - Type-safe async queue (NOT custom promise/callback systems)
+  - `Queue.bounded(n)` - backpressure when full
+  - `Queue.unbounded()` - no limit (use for render work queue)
+  - `Queue.offer/take/takeAll/poll/offerAll/takeUpTo/takeN` - operations
+  - NEVER manually poll in a loop - use `Queue.takeAll`
+**Stream** - Pull-based reactive streams (NOT RxJS, NOT manual event emitters)
+  - `Stream.runForEach(stream, fn)` - consume stream
+  - `Stream.fromQueue` - convert queue to stream
+  - `Stream.map/filter/flatMap` - transformations
+  - Supports backpressure, error handling, resource safety
 
-**Use case for didact-effect**: Can be used to create services for DOM manipulation, event handling, or state management that components can depend on.
+## Concurrency & Fibers
 
-## State Management
+**Effect.fork** - Run in new fiber (returns `RuntimeFiber`)
+**Effect.forkIn(effect, scope)** - Fork in scope (auto-cleanup)
+**Effect.forkDaemon** - Fork detached fiber (not interrupted by parent)
+**Fiber.join(fiber)** - Wait for fiber completion
+**Fiber.interrupt(fiber)** - Cancel fiber
+**Fiber.await(fiber)** - Wait and get `Exit` result
+**FiberSet** - Manage fiber collections (NOT `Promise.all`)
+  - `FiberSet.makeRuntime` - create runtime backed by FiberSet
+  - All fibers cleaned up when scope closes
 
-### Atom (from @effect-atom/atom)
+## Interruption Control
 
-**Note**: We will use Atom instead of plain Ref for component state management. See `docs/effect-atom-core.md` for complete Atom documentation.
-
-**Core Operations for didact-effect**:
-- `Atom.make(initialValue)` - Create reactive atom
-- `Atom.get(atom)` - Read current value (Effect)
-- `Atom.set(atom, value)` - Set new value (via AtomRegistry)
-- `Atom.update(atom, fn)` - Update with function (via AtomRegistry)
-
-**Key Benefits for didact-effect**:
-- **Automatic Reactivity**: Reading an atom automatically subscribes components to changes
-- **Fine-grained Updates**: Only components using changed atoms re-render
-- **Effect Integration**: Atoms work directly with Effect programs
-- **AtomRegistry**: Provides centralized state management and subscription system
-
-**Basic Pattern**:
-```typescript
-const Counter: Component = (props) =>
-  Effect.gen(function* () {
-    const count = yield* Atom.make(0);
-    return h("button", { onClick: () => Atom.update(count, n => n + 1) }, [
-      `Count: ${yield* Atom.get(count)}`,
-    ]);
-  });
-```
-
-### Ref (Effect built-in)
-
-**Purpose**: Lower-level mutable reference for internal runtime state.
-
-**Use case for didact-effect**: Used internally by the runtime for managing component lifecycle, DOM state, and other non-reactive state that doesn't need automatic subscriptions.
-
-## Asynchronous Coordination
-
-### Queue
-
-**Purpose**: Lightweight in-memory queue with built-in back-pressure for asynchronous, type-safe data handling.
-
-**Core Operations**:
-- `Queue.offer` - Adds a value to the queue
-- `Queue.take` - Removes and returns the oldest value from the queue
-
-**Queue Types**:
-- `Queue.bounded(capacity)` - Back-pressure when full
-- `Queue.unbounded()` - No capacity limit
-- `Queue.dropping(capacity)` - Discards new values when full
-- `Queue.sliding(capacity)` - Removes old values for new ones
-
-**Advanced Operations**:
-- `Queue.offerAll` - Add multiple items at once
-- `Queue.takeAll` - Retrieve all items at once
-- `Queue.takeUpTo(n)` - Take up to n items
-- `Queue.takeN(n)` - Take exactly n items (suspends until available)
-- `Queue.poll` - Non-blocking take (returns Option)
-
-**Specialized Interfaces**:
-- `Queue.Enqueue<A>` - Offer-only operations
-- `Queue.Dequeue<A>` - Take-only operations
-
-**Use case for didact-effect**: **Primary use will be for queueing render work**. When atoms change and components need to re-render, the render work will be queued up for batch processing. Also useful for event queues and coordinating between component updates and DOM operations.
-
-## Data Structures
-
-### HashMap
-
-**Core Interface**:
-```typescript
-export interface HashMap<out Key, out Value>
-  extends Iterable<[Key, Value]>,
-    Equal,
-    Pipeable,
-    Inspectable {
-  readonly [TypeId]: TypeId
-}
-```
-
-**Purpose**: Immutable hash map data structure.
-
-**Key Operations**:
-- `HashMap.empty()` - Create empty HashMap
-- `HashMap.make(...entries)` - Create from entries
-- `HashMap.get(map, key)` - Get value by key
-- `HashMap.set(map, key, value)` - Set key-value pair
-- `HashMap.has(map, key)` - Check if key exists
-- `HashMap.remove(map, key)` - Remove key
-- `HashMap.keys/values/entries` - Iteration
-
-**Use case for didact-effect**: Useful for component props, managing component instances by ID, or caching computed values.
-
-## Streaming & Reactive Programming
-
-### Stream
-
-**Core Interface**:
-```typescript
-export interface Stream<out A, out E = never, out R = never>
-  extends Stream.Variance<A, E, R>,
-    Pipeable
-```
-
-**Purpose**: A description of a program that may emit zero or more values of type `A`, may fail with errors of type `E`, and uses context of type `R`.
-
-**Characteristics**:
-- Purely functional pull-based stream
-- Inherent laziness and backpressure
-- Emits arrays of values for performance
-- Rich composition capabilities
-- Error management similar to Effect
-
-**Use case for didact-effect**: Could be used for reactive event streams, managing component update streams, or handling continuous data flows.
+**Effect.interrupt** - Immediately interrupt current fiber
+**Effect.interruptible(effect)** - Mark region as interruptible
+**Effect.uninterruptible(effect)** - Mark region as uninterruptible
+**Effect.onInterrupt(cleanup)** - Run cleanup on interruption
 
 ## Resource Management
 
-### Scope
+**Effect.addFinalizer(cleanup)** - Register cleanup (runs on scope close)
+**Effect.scoped(effect)** - Wrap effect with new scope
+**Effect.acquireRelease(acquire, release)** - Safe resource pattern
+**Effect.acquireUseRelease(acquire, use, release)** - Full resource lifecycle
+**Effect.ensuring(finalizer)** - Run finalizer after effect (like finally)
+**Scope.fork(scope)** - Create child scope
+  - Finalizers run in REVERSE order (stack unwinding)
+  - Guaranteed to run on success, failure, or interruption
 
-**Purpose**: Core construct for managing resources safely and composably.
+## Iteration - NEVER use manual for/while with effects!
 
-**Key Concepts**:
-- Represents the lifetime of one or more resources
-- When closed, all resources are released
-- Supports finalizers for cleanup logic
-- Finalizers execute in reverse order (stack unwinding)
+**Effect.forEach(items, fn, opts)** - Replace `for` loops
+  - `{ concurrency: "unbounded" | number }` - parallel execution
+  - `{ discard: true }` - don't collect results (memory efficient)
+**Effect.all(effects, opts)** - Run multiple effects (arrays/tuples/structs/records)
+  - `{ concurrency: "unbounded" | number }` - control parallelism
+  - `{ mode: "default" | "either" | "validate" }` - error handling mode
+  - Preserves structure of input (tuple → tuple, struct → struct)
+**Effect.iterate(initial, { while, body })** - Replace while loops
+**Effect.loop(initial, { while, step, body })** - For loops with accumulation
+**Effect.reduce(items, init, fn)** - Sequential fold
+**Effect.filter(items, predicate)** - Filter with effectful predicate
+**Effect.partition(items, fn)** - Split into [failures, successes]
+**Effect.every(items, predicate)** - Check if all match
+**Effect.exists(items, predicate)** - Check if any match
+**Effect.findFirst(items, predicate)** - Find first match (returns `Option`)
+**Queue.takeAll(queue)** - Atomic drain, returns Chunk (NOT while + poll loop)
 
-**Core Operations**:
-- `Scope.make()` - Create a new scope
-- `Scope.addFinalizer(scope, finalizer)` - Add cleanup logic
-- `Scope.close(scope, exit)` - Close scope and run finalizers
-- `Effect.addFinalizer(finalizer)` - Add finalizer to current scope
-- `Effect.scoped(effect)` - Wrap effect with automatic scope management
+## Defects & Exits
 
-**Finalizer Execution**:
-- Finalizers run in reverse order of addition
-- Execute on success, failure, or interruption
-- Guaranteed to run when scope closes
+**Effect.die(error)** - Throw unrecoverable error (defect)
+**Effect.dieMessage(message)** - Die with string message
+**Effect.exit** - Get `Exit<A, E>` result (includes cause info)
 
-**Use case for didact-effect**: Essential for managing component lifecycles, DOM element cleanup, event listener removal, and resource cleanup when components unmount.
+## Pattern Matching & Inspection
 
-## Summary for didact-effect Implementation
+**Effect.match({ onFailure, onSuccess })** - Pattern match on result
+**Effect.matchEffect({ onFailure, onSuccess })** - Pattern match with effects
+**Effect.matchCause/matchCauseEffect** - Match on full cause (includes defects)
 
-Based on this research, here's how these APIs map to didact-effect needs:
+## Validation & Error Accumulation
 
-1. **FiberSet.makeRuntime** - Core runtime for managing component fibers
-2. **Effect.Service** - Services for DOM manipulation, event handling  
-3. **Atom (from @effect-atom/atom)** - Reactive component state with automatic subscriptions
-4. **AtomRegistry** - Centralized state management and subscription system
-5. **Queue** - **Render work queue** for batching component re-renders when atoms change
-6. **HashMap** - Component instance management and prop storage
-7. **Stream** - Reactive event streams (optional advanced feature)
-8. **Scope** - Component lifecycle and resource management
-9. **Ref** - Internal runtime state (non-reactive)
+**Effect.validate(effect, opts)** - Run effect, accumulate errors (NOT fail-fast)
+**Effect.validateAll(effects)** - Validate all, collect all failures
+**Effect.validateFirst(effects)** - Return first success or all failures
 
-### Key Architecture Points:
+## Caching & Memoization
 
-- **Atom + AtomRegistry**: Provides the reactive foundation where reading an atom automatically subscribes components to changes
-- **FiberSet.makeRuntime**: Manages concurrent component rendering as separate fibers
-- **Effect.Service**: Enables dependency injection for DOM services, event handling, etc.
-- **Scope**: Ensures proper cleanup when components unmount
-- **Queue**: **Render work queue** - batches component re-renders when atoms change, ensuring efficient DOM updates
+**Effect.cached** - Cache result, re-execute on invalidation
+**Effect.cachedWithTTL(duration)** - Cache with time-to-live
+**Effect.cachedInvalidateWithTTL(duration)** - TTL cache with manual invalidation
+**Effect.once** - Ensure effect runs only once, cache forever
+**Effect.cachedFunction(fn)** - Memoize effectful function
 
-The combination of these APIs provides a solid foundation for building an Effect-first JSX renderer with automatic fine-grained reactivity, proper resource management, and concurrent component execution.
+## Observability
 
----
+**Effect.log(message)** - Structured logging (NOT `console.log`)
+**Effect.logDebug/logInfo/logWarning/logError/logFatal** - Log at specific level
+**Effect.withSpan(name)** - Create tracing span for observability
+**Effect.annotateCurrentSpan(key, value)** - Add metadata to current span
 
-## **Effect Iteration APIs for Performance**
+## Effect Constructors
 
-Effect provides specialized iteration APIs that offer benefits over traditional `for` and `while` loops:
+**Effect.succeed(value)** - Create successful effect
+**Effect.fail(error)** - Create failed effect
+**Effect.sync(() => value)** - Wrap synchronous code
+**Effect.promise(() => promise)** - Wrap promise (cannot fail)
+**Effect.tryPromise(() => promise)** - Wrap promise (can fail)
+**Effect.async(register)** - Create from callback
+**Effect.gen(function*)** - Generator-based do-notation
 
-### **1. `Effect.forEach` - Replace `for` loops with effectful operations**
+## Pipeable Transformations
 
-```typescript
-// ❌ Traditional loop (sequential, imperative)
-for (const atom of accessedAtoms) {
-  const subscription = Stream.runForEach(
-    Atom.toStream(atom),
-    () => queueFiberForRerender(fiber)
-  );
-  yield* Effect.forkIn(subscription, componentScope);
-}
+**Effect.map(fn)** - Transform success value
+**Effect.flatMap(fn)** - Chain effects
+**Effect.andThen(nextEffect)** - Sequence effects
+**Effect.tap(fn)** - Side-effect without changing value
+**Effect.as(value)** - Replace result with constant
+**Effect.void** - Discard result → `Effect<void>`
+**Effect.ignore** - Discard success AND failure → `Effect<void, never>`
 
-// ✅ Effect.forEach (declarative, configurable concurrency)
-yield* Effect.forEach(
-  accessedAtoms, 
-  (atom) => {
-    const subscription = Stream.runForEach(
-      Atom.toStream(atom),
-      () => queueFiberForRerender(fiber)
-    );
-    return Effect.forkIn(subscription, componentScope);
-  },
-  { 
-    concurrency: "unbounded",  // Parallel subscriptions
-    discard: true              // Don't collect results
-  }
-);
-```
+## Error Channel Operations
 
-**Benefits:**
-- **Configurable concurrency**: Sequential (default), bounded, or unbounded
-- **Short-circuiting**: Stops on first error (unless mode: "either")
-- **Discard option**: Avoids memory overhead when results not needed
-- **Type-safe**: Full inference of success/error types
+**Effect.mapError(fn)** - Transform error type
+**Effect.mapBoth({ onFailure, onSuccess })** - Transform both channels
+**Effect.flip** - Swap error and success channels
+**Effect.catchAll(handler)** - Recover from all errors
+**Effect.catchTag(tag, handler)** - Catch specific tagged error
+**Effect.either** - Move error to success as `Either<A, E>`
+**Effect.option** - Convert errors to `None`
+**Effect.orElse(() => fallback)** - Try fallback on error
+**Effect.orElseSucceed(value)** - Provide fallback value
+**Effect.orDie** - Convert error to defect (unrecoverable)
+**Effect.firstSuccessOf(effects)** - Return first success
 
-### **2. `Queue.takeAll` - Replace polling loops**
+## Filtering & Predicates
 
-```typescript
-// ❌ Manual polling loop (multiple effect executions)
-const batch: Fiber[] = [];
-let fiber = yield* Queue.poll(state.renderQueue);
-while (Option.isSome(fiber)) {
-  batch.push(fiber.value);
-  fiber = yield* Queue.poll(state.renderQueue);
-}
+**Effect.filter(predicate)** - Filter success values
+**Effect.filterOrFail(predicate, error)** - Filter or fail with error
+**Effect.filterOrElse(predicate, fallback)** - Filter or use fallback
+**Effect.partition(items, fn)** - Split into [failures, successes]
 
-// ✅ Queue.takeAll (single atomic operation)
-const batch = yield* Queue.takeAll(state.renderQueue);
-```
+## Timing & Delays
 
-**Benefits:**
-- **Atomic**: Single operation vs multiple polls
-- **Returns Chunk**: More efficient than array building
-- **Non-blocking**: Returns empty Chunk if queue empty
+**Effect.sleep(duration)** - Non-blocking delay
+**Effect.delay(duration)** - Delay before execution
+**Effect.timeout(duration)** - Fail with `TimeoutException` if too slow
+**Effect.repeat(schedule)** - Re-execute on success
 
-### **3. `Effect.iterate` - Replace while loops with state**
+## Racing & Concurrency
 
-```typescript
-// ❌ Traditional while loop
-let state = initial;
-while (condition(state)) {
-  const newState = yield* updateState(state);
-  state = newState;
-}
-return state;
+**Effect.race(other)** - Race two effects, return first success
+**Effect.raceAll(effects)** - Race multiple effects
+**Effect.raceFirst(other)** - Race two, return first completion (even failure)
 
-// ✅ Effect.iterate (declarative state iteration)
-yield* Effect.iterate(
-  initial,
-  {
-    while: (state) => condition(state),
-    body: (state) => updateState(state)
-  }
-);
-```
+## Combining Effects
 
-**Benefits:**
-- **Declarative**: Intent clearer than imperative loop
-- **Effect-aware**: Handles effectful state updates naturally
-- **Composable**: Easy to combine with other Effect operators
+**Effect.zip(other)** - Combine into tuple `[a, b]`
+**Effect.zipWith(other, fn)** - Combine with custom function
+  - Use `{ concurrent: true }` for parallel execution
 
-### **4. `Effect.loop` - Collect results while iterating**
+## Common Anti-Patterns
 
-```typescript
-// ❌ Manual accumulation
-const results = [];
-let i = 0;
-while (i < fiber.children.length) {
-  const result = yield* reconcileChild(fiber.children[i]);
-  results.push(result);
-  i++;
-}
-
-// ✅ Effect.loop (declarative with accumulation)
-const results = yield* Effect.loop(
-  0,
-  {
-    while: (i) => i < fiber.children.length,
-    step: (i) => i + 1,
-    body: (i) => reconcileChild(fiber.children[i])
-  }
-);
-```
-
-**Benefits:**
-- **Combines state + results**: No manual array building
-- **Discard option**: Can run for side effects only
-- **Indexed iteration**: Built-in counter management
-
-### **5. `Effect.reduce` - Replace fold/accumulate patterns**
-
-```typescript
-// ❌ Manual reduce with effects
-let acc = initial;
-for (const item of items) {
-  const result = yield* processItem(item);
-  acc = combine(acc, result);
-}
-
-// ✅ Effect.reduce (declarative accumulation)
-const result = yield* Effect.reduce(
-  items,
-  initial,
-  (acc, item, index) => 
-    processItem(item).pipe(
-      Effect.map(result => combine(acc, result))
-    )
-);
-```
-
-**Benefits:**
-- **Sequential guarantee**: Order preserved
-- **Index tracking**: Built-in iteration counter
-- **Type inference**: Accumulator type inferred
-
-### **6. `Effect.all` - Process multiple effects**
-
-```typescript
-// ❌ Sequential processing
-const results = [];
-for (const fiber of fibers) {
-  const result = yield* performUnitOfWork(fiber);
-  results.push(result);
-}
-
-// ✅ Effect.all with concurrency
-const results = yield* Effect.all(
-  fibers.map(fiber => performUnitOfWork(fiber)),
-  { 
-    concurrency: "unbounded",      // Parallel execution
-    mode: "either"                 // Collect all results even if some fail
-  }
-);
-```
-
-**Benefits:**
-- **Flexible input**: Arrays, tuples, structs, records
-- **Concurrency control**: Sequential, bounded, unbounded
-- **Error handling modes**: "default" (short-circuit), "either" (collect all), "validate" (with Options)
-- **Type preservation**: Maintains structure of input
-
-### **When to Use Each API**
-
-| Use Case | API | Example |
-|----------|-----|---------|
-| Iterate with effects, don't need results | `Effect.forEach` + `{ discard: true }` | Processing side effects for each atom subscription |
-| Iterate with effects, collect results | `Effect.forEach` | Mapping over children to get reconciled results |
-| Drain queue completely | `Queue.takeAll` | Batch processing render queue |
-| While loop with effectful condition | `Effect.iterate` | Polling until condition met |
-| For loop with index and results | `Effect.loop` | Walking fiber tree with state |
-| Accumulate over collection | `Effect.reduce` | Building up DOM from children |
-| Parallel task execution | `Effect.all` + `{ concurrency }` | Concurrent fiber rendering |
-
-### **Performance Characteristics**
-
-**Why Effect APIs can be faster than manual loops:**
-
-1. **Optimized execution paths**: Effect's runtime can optimize chains of operations
-2. **Fiber scheduling**: Concurrent operations use Effect's fiber scheduler efficiently
-3. **Memory efficiency**: `discard: true` avoids allocating result arrays
-4. **Chunk-based collections**: `Queue.takeAll` returns Chunk (persistent data structure)
-5. **Short-circuiting**: Early termination on errors avoids unnecessary work
-6. **Batching**: Effect can batch multiple operations together in some cases
-
-**When traditional loops are acceptable:**
-
-- Pure synchronous operations (no Effects)
-- Simple iteration without error handling needs
-- Very small collections (<10 items) where overhead doesn't matter
-- Building data structures that Effect APIs don't directly support
-
-**Best practice**: Use Effect iteration APIs for all effectful operations. The declarative style makes code more maintainable and enables Effect's runtime optimizations.
+❌ Manual loops with effects → ✅ Effect.forEach/all/iterate/loop
+❌ try/finally cleanup → ✅ Effect.addFinalizer/scoped
+❌ Promise.all([...]) → ✅ Effect.all([...], { concurrency })
+❌ Manual polling loop → ✅ Queue.takeAll or Stream
+❌ Plain Map/Object → ✅ HashMap
+❌ Plain arrays for mutable state → ✅ Ref.make([...]) or Chunk
+❌ Ref for reactive state → ✅ Atom (auto-subscriptions)
+❌ Custom event emitters → ✅ Stream/Queue
+❌ setTimeout/setInterval → ✅ Effect.sleep/Effect.repeat
+❌ null/undefined for optional → ✅ Option.some/none
+❌ throw/try-catch → ✅ Effect.fail/catchAll
+❌ Manual if-else with effects → ✅ Effect.if/when/unless
+❌ Nested callbacks → ✅ Effect.gen with yield*
+❌ Manual fiber management → ✅ FiberSet or Effect.forkIn with Scope
+❌ Imaginary methods like `Effect.unit` → ✅ Effect.void (the actual API)

@@ -1,275 +1,216 @@
 ## Examples
 
-### Simple Counter (Leveraging @effect-atom/atom)
+### Simple Counter
 ```typescript
-const Counter: Component = ({ label }: { label: string }) => {
-  const countAtom = Atom.make(0)
-  return Effect.gen(function* () {
-    // Use derived atom for automatic reactivity tracking
-    const displayAtom = yield* Atom.make((get) => ({
-      count: get(countAtom),
-      label: label
-    }))
+import * as Effect from "effect/Effect";
+import { Atom } from "@didact/core";
 
-    const { count, label: currentLabel } = Atom.get(displayAtom)
+export const Counter = ({ label }: { label: string }) => {
+  return Effect.gen(function*() {
+    const count = yield* Atom.make(0);
+    const value = yield* count.get();
 
-    return h(Fragment, [
-      h("h3", [currentLabel]),
-      h("p", [`Count: ${count}`]),
-      h("button", {
-        onClick: () => Atom.set(countAtom, n => n + 1)
-      }, ["+"]),
-      h("button", {
-        onClick: () => Atom.set(countAtom, n => n - 1)
-      }, ["-"])
-    ])
-  })
-}
+    return (
+      <div>
+        <h3>{label}</h3>
+        <p>Count: {value}</p>
+        <button onClick={() => count.update((n: number) => n + 1)}>
+          +
+        </button>
+        <button onClick={() => count.update((n: number) => n - 1)}>
+          -
+        </button>
+        <button onClick={() => count.set(0)}>
+          Reset
+        </button>
+      </div>
+    );
+  });
+};
 ```
 
-### Stream-Based Event Handling with Atoms
+### Stream-Based Components with Suspense
 ```typescript
-// Use atoms for reactive state, streams for event processing
-const searchQueryAtom = Atom.make("")
-const searchResultsAtom = Atom.make((get) => {
-  const query = get(searchQueryAtom)
-  if (query.length < 2) return []
+import * as Stream from "effect/Stream";
+import * as Schedule from "effect/Schedule";
+import { pipe } from "effect/Function";
+import { h, Suspense } from "@didact/core";
 
-  // This could be an Effect that fetches from API
-  return Effect.succeed([`Result for: ${query}`])
-})
+// Components can return Streams for progressive updates
+export const StreamCounter = () => {
+  const items = [
+    <div><p>Ready: 3</p></div>,
+    <div><p>Ready: 2</p></div>,
+    <div><p>Ready: 1</p></div>,
+    <div><p>Complete!</p></div>
+  ];
+  
+  return pipe(
+    Stream.fromIterable(items),
+    Stream.schedule(Schedule.spaced("500 millis"))
+  );
+};
 
-const DebouncedSearch: Component = () =>
-  Effect.gen(function* () {
-    // Get current state from atoms
-    const query = Atom.get(searchQueryAtom)
-    const results = Atom.get(searchResultsAtom)
-
-    // Set up debounced input stream
-    const handleInput = (element: HTMLInputElement) => pipe(
-      Stream.fromEventListener(element, "input"),
-      Stream.debounce("300 millis"),
-      Stream.map((event: InputEvent) => (event.target as HTMLInputElement).value),
-      Stream.runForEach((value) => Atom.set(searchQueryAtom, value))
-    )
-
-    return h("div", [
-      h("input", {
-        value: query,
-        onMount: handleInput,  // Custom event for element mounting
-        placeholder: "Search..."
-      }),
-      h("ul",
-        Result.match(results, {
-          onInitial: () => [h("li", ["Loading..."])],
-          onSuccess: (items) => items.map(item => h("li", [item])),
-          onFailure: () => [h("li", ["Error loading results"])]
-        })
-      )
-    ])
-  })
+// Use Suspense to show fallback while waiting for first emission
+export const App = () => (
+  <Suspense fallback={<div>Loading...</div>}>
+    <StreamCounter />
+  </Suspense>
+);
 ```
 
-### Global Event Streams with Atoms
+### Todo List with Child Components
 ```typescript
-// Global atoms for window state - managed by global event streams
-const windowDimensionsAtom = Atom.make({
-  width: window.innerWidth,
-  height: window.innerHeight
-})
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import { pipe } from "effect/Function";
+import { h, Atom } from "@didact/core";
 
-// Global stream management (runs once at app startup)
-const setupGlobalStreams = () => {
-  const resizeStream = pipe(
-    BrowserStream.fromEventListenerWindow("resize"),
-    Stream.runForEach(() =>
-      Atom.set(windowDimensionsAtom, {
-        width: window.innerWidth,
-        height: window.innerHeight
-      })
-    )
-  )
+const TodoItem = ({
+  text,
+  onRemove,
+}: {
+  text: string;
+  onRemove: (text: string) => void;
+}) => {
+  return Effect.gen(function*() {
+    const completed = yield* Atom.make(false);
+    const isCompleted = yield* completed.get();
 
-  return BrowserRuntime.runMain(resizeStream).fork
-}
+    return (
+      <li>
+        <input
+          type="checkbox"
+          checked={isCompleted}
+          onChange={() => completed.update((v: boolean) => !v)}
+        />
+        <span style={isCompleted ? "text-decoration: line-through" : ""}>
+          {text}
+        </span>
+        <button onClick={() => onRemove(text)}>Remove</button>
+      </li>
+    );
+  });
+};
 
-const ResponsiveComponent: Component = () =>
-  Effect.gen(function* () {
-    // Reactive derived state using atoms
-    const layoutAtom = Atom.make((get) => {
-      const { width } = get(windowDimensionsAtom)
-      return width < 768 ? "Mobile" : "Desktop"
-    })
+export const TodoList = () => {
+  return Effect.gen(function*() {
+    const todos = yield* Atom.make<string[]>([]);
+    const todoList = yield* todos.get();
 
-    const { width, height } = Atom.get(windowDimensionsAtom)
-    const layout = Atom.get(layoutAtom)
+    const addTodo = (currentInput: string) => {
+      return todos.update((list: string[]) => list.concat(currentInput));
+    };
 
-    return h("div", [
-      h("h3", ["Responsive Component"]),
-      h("p", [`Window size: ${width}x${height}`]),
-      h("p", [layout])
-    ])
-  })
+    const removeTodo = (todoToRemove: string) => {
+      return todos.update((list: string[]) => 
+        list.filter((todo: string) => todo !== todoToRemove)
+      );
+    };
+
+    return (
+      <form
+        onSubmit={(e: Event) => {
+          e.preventDefault();
+          const form = e.currentTarget as HTMLFormElement;
+          return pipe(
+            new FormData(form),
+            Object.fromEntries,
+            Schema.decodeUnknown(Schema.Struct({ todoInput: Schema.String })),
+            Effect.flatMap((parsed) => addTodo(parsed.todoInput)),
+            Effect.tap(() => Effect.sync(() => form.reset()))
+          );
+        }}
+      >
+        <h3>Todo List</h3>
+        <input
+          type="text"
+          name="todoInput"
+          placeholder="What needs to be done?"
+        />
+        <button type="submit">Add</button>
+        <ul>
+          {todoList.map((todo: string) =>
+            h(TodoItem, { key: todo, text: todo, onRemove: removeTodo }, [])
+          )}
+        </ul>
+      </form>
+    );
+  });
+};
 ```
 
-### Service Integration with Atom Runtime
+### Static Components (No State)
 ```typescript
-class UserService extends Effect.Service<UserService>()("UserService", {
-  effect: Effect.succeed({
-    getUsers: () => Effect.succeed([{ id: 1, name: "Alice" }]),
-    searchUsers: (query: string) => Effect.succeed([{ id: 2, name: "Bob" }])
-  })
-}) {}
+import { type VNode } from "@didact/core";
 
-// Create atom runtime with services
-const appRuntime = Atom.runtime(UserService.Default)
+// Components without state can be simple functions
+const Subtitle = ({ children }: { children: VNode }) => (
+  <p style="text-align: center; color: #666;">
+    {children}
+  </p>
+);
 
-// Atoms that use services via the runtime
-const searchQueryAtom = Atom.make("")
-const usersAtom = appRuntime.atom(
-  Effect.gen(function* () {
-    const userService = yield* UserService
-    return yield* userService.getUsers()
-  })
-)
-
-// Derived atom that searches based on query
-const searchResultsAtom = appRuntime.atom(
-  Effect.gen(function* () {
-    const query = Atom.get(searchQueryAtom)
-    if (query.length < 2) return []
-
-    const userService = yield* UserService
-    return yield* userService.searchUsers(query)
-  })
-)
-
-const UserSearchList: Component = () =>
-  Effect.gen(function* () {
-    const query = Atom.get(searchQueryAtom)
-    const results = Atom.get(searchResultsAtom)
-
-    return h("div", [
-      h("input", {
-        value: query,
-        onInput: (e) => Atom.set(searchQueryAtom, e.target.value),
-        placeholder: "Search users..."
-      }),
-      h("ul",
-        Result.match(results, {
-          onInitial: () => [h("li", ["Loading..."])],
-          onSuccess: (users) => users.map(u => h("li", { key: u.id }, [u.name])),
-          onFailure: () => [h("li", ["Error loading users"])]
-        })
-      )
-    ])
-  })
+export const StaticHeader = () => (
+  <div>
+    <h1 style="text-align: center;">🚀 Didact Effect Demo</h1>
+    <Subtitle>Effect-first reactive JSX</Subtitle>
+  </div>
+);
 ```
 
-## Advanced Event Handling Patterns
+## Rendering the App
 
-### 1. Mouse Tracking with Stream Composition
 ```typescript
-const MouseTracker: Component = () =>
-  Effect.gen(function* () {
-    const mousePos = yield* Atom.make({ x: 0, y: 0 })
-    const isMouseDown = yield* Atom.make(false)
+import * as Effect from "effect/Effect";
+import * as BrowserPlatform from "@effect/platform-browser";
+import { render, h } from "@didact/core";
 
-    // Compose multiple mouse event streams
-    const mouseStream = Stream.merge(
-      pipe(
-        BrowserStream.fromEventListenerDocument("mousemove"),
-        Stream.map((event) => ({ type: "move", x: event.clientX, y: event.clientY }))
-      ),
-      pipe(
-        BrowserStream.fromEventListenerDocument("mousedown"),
-        Stream.map(() => ({ type: "down" }))
-      ),
-      pipe(
-        BrowserStream.fromEventListenerDocument("mouseup"),
-        Stream.map(() => ({ type: "up" }))
-      )
-    )
+Effect.gen(function*() {
+  const root = document.getElementById("root")!;
 
-    yield* Stream.runForEach(mouseStream, (event) => {
-      switch (event.type) {
-        case "move":
-          return Atom.set(mousePos, { x: event.x, y: event.y })
-        case "down":
-          return Atom.set(isMouseDown, true)
-        case "up":
-          return Atom.set(isMouseDown, false)
-      }
-    }).fork
+  // render() returns Effect.never, so fork it to run independently
+  yield* Effect.fork(render(
+    h("div", {}, [
+      h(StaticHeader),
+      h(Counter, { label: "Counter A" }),
+      h(Counter, { label: "Counter B" }),
+      h(TodoList),
+    ]),
+    root
+  ));
 
-    const pos = Atom.get(mousePos)
-    const isDown = Atom.get(isMouseDown)
-
-    return h("div", [
-      h("p", [`Mouse: ${pos.x}, ${pos.y}`]),
-      h("p", [`Mouse down: ${isDown}`])
-    ])
-  })
+  return yield* Effect.never;
+}).pipe(
+  Effect.catchAllDefect((e) => Effect.log(e)),
+  BrowserPlatform.BrowserRuntime.runMain,
+);
 ```
 
-### 2. Form Validation with Stream Processing
+## Key API Patterns
+
+### Atoms
+- `Atom.make(initialValue)` - Create reactive state
+- `atom.get()` - Read current value (auto-subscribes component)
+- `atom.set(newValue)` - Set new value
+- `atom.update(fn)` - Update based on previous value
+
+### Event Handlers
+- Can return `Effect` values that will be auto-executed
+- Use `Effect.sync()` for side effects
+- Use `pipe()` for composing Effects
+
+### Components
+- Return `Effect<VNode>` for stateful components
+- Return `VNode` directly for static components
+- Return `Stream<VNode>` for progressive rendering (use with Suspense)
+
+### JSX vs h()
+Both work, use what you prefer:
 ```typescript
-const ValidatedForm: Component = () => {
-  const email = yield* Atom.make("")
-  const password = yield* Atom.make("")
-  const errors = yield* Atom.make<Record<string, string>>({})
+// JSX syntax (requires tsconfig jsx: "react-jsx")
+<button onClick={() => count.set(0)}>Reset</button>
 
-  return Effect.gen(function* () {
-    // Validation streams with debouncing
-    const emailValidation = Atom.toStream(email).pipe(
-      Stream.debounce("300 millis"),
-      Stream.map((value) => ({
-        field: "email",
-        error: value.includes("@") ? null : "Invalid email"
-      }))
-    )
-
-    const passwordValidation = Atom.toStream(password).pipe(
-      Stream.debounce("300 millis"),
-      Stream.map((value) => ({
-        field: "password",
-        error: value.length >= 8 ? null : "Password too short"
-      }))
-    )
-
-    // Merge validation streams
-    yield* Stream.runForEach(
-      Stream.merge(emailValidation, passwordValidation),
-      ({ field, error }) =>
-        Atom.update(errors, (prev) => Object.assign({}, prev, {
-          [field]: error
-        }))
-    ).fork
-
-    const currentErrors = Atom.get(errors)
-    const currentEmail = Atom.get(email)
-    const currentPassword = Atom.get(password)
-
-    return h("form", [
-      h("input", {
-        type: "email",
-        placeholder: "Email",
-        onInput: (e) => Atom.set(email, e.target.value)
-      }),
-      currentErrors.email && h("span", { class: "error" }, [currentErrors.email]),
-
-      h("input", {
-        type: "password",
-        placeholder: "Password",
-        onInput: (e) => Atom.set(password, e.target.value)
-      }),
-      currentErrors.password && h("span", { class: "error" }, [currentErrors.password]),
-
-      h("button", {
-        type: "submit",
-        disabled: Object.values(currentErrors).some(Boolean)
-      }, ["Submit"])
-    ])
-  })
-}
+// h() function
+h("button", { onClick: () => count.set(0) }, ["Reset"])
 ```

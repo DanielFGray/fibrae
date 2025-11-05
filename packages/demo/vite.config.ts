@@ -6,6 +6,13 @@ export default defineConfig({
   define: {
     global: 'globalThis',
   },
+  esbuild: {
+    jsx: 'transform',
+    jsxDev: false,
+    jsxFactory: 'jsx',
+    jsxFragment: 'Fragment',
+    jsxInject: `import { jsx, Fragment } from '@didact/core/jsx-runtime'`,
+  },
   optimizeDeps: {
     exclude: [
       '@opentelemetry/sdk-trace-node',
@@ -15,8 +22,14 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@opentelemetry/sdk-trace-node': '@opentelemetry/sdk-trace-web'
-    }
+      '@opentelemetry/sdk-trace-node': '@opentelemetry/sdk-trace-web',
+      // Force all subpath imports like "effect/Effect" to resolve
+      // to the single root install to avoid version mismatch warnings.
+      'effect': path.resolve(path.join(import.meta.dirname, '..', '..', 'node_modules', 'effect')),
+    },
+    dedupe: [
+      'effect'
+    ]
   },
   plugins: [
     {

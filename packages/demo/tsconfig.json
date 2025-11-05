@@ -5,9 +5,11 @@
     "rootDir": "./src",
     "declaration": true,
     "emitDeclarationOnly": false,
+    "jsx": "preserve",
     "types": [
       "vite/client",
-      "cypress"
+      "cypress",
+      "@didact/core/jsx-runtime"
     ]
   },
   "include": [

@@ -5,18 +5,24 @@
   "type": "module",
   "scripts": {
     "dev:server": "vite dev",
-    "build": "run-s -s types:check",
+    "client:build": "vite build",
+    "build": "run-s client:build",
     "types:watch": "tsc -p . --noEmit --watch",
-    "types:check": "tsc -p .",
+    "types:check": "tsc -p . --noEmit",
     "preview": "vite preview",
     "cypress:open": "cypress open",
-    "cypress:run": "cypress run"
+    "cypress:run": "cypress run --quiet",
+    "ssr": "bun src/demo-ssr.ts",
+    "ssr:html": "mkdir -p dist && bun src/demo-ssr.ts > dist/ssr.html && echo 'Wrote dist/ssr.html'"
   },
   "dependencies": {
     "@didact/core": "workspace:*",
-    "@effect-atom/atom": "^0.3.4",
+    "@effect-atom/atom": "catalog:",
     "@effect/opentelemetry": "^0.58.0",
+    "@effect/platform": "catalog:",
     "@effect/platform-browser": "catalog:",
+    "@effect/platform-bun": "catalog:",
+    "@effect/platform-node": "catalog:",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/core": "^2.2.0",
     "@opentelemetry/instrumentation-document-load": "^0.53.0",
@@ -25,12 +31,13 @@
     "@opentelemetry/sdk-metrics": "^2.2.0",
     "@opentelemetry/sdk-trace-web": "^2.2.0",
     "@opentelemetry/semantic-conventions": "^1.37.0",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "npm-run-all": "^4.1.5"
   },
   "devDependencies": {
-    "@effect/language-service": "catalog:",
-    "cypress": "^15.5.0",
-    "typescript": "catalog:",
+    "@effect/language-service": "^0.51.1",
+    "cypress": "^15.6.0",
+    "typescript": "^5.9.3",
     "vite": "npm:rolldown-vite@7.1.14"
   },
   "overrides": {

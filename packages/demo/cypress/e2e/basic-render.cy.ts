@@ -2,7 +2,7 @@ describe("Basic Rendering", () => {
   beforeEach(() => {
     cy.visit("http://localhost:5173");
   });
-  const defaultCommandTimeout = 250
+  const defaultCommandTimeout = 100
   describe("renders", () => {
     it("renders static components", { defaultCommandTimeout }, () => {
       cy.getCy("app-title").should("exist");

@@ -1,63 +1,44 @@
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
 import { pipe } from "effect/Function";
-import * as BrowserPlatform from "@effect/platform-browser";
-import { render, h, Atom, Suspense, type VElement } from "@didact/core";
-import { ViteDevServerDebugger } from "./tracing.js";
+import { h, Atom, Suspense, type VNode } from "@didact/core";
 
-const Counter = ({ label }: { label: string }) => {
+export const Counter = ({ label }: { label: string }) => {
   return Effect.gen(function*() {
     const count = yield* Atom.make(0);
     const value = yield* count.get();
 
-    return h(
-      "div",
-      {
-        "data-cy": label.toLowerCase().replace(" ", "-"),
-        style:
-          "padding: 1rem; border: 2px solid #666; border-radius: 8px; margin: 1rem 0;",
-      },
-      [
-        h("h3", {}, [label]),
-        h("p", { "data-cy": "counter-value" }, [`Count: ${value}`]),
-        h("div", { style: "display: flex; gap: 0.5rem;" }, [
-          h(
-            "button",
-            {
-              "data-cy": "counter-increment",
-              onClick: () => count.update((n: number) => n + 1),
-            },
-            ["+"],
-          ),
-          h(
-            "button",
-            {
-              "data-cy": "counter-decrement",
-              onClick: () => count.update((n: number) => n - 1),
-            },
-            ["-"],
-          ),
-          h(
-            "button",
-            {
-              "data-cy": "counter-reset",
-              onClick: () => count.set(0),
-            },
-            ["Reset"],
-          ),
-        ]),
-      ],
-    );
+    return <div
+      data-cy={label.toLowerCase().replace(" ", "-")}
+      style="padding: 1rem; border: 2px solid #666; border-radius: 8px; margin: 1rem 0;"
+    >
+      <h3>{label} </h3>
+      <p data-cy="counter-value">Count: {value}</p>
+      <div style="display: flex; gap: 0.5rem;" >
+        <button data-cy="counter-increment" onClick={() => count.update((n: number) => n + 1)}>
+          +
+        </button>
+        <button
+          data-cy="counter-decrement"
+          onClick={() => count.update((n: number) => n - 1)}
+        >
+          -
+        </button>
+        <button data-cy="counter-reset" onClick={() => count.set(0)}>
+          Reset
+        </button>
+      </div>
+    </div>
   });
 };
 
-const StreamCounter = () => {
-  // Component that returns a stream with multiple emissions
-  // Suspense will handle the "Loading..." fallback
-  return Stream.make(
+// Component that returns a stream with multiple emissions
+// Suspense will handle the "Loading..." fallback
+export const StreamCounter = () => {
+  console.log("[StreamCounter] Component function called!");
+  const items = [
     h("div", {
       "data-cy": "stream-counter",
       style: "padding: 1rem; border: 2px solid #ff6600; border-radius: 8px; margin: 1rem 0;"
@@ -74,7 +55,7 @@ const StreamCounter = () => {
     ]),
     h("div", {
       "data-cy": "stream-counter",
-      style: "padding: 1rem; border: 2px solid #ff6600; border-radius: 8px; margin: 1rem 0;"
+      style: "padding: 1rem; border: 2px solid #ff6600; border-radius: 8px; margin: 1rem 0."
     }, [
       h("h3", {}, ["Stream Counter"]),
       h("p", { "data-cy": "stream-status" }, ["Ready: 1"])
@@ -86,12 +67,16 @@ const StreamCounter = () => {
       h("h3", {}, ["Stream Counter"]),
       h("p", { "data-cy": "stream-status" }, ["Complete!"])
     ])
-  ).pipe(
-    Stream.schedule(Schedule.spaced("500 millis"))
+  ];
+
+  return pipe(
+    Stream.fromIterable(items),
+    Stream.schedule(Schedule.spaced("500 millis")),
+    Stream.tap(() => Effect.log("[StreamCounter] Stream emission!"))
   );
 };
 
-const TodoItem = ({
+export const TodoItem = ({
   text,
   onRemove,
 }: {
@@ -157,7 +142,7 @@ const TodoItem = ({
   });
 };
 
-const TodoList = () => {
+export const TodoList = () => {
   return Effect.gen(function*() {
     const todos = yield* Atom.make<string[]>([]);
 
@@ -224,71 +209,41 @@ const TodoList = () => {
   });
 };
 
-const Subtitle = ({ children }: { children: VElement[] }) => h(
-  "p",
-  {
-    "data-cy": "app-subtitle",
-    style: "text-align: center; color: #666;",
-  },
-  children
+const Subtitle = ({ children }: { children: VNode | string }) => (
+  <p data-cy="app-subtitle" style="text-align: center; color: #666;">
+    {children}
+  </p>
 );
 
-const StaticHeader = () =>
-  h(
-    "div",
-    { style: "max-width: 800px; margin: 2rem auto; font-family: system-ui;" },
-    [
-      h("h1", { "data-cy": "app-title", style: "text-align: center;" }, [
-        "🚀 Didact Effect Demo",
-      ]),
-      h(Subtitle, {}, ["Effect-first reactive JSX with @effect/platform-browser integration"]),
-    ],
-  );
-
-Effect.gen(function*() {
-  const root = pipe(document.getElementById("root"), Option.fromNullable, Option.getOrThrow)
-
-  // for testing purposes we are doing independent renderers to avoid crashing the whole app for one broken part
-  // TODO: add error boundaries so we dont need this
-
-  const staticContainer = document.createElement("div");
-  staticContainer.setAttribute('id', "static-container");
-  root.appendChild(staticContainer)
-
-  const counterContainer = document.createElement("div");
-  counterContainer.setAttribute('id', "counter-container");
-  root.appendChild(counterContainer)
-
-  const todoContainer = document.createElement("div");
-  todoContainer.setAttribute('id', "todo-container");
-  root.appendChild(todoContainer)
-
-  const streamContainer = document.createElement("div");
-  streamContainer.setAttribute('id', "stream-container");
-  root.appendChild(streamContainer);
-
-  // Fork each render independently since render() returns Effect.never
-  yield* Effect.fork(render(h(StaticHeader), staticContainer));
-  yield* Effect.fork(render(
-    h(Suspense, {
-      fallback: h("div", {
-        "data-cy": "stream-counter",
-        style: "padding: 1rem; border: 2px solid #999; border-radius: 8px; margin: 1rem 0;"
-      }, [
-        h("h3", {}, ["Stream Counter"]),
-        h("p", { "data-cy": "stream-status" }, ["Loading..."])
-      ])
-    }, [h(StreamCounter)])
-    , streamContainer));
-  yield* Effect.fork(render(h("div", {}, [
-    h(Counter, { label: "Counter A" }),
-    h(Counter, { label: "Counter B" }),
-  ]), counterContainer));
-  yield* Effect.fork(render(h(TodoList), todoContainer));
-
-  return yield* Effect.never;
-}).pipe(
-  Effect.catchAllDefect((e) => Effect.log(e)),
-  Effect.provide(ViteDevServerDebugger),
-  BrowserPlatform.BrowserRuntime.runMain,
+export const StaticHeader = () => (
+  <div style="max-width: 800px; margin: 2rem auto; font-family: system-ui;">
+    <h1 data-cy="app-title" style="text-align: center;">
+      🚀 Didact Effect Demo
+    </h1>
+    <Subtitle>Effect-first reactive JSX with @effect/platform-browser integration</Subtitle>
+    <p style="text-align: center;">
+      <a href="/examples.html" style="color: #4a9eff;">View Examples Page →</a>
+    </p>
+  </div>
 );
+
+export const StreamCounterFallback = () => <div
+  data-cy="stream-counter"
+  style="padding: 1rem; border: 2px solid #999; border-radius: 8px; margin: 1rem 0;"
+>
+  <h3>Stream Counter</h3>
+  <p data-cy="stream-status">Loading...</p>
+</div>
+
+// Composite App component for SSR/shared rendering
+export const App = () => <>
+  <StaticHeader />
+  <Suspense fallback={<StreamCounterFallback />}>
+    <StreamCounter />
+  </Suspense>
+  <div>
+    <Counter label="Counter A" />
+    <Counter label="Counter B" />
+  </div>
+  <TodoList />
+</>

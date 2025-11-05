@@ -8,26 +8,42 @@
       "packages/*"
     ],
     "catalog": {
+      "@effect-atom/atom": "^0.3.4",
       "@effect/language-service": "^0.51.1",
+      "@effect/platform": "^0.93.0",
       "@effect/platform-browser": "^0.72.0",
+      "@effect/platform-bun": "^0.83.0",
       "@effect/platform-node": "^0.98.4",
-      "effect": "^3.18.4",
+      "effect": "^3.19.0",
       "typescript": "^5.9.3"
     }
   },
   "scripts": {
-    "dev": "mprocs zsh 'bun dev:demo' 'bun run test' 'bun types:watch'",
+    "dev": "mprocs zsh 'bun dev:demo' 'bun run test' 'bun build:watch'",
     "dev:demo": "bun --filter demo dev:server",
     "test": "bun --filter demo cypress:open --e2e --browser=chromium",
-    "cypress:run": "cypress run",
-    "cypress:open": "cypress open",
+    "cypress:run": "cd packages/demo && bun cypress:run",
+    "cypress:open": "cd packages/demo && bun cypress:open",
     "build": "run-s build:core",
+    "build:watch": "bun --filter @didact/core build:watch",
     "build:core": "bun --filter @didact/core build",
     "types:check": "bun --filter '@didact/core' --filter 'demo' types:check",
-    "types:watch": "bun --filter '@didact/core' --filter 'demo' types:watch"
+    "types:watch": "bun --filter '@didact/core' --filter 'demo' types:watch",
+    "ssr:demo": "bun --filter @didact/core build && bun --filter demo ssr",
+    "lint": "eslint ."
   },
   "dependencies": {
     "mprocs": "^0.7.3",
     "npm-run-all": "^4.1.5"
+  },
+  "devDependencies": {
+    "@effect/language-service": "^0.55.2",
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "typescript-eslint": "^8.46.3"
+  },
+  "overrides": {
+    "effect": "3.19.0"
   }
 }

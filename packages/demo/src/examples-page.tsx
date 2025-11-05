@@ -1,0 +1,428 @@
+import * as Effect from "effect/Effect";
+import * as Stream from "effect/Stream";
+import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
+import * as Option from "effect/Option";
+import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as LogLevel from "effect/LogLevel";
+import * as BrowserPlatform from "@effect/platform-browser";
+import { pipe } from "effect/Function";
+import { render, Atom, Suspense, ErrorBoundary, type VNode } from "@didact/core";
+
+// Example 1: Simple Counter
+const Counter = ({ label }: { label: string }) => {
+  return Effect.gen(function*() {
+    const count = yield* Atom.make(0);
+    const value = yield* count.get();
+
+    return (
+      <div data-cy="example-counter">
+        <h3>{label}</h3>
+        <p data-cy="counter-value">Count: {value}</p>
+        <button data-cy="counter-increment" onClick={() => count.update((n: number) => n + 1)}>
+          +
+        </button>
+        <button data-cy="counter-decrement" onClick={() => count.update((n: number) => n - 1)}>
+          -
+        </button>
+        <button data-cy="counter-reset" onClick={() => count.set(0)}>
+          Reset
+        </button>
+      </div>
+    );
+  });
+};
+
+// Example 2: Stream Component with Suspense
+const StreamCounter = () => {
+  const items = [
+    <div data-cy="stream-status"><p>Ready: 3</p></div>,
+    <div data-cy="stream-status"><p>Ready: 2</p></div>,
+    <div data-cy="stream-status"><p>Ready: 1</p></div>,
+    <div data-cy="stream-status"><p style="color: #4ade80;">Complete!</p></div>
+  ];
+
+  return pipe(
+    Stream.fromIterable(items),
+    Stream.schedule(Schedule.spaced("500 millis"))
+  );
+};
+
+// Example 3: TodoItem child component
+const TodoItem = ({
+  text,
+  onRemove,
+}: {
+  text: string;
+  onRemove: (text: string) => void;
+}) => {
+  return Effect.gen(function*() {
+    const completed = yield* Atom.make(false);
+    const isCompleted = yield* completed.get();
+
+    return (
+      <li data-cy="todo-item" style="display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 0;">
+        <input
+          data-cy="todo-checkbox"
+          type="checkbox"
+          checked={isCompleted}
+          onChange={() => completed.update((v: boolean) => !v)}
+        />
+        <span
+          data-cy="todo-text"
+          style={isCompleted ? "text-decoration: line-through; color: #999;" : ""}
+        >
+          {text}
+        </span>
+        <button
+          data-cy="todo-remove"
+          type="button"
+          onClick={() => onRemove(text)}
+          style="margin-left: auto;"
+        >
+          Remove
+        </button>
+      </li>
+    );
+  });
+};
+
+// Example 3: Todo List with form submission
+const TodoList = () => {
+  return Effect.gen(function*() {
+    const todos = yield* Atom.make<string[]>([]);
+    const todoList = yield* todos.get();
+
+    const addTodo = (currentInput: string) => {
+      return todos.update((list: string[]) => list.concat(currentInput));
+    };
+
+    const removeTodo = (todoToRemove: string) => {
+      return todos.update((list: string[]) =>
+        list.filter((todo: string) => todo !== todoToRemove)
+      );
+    };
+
+    return (
+      <form
+        data-cy="todo-list"
+        onSubmit={(e: Event) => {
+          e.preventDefault();
+          const form = e.currentTarget as HTMLFormElement;
+          return pipe(
+            new FormData(form),
+            Object.fromEntries,
+            Schema.decodeUnknown(Schema.Struct({ todoInput: Schema.String })),
+            Effect.flatMap((parsed) => addTodo(parsed.todoInput)),
+            Effect.tap(() => Effect.sync(() => form.reset()))
+          );
+        }}
+      >
+        <h3>Todo List</h3>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+          <input
+            data-cy="todo-input"
+            type="text"
+            name="todoInput"
+            placeholder="What needs to be done?"
+            style="flex: 1; padding: 0.5rem;"
+          />
+          <button data-cy="todo-add" type="submit">Add</button>
+        </div>
+        <ul style="list-style: none; padding: 0;">
+          {todoList.map((todo: string) =>
+            <TodoItem key={todo} text={todo} onRemove={removeTodo} />
+          )}
+        </ul>
+      </form>
+    );
+  });
+};
+
+// Example 4: Static Components
+const Subtitle = ({ children }: { children: VNode | string }) => (
+  <p style="text-align: center; color: #999;">
+    {children}
+  </p>
+);
+
+const StaticHeader = () => (
+  <div>
+    <h1 style="text-align: center;">🚀 Static Component Example</h1>
+    <Subtitle>No state, just pure rendering</Subtitle>
+  </div>
+);
+
+// Example 5: Debounced Search
+// This attempts to use a debounced Effect pattern - will it work?
+const DebouncedSearch = () => {
+  return Effect.gen(function*() {
+    const query = yield* Atom.make("");
+    const debouncedQuery = yield* Atom.make("");
+    const isSearching = yield* Atom.make(false);
+
+    const currentQuery = yield* query.get();
+    const currentDebouncedQuery = yield* debouncedQuery.get();
+    const searching = yield* isSearching.get();
+
+    // Try to debounce with Effect.delay - stress test!
+    const performSearch = (value: string) => pipe(
+      Effect.sync(() => isSearching.set(true)),
+      Effect.flatMap(() => Effect.delay(Effect.void, "300 millis")),
+      Effect.flatMap(() => Effect.sync(() => {
+        debouncedQuery.set(value);
+        isSearching.set(false);
+      }))
+    );
+
+    // Simulate search results
+    const results = currentDebouncedQuery.length >= 2
+      ? [`Result 1 for "${currentDebouncedQuery}"`, `Result 2 for "${currentDebouncedQuery}"`, `Result 3 for "${currentDebouncedQuery}"`]
+      : [];
+
+    return (
+      <div data-cy="debounced-search">
+        <h3>Debounced Search</h3>
+        <p style="color: #ffa94a; font-size: 0.9em; margin-bottom: 1rem;">
+          ⚠️ Testing: Effect.delay in event handlers
+        </p>
+        <input
+          data-cy="search-input"
+          type="text"
+          value={currentQuery}
+          onInput={(e: InputEvent) => {
+            const value = (e.target as HTMLInputElement).value;
+            query.set(value);
+            // Return an Effect that will be auto-executed - stress test!
+            return performSearch(value);
+          }}
+          placeholder="Type to search..."
+          style="width: 100%; padding: 0.5rem; margin-bottom: 1rem;"
+        />
+        <p style="color: #999;">
+          Query: <strong>{currentQuery}</strong> |
+          Debounced: <strong>{currentDebouncedQuery || "(none)"}</strong>
+          {searching && " | 🔄 Searching..."}
+        </p>
+        <ul data-cy="search-results" style="list-style: none; padding: 0;">
+          {results.length > 0 ? (
+            results.map((result, i) => (
+              <li key={i} data-cy="search-result" style="padding: 0.5rem; background: #333; margin: 0.25rem 0; border-radius: 4px;">
+                {result}
+              </li>
+            ))
+          ) : (
+            <li style="color: #999; font-style: italic;">
+              {currentDebouncedQuery.length > 0 ? "Type at least 2 characters..." : "Start typing to search..."}
+            </li>
+          )}
+        </ul>
+      </div>
+    );
+  });
+};
+
+// Example 6: Service-based component (like React Context)
+// This tests if Effect.Service works across multiple components with shared Atoms
+class ThemeService extends Effect.Service<ThemeService>()("ThemeService", {
+  accessors: true,
+  effect: Effect.gen(function*() {
+    const currentTheme = yield* Atom.make<"light" | "dark">("dark");
+
+    return {
+      getTheme: () => currentTheme.get(),
+      toggleTheme: () => currentTheme.update((t: "light" | "dark") => t === "light" ? "dark" : "light")
+    };
+  })
+}) { }
+
+// Testing: Async service calls with Effect.sleep - will components show loading states?
+class UserService extends Effect.Service<UserService>()("UserService", {
+  accessors: true,
+  sync: () => ({
+    getCurrentUser: () => pipe(
+      Effect.log("UserService: Fetching current user..."),
+      Effect.flatMap(() => Effect.sleep("1 second")),
+      Effect.flatMap(() => Effect.succeed({ name: "Alice", role: "admin" })),
+      Effect.tap(() => Effect.log("UserService: Current user loaded!"))
+    ),
+    getUsers: () => pipe(
+      Effect.log("UserService: Fetching all users..."),
+      Effect.flatMap(() => Effect.sleep("2 seconds")),
+      Effect.flatMap(() => Effect.succeed([
+        { id: 1, name: "Alice" },
+        { id: 2, name: "Bob" },
+        { id: 3, name: "Charlie" }
+      ])),
+      Effect.tap(() => Effect.log("UserService: All users loaded!"))
+    )
+  })
+}) { }
+
+const ThemedUserCard = () => {
+  return Effect.gen(function*() {
+    // Testing: Can we access services in components?
+
+    // Testing: Does getTheme() properly track the Atom?
+    const theme = yield* ThemeService.getTheme();
+    const user = yield* UserService.getCurrentUser();
+
+    const bgColor = theme === "light" ? "#f0f0f0" : "#2a2a2a";
+    const textColor = theme === "light" ? "#1a1a1a" : "#e0e0e0";
+
+    return (
+      <div
+        data-cy="themed-user-card"
+        style={`padding: 1rem; background: ${bgColor}; color: ${textColor}; border-radius: 8px; margin: 1rem 0;`}
+      >
+        <h4>Current User</h4>
+        <p>Name: <strong>{user.name}</strong></p>
+        <p>Role: <strong>{user.role}</strong></p>
+        <p>Theme: <strong>{theme}</strong></p>
+        <button
+          data-cy="toggle-theme"
+          onClick={() => ThemeService.toggleTheme()}
+          style="padding: 0.5rem 1rem;"
+        >
+          Toggle Theme (should update both components!)
+        </button>
+      </div>
+    );
+  });
+};
+
+const UserList = () => {
+  return Effect.gen(function*() {
+    // Testing: Same services, should share the same Atom instance
+    const themeService = yield* ThemeService;
+    const userService = yield* UserService;
+
+    // Testing: Should this component re-render when ThemeService atom changes?
+    const theme = yield* themeService.getTheme();
+    const users = yield* userService.getUsers();
+
+    const bgColor = theme === "light" ? "#f0f0f0" : "#2a2a2a";
+    const textColor = theme === "light" ? "#1a1a1a" : "#e0e0e0";
+
+    return (
+      <div data-cy="user-list" style={`padding: 1rem; background: ${bgColor}; color: ${textColor}; border-radius: 8px;`}>
+        <h4>All Users (theme: {theme})</h4>
+        <ul style="list-style: none; padding: 0;">
+          {users.map((user) => (
+            <li key={user.id} style="padding: 0.5rem 0;">
+              {user.id}. {user.name}
+            </li>
+          ))}
+        </ul>
+        <p style="color: #ffa94a; font-size: 0.9em;">
+          ⚠️ Testing: Does toggling theme above update this component too?
+        </p>
+      </div>
+    );
+  });
+};
+
+// Main Examples Page
+Effect.gen(function*() {
+  const root = pipe(
+    document.getElementById("root"),
+    Option.fromNullable,
+    Option.getOrThrow
+  );
+
+  // Create sections for each example
+  const counterSection = document.createElement("div");
+  counterSection.className = "example-section";
+  counterSection.innerHTML = "<h2>Example 1: Simple Counter</h2><p>Basic reactive state with Atom.make()</p>";
+  root.appendChild(counterSection);
+
+  const staticSection = document.createElement("div");
+  staticSection.className = "example-section";
+  staticSection.innerHTML = "<h2>Example 2: Static Components</h2><p>Components without state</p>";
+  root.appendChild(staticSection);
+
+  const streamSection = document.createElement("div");
+  streamSection.className = "example-section";
+  streamSection.innerHTML = "<h2>Example 3: Stream with Suspense</h2><p>Progressive rendering with fallback</p>";
+  root.appendChild(streamSection);
+
+  const todoSection = document.createElement("div");
+  todoSection.className = "example-section";
+  todoSection.innerHTML = "<h2>Example 4: Todo List with Child Components</h2><p>Form submission and nested components</p>";
+  root.appendChild(todoSection);
+
+  const searchSection = document.createElement("div");
+  searchSection.className = "example-section";
+  searchSection.innerHTML = "<h2>Example 5: Debounced Search 🔬</h2><p>Testing: Effect.delay in event handlers + multiple atom updates</p>";
+  root.appendChild(searchSection);
+
+  const serviceSection = document.createElement("div");
+  serviceSection.className = "example-section";
+  serviceSection.innerHTML = "<h2>Example 6: Effect Services 🔬</h2><p>Testing: Shared services with Atoms + async Effect.sleep (1-2 sec delays)</p>";
+  root.appendChild(serviceSection);
+
+  const errorSection = document.createElement("div");
+  errorSection.className = "example-section";
+  errorSection.innerHTML = "<h2>Example 7: Error Boundaries</h2><p>Render-time, event, and stream errors</p>";
+  root.appendChild(errorSection);
+
+  // Demo components for ErrorBoundary
+  const CrashDuringRender = () => {
+    throw new Error("render-crash");
+  };
+
+  const EventFailer = () => (
+    <div>
+      <button data-cy="fail-event" onClick={() => Effect.fail(new Error("event-crash"))}>Fail Event</button>
+    </div>
+  );
+
+  const StreamFailer = () => {
+    const ok = <div data-cy="stream-ok">Stream OK once</div>;
+    const fail = Effect.delay(Effect.fail(new Error("stream-crash")), "300 millis");
+    return Stream.concat(Stream.succeed(ok), Stream.fromEffect(fail));
+  };
+
+  // Render each example independently
+  yield* Effect.fork(render(
+    <Counter label="Example Counter" />,
+    counterSection
+  ));
+
+  yield* Effect.fork(render(
+    <StaticHeader />,
+    staticSection
+  ));
+
+  yield* Effect.fork(render(
+    <Suspense fallback={<div data-cy="stream-loading"> Loading stream...</div>}><StreamCounter /></Suspense>,
+    streamSection
+  ));
+
+  yield* Effect.fork(render(<TodoList />, todoSection));
+
+  yield* Effect.fork(render(<DebouncedSearch />, searchSection));
+
+  // Service example needs to provide the services to the render
+  const serviceLayer = Layer.merge(ThemeService.Default, UserService.Default);
+
+  yield* Effect.fork(render(
+    <><ThemedUserCard /><UserList /></>,
+    serviceSection
+  ).pipe(Effect.provide(serviceLayer)));
+
+  // Error boundary renders - SIMPLIFIED TO ONE TEST
+  yield* Effect.fork(render(
+    <ErrorBoundary fallback={<div data-cy="fallback-render">Render Error</div>}>
+      <CrashDuringRender />
+    </ErrorBoundary>,
+    errorSection
+  ));
+
+  return yield* Effect.never;
+}).pipe(
+  Effect.catchAllDefect((e) => Effect.flatMap(Effect.log(e), () => Effect.never)),
+  Effect.provide(Logger.minimumLogLevel(LogLevel.Debug)),
+  BrowserPlatform.BrowserRuntime.runMain,
+);

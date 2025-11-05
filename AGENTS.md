@@ -13,14 +13,15 @@ Building an Effect-first JSX renderer where components are Effect programs with 
 
 ## Core API Pattern
 ```typescript
-const Counter: Component = (props) => {
-  const count = Atom.make(0);
+const Counter = (props) => {
   return Effect.gen(function* () {
-    return h([ // fragment
-      h("button", { onClick: () => Atom.update(count, n => n + 1) }, [
-        `Count: ${Atom.get(count)}`,
-      ]),
-    ]);
+    const count = yield* Atom.make(0);
+    const value = yield* Atom.get(count)
+    return (
+      <button onClick={() => Atom.update(count, n => n + 1)}>
+        Count: {value}
+      </button>
+    )
   });
 }
 ```
@@ -36,15 +37,13 @@ const Counter: Component = (props) => {
   - `./packages/didact/src/index.ts` - main source code
   - `./packages/didact/src/non-effect.ts` - legacy react-style renderer for reference (DO NOT TOUCH)
   - `./packages/demo/src/demo-effect.ts` - example usage of didact renderer, used for testing
-  - `./dev-server-logs.json` - browser console output when debugging frontend issues. Effect captures log info with `Effect.log` and sends structured json logs to this file. Do not read it directly without using `jq` to search/filter it, eg `jq -R 'select(.message | contains(\"foo"))[-10:] | "timestamp: \(.timestamp), message: \(.message)"' dev-server-logs.json`
 
 ## Commands
   - Build: `bun run build` (tsc)
   - E2E Tests: `bun --filter demo cypress:run` (headless Cypress E2E tests)
-    - Single test: `bun --filter demo cypress:run -- --spec cypress/e2e/<test-name>.cy.ts`
+    - Single test: `bun --filter demo cypress:run --spec "cypress/e2e/<test-name>.cy.ts"`
 
-Assume the vite dev server is already running. Do not try to run it with `bun dev`,
-I am running the dev server, and tests re-run on edits. You can safely inspect the log output after sleeping 3 seconds after editing without running tests manually.
+Assume the vite dev server is already running. Do not try to run it with `bun dev`.
 
 ## Current State
   - ✅ Basic reactive Atom tracking
@@ -64,5 +63,11 @@ I am running the dev server, and tests re-run on edits. You can safely inspect t
 # Tools  
   - `ast-grep` is installed, *use it as much as possible* when editing, see ./docs/ast-grep-guide.md
   - Cypress is used for all E2E testing in `packages/demo/cypress/e2e/`
+  - **Firefox MCP** - Access live browser console logs from the dev server:
+    ```
+    1. firefox-devtools_navigate_page to http://localhost:5173
+    2. firefox-devtools_list_console_messages (optionally filter with limit, level, textContains)
+    3. Can also take snapshots, interact with UI, monitor network requests
+    ```
 
 > Remember, though it is inspired by React, this is not recreating React nor implementing React APIs

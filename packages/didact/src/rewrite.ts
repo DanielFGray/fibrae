@@ -6,53 +6,27 @@ import * as Scope from "effect/Scope";
 import * as Ref from "effect/Ref";
 import * as Exit from "effect/Exit";
 import * as Deferred from "effect/Deferred";
+import * as FiberSet from "effect/FiberSet";
+
 import {
   Atom as BaseAtom,
-  Registry,
+  Registry as AtomRegistry,
 } from "@effect-atom/atom";
-import { FiberSet } from "effect";
+import type {
+  VElement,
+  ElementType,
+  Fiber,
+  FiberRef,
+  ErrorBoundaryConfig,
+  Primitive,
+} from "./shared.js";
 
-// Re-export Registry namespace for external use
-export { Registry as AtomRegistry } from "@effect-atom/atom";
+// Re-export shared types for backwards compatibility
+export type { VElement, ElementType, Fiber, FiberRef, Primitive };
+export type { ErrorBoundaryConfig };
 
-type Primitive = keyof HTMLElementTagNameMap | "TEXT_ELEMENT";
-
-export type ElementType<Props = {}> =
-  | Primitive
-  | ((props: Props) => VElement | Stream.Stream<VElement, any, any> | Effect.Effect<VElement, any, any>);
-
-export interface VElement {
-  type: ElementType;
-  props: {
-    [key: string]: unknown;
-    children?: VElement[];
-  };
-}
-
-export type FiberRef = { current: Fiber };
-
-type ErrorBoundaryConfig = { fallback: VElement; onError?: (cause: unknown) => void; hasError: boolean };
-
-export interface Fiber {
-  type: Option.Option<ElementType>;
-  props: {
-    [key: string]: unknown;
-    children?: VElement[];
-  };
-  dom: Option.Option<Node>;
-  parent: Option.Option<Fiber>;
-  child: Option.Option<Fiber>;
-  sibling: Option.Option<Fiber>;
-  alternate: Option.Option<Fiber>;
-  effectTag: Option.Option<"UPDATE" | "PLACEMENT" | "DELETION">;
-  componentScope: Option.Option<Scope.Scope>;
-  accessedAtoms: Option.Option<Set<BaseAtom.Atom<any>>>;
-  latestStreamValue: Option.Option<VElement>;
-  childFirstCommitDeferred: Option.Option<Deferred.Deferred<void>>;
-  fiberRef: Option.Option<FiberRef>;
-  isMultiEmissionStream: boolean;
-  errorBoundary: Option.Option<ErrorBoundaryConfig>;
-}
+// Alias for convenience (matches common React terminology)
+export type VNode = VElement;
 
 export class RenderError extends Data.TaggedError("RenderError") { }
 
@@ -62,46 +36,46 @@ export class FiberContext extends Effect.Tag("FiberContext")<
 >() { }
 
 class AtomHandle<R, W = R> {
-  private _registry: Option.Option<Registry.Registry> = Option.none();
+  private _registry: Option.Option<AtomRegistry.Registry> = Option.none();
   private readonly _atom: BaseAtom.Writable<R, W>;
 
   constructor(atom: BaseAtom.Writable<R, W>) {
     this._atom = atom;
   }
 
-  _bindRegistry(registry: Registry.Registry): void {
+  _bindRegistry(registry: AtomRegistry.Registry): void {
     this._registry = Option.some(registry);
   }
 
-  get(): Effect.Effect<R, never, Registry.AtomRegistry> {
+  get(): Effect.Effect<R, never, AtomRegistry.AtomRegistry> {
     const self = this;
     return Effect.gen(function*() {
-      const registry = yield* Registry.AtomRegistry;
+      const registry = yield* AtomRegistry.AtomRegistry;
       self._bindRegistry(registry);
       return registry.get(self._atom);
     });
   }
 
-  set(value: W): Effect.Effect<void, never, Registry.AtomRegistry> {
+  set(value: W): Effect.Effect<void, never, AtomRegistry.AtomRegistry> {
     const self = this;
     return Effect.gen(function*() {
-      const registry = yield* Registry.AtomRegistry;
+      const registry = yield* AtomRegistry.AtomRegistry;
       registry.set(self._atom, value);
     });
   }
 
-  update(f: (r: R) => W): Effect.Effect<void, never, Registry.AtomRegistry> {
+  update(f: (r: R) => W): Effect.Effect<void, never, AtomRegistry.AtomRegistry> {
     const self = this;
     return Effect.gen(function*() {
-      const registry = yield* Registry.AtomRegistry;
+      const registry = yield* AtomRegistry.AtomRegistry;
       registry.update(self._atom, f);
     });
   }
 
-  modify<A>(f: (r: R) => [returnValue: A, nextValue: W]): Effect.Effect<A, never, Registry.AtomRegistry> {
+  modify<A>(f: (r: R) => [returnValue: A, nextValue: W]): Effect.Effect<A, never, AtomRegistry.AtomRegistry> {
     const self = this;
     return Effect.gen(function*() {
-      const registry = yield* Registry.AtomRegistry;
+      const registry = yield* AtomRegistry.AtomRegistry;
       return registry.modify(self._atom, f);
     });
   }
@@ -150,17 +124,17 @@ class AtomHandle<R, W = R> {
 const normalizeToStream = (v: VElement | Effect.Effect<VElement> | Stream.Stream<VElement>): Stream.Stream<VElement> => {
   if (Effect.isEffect(v)) return Stream.fromEffect(v);
   if (typeof v === "object" && "pipe" in v && typeof v.pipe === "function") {
-    return v as Stream.Stream<VElement>;
+    return v;
   }
   return Stream.succeed(v as VElement);
 };
 
 const makeTrackingRegistry = (
-  realRegistry: Registry.Registry,
+  realRegistry: AtomRegistry.Registry,
   accessedAtoms: Set<BaseAtom.Atom<any>>
-): Registry.Registry => {
+): AtomRegistry.Registry => {
   return {
-    [Registry.TypeId]: Registry.TypeId,
+    [AtomRegistry.TypeId]: AtomRegistry.TypeId,
     getNodes: () => realRegistry.getNodes(),
     get: <A>(atom: BaseAtom.Atom<A>) => {
       const actualAtom = atom instanceof AtomHandle ? atom.atom : atom;
@@ -201,7 +175,7 @@ const makeTrackingRegistry = (
   };
 };
 
-export const CustomAtomRegistryLayer = Registry.layerOptions({
+export const CustomAtomRegistryLayer = AtomRegistry.layerOptions({
   scheduleTask: (f: () => void) => f()
 });
 
@@ -209,7 +183,7 @@ export class DidactRuntime extends Effect.Service<DidactRuntime>()("DidactRuntim
   accessors: true,
   dependencies: [CustomAtomRegistryLayer],
   scoped: Effect.gen(function*() {
-    const registry = yield* Registry.AtomRegistry;
+    const registry = yield* AtomRegistry.AtomRegistry;
     const runtimeScope = yield* Scope.make();
 
     const state = yield* Ref.make({
@@ -223,7 +197,7 @@ export class DidactRuntime extends Effect.Service<DidactRuntime>()("DidactRuntim
       atomHandleCache: new WeakMap<Fiber, Map<BaseAtom.Atom<any>, AtomHandle<any, any>>>(),
     });
 
-    const runFork = yield* FiberSet.makeRuntime<Registry.AtomRegistry>();
+    const runFork = yield* FiberSet.makeRuntime<AtomRegistry.AtomRegistry>();
 
     const AtomOps = {
       get: <A>(atom: BaseAtom.Atom<A>): A => registry.get(atom),
@@ -243,6 +217,10 @@ const queueFiberForRerender = Effect.fn("queueFiberForRerender")((fiber: Fiber) 
     const runtime = yield* DidactRuntime;
     const { state } = runtime;
 
+    const fiberType = Option.getOrElse(fiber.type, () => "<none>");
+    const hasErrBoundary = Option.isSome(fiber.errorBoundary);
+    const hasErrorState = hasErrBoundary ? Option.getOrElse(fiber.errorBoundary, () => ({ hasError: false })).hasError : false;
+
     const didSchedule = yield* Ref.modify(state, (s) => {
       const alreadyQueued = s.renderQueue.has(fiber);
       const newQueue = alreadyQueued ? s.renderQueue : new Set([...s.renderQueue, fiber]);
@@ -261,7 +239,7 @@ const queueFiberForRerender = Effect.fn("queueFiberForRerender")((fiber: Fiber) 
         runFork(
           processBatch().pipe(
             Effect.provideService(DidactRuntime, runtime),
-            Effect.provideService(Registry.AtomRegistry, registry)
+            Effect.provideService(AtomRegistry.AtomRegistry, registry)
           )
         );
       });
@@ -280,17 +258,18 @@ const findNearestErrorBoundary = (fiber: Fiber): Option.Option<Fiber> => {
 };
 
 const handleFiberError = Effect.fn("handleFiberError")((fiber: Fiber, cause: unknown) =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const boundaryOpt = findNearestErrorBoundary(fiber);
     if (Option.isSome(boundaryOpt)) {
       const boundary = boundaryOpt.value;
-      const cfg = Option.getOrElse(boundary.errorBoundary, () => ({ fallback: h("div", {}, []), hasError: false } as any));
+      const cfg: ErrorBoundaryConfig = Option.getOrElse(boundary.errorBoundary, () => ({ fallback: h("div", {}, []), hasError: false }));
+      const wasAlreadyError = cfg.hasError === true;
       try { cfg.onError?.(cause); } catch { }
       cfg.hasError = true;
-      boundary.errorBoundary = Option.some(cfg as any);
-      yield* queueFiberForRerender(boundary);
-    } else {
-      yield* Effect.log(`[Error] Unhandled error without ErrorBoundary: ${String(cause)}`);
+      boundary.errorBoundary = Option.some(cfg);
+      if (!wasAlreadyError) {
+        yield* queueFiberForRerender(boundary);
+      }
     }
   })
 );
@@ -348,7 +327,7 @@ const processBatch = Effect.fn("processBatch")(() =>
   })
 );
 
-const resubscribeFiber = Effect.fn("resubscribeFiber")(
+Effect.fn("resubscribeFiber")(
   (fiber: Fiber, accessedAtoms: Set<BaseAtom.Atom<any>>) =>
     Effect.gen(function*() {
       const runtime = yield* DidactRuntime;
@@ -360,14 +339,13 @@ const resubscribeFiber = Effect.fn("resubscribeFiber")(
       });
 
       const newScope = yield* Scope.make();
-      fiber.componentScope = Option.some(newScope as Scope.Scope.Closeable);
+      fiber.componentScope = Option.some(newScope);
 
       yield* Effect.forEach(
         accessedAtoms,
         (atom) => {
-          const stream = Registry.toStream(registry, atom).pipe(
+          const stream = AtomRegistry.toStream(registry, atom).pipe(
             Stream.drop(1),
-            Stream.tap(() => Effect.log(`[Atom Change] Atom value changed, queueing rerender`))
           );
           const subscription = Stream.runForEach(
             stream,
@@ -379,6 +357,7 @@ const resubscribeFiber = Effect.fn("resubscribeFiber")(
         },
         { discard: true, concurrency: "unbounded" }
       );
+
     })
 );
 
@@ -390,16 +369,10 @@ const performUnitOfWork: (fiber: Fiber) => Effect.Effect<Option.Option<Fiber>, n
         onSome: (type) => typeof type === "function"
       });
 
-      const typeName = Option.match(fiber.type, {
-        onNone: () => "none",
-        onSome: (type) => typeof type === "function" ? (type as Function).name || "anonymous" : String(type)
-      });
-      yield* Effect.log(`[performUnitOfWork] Processing fiber with type: ${typeName}, isFunction: ${isFunctionComponent}`);
-
       const eff = isFunctionComponent ? updateFunctionComponent(fiber) : updateHostComponent(fiber);
       const exited = yield* Effect.exit(eff);
       if (Exit.isFailure(exited)) {
-        yield* handleFiberError(fiber, (exited as Exit.Failure<unknown>).cause);
+        yield* handleFiberError(fiber, exited.cause);
         return Option.none<Fiber>();
       }
 
@@ -419,36 +392,6 @@ const performUnitOfWork: (fiber: Fiber) => Effect.Effect<Option.Option<Fiber>, n
     })
   );
 
-const subscribeFiberAtoms = Effect.fn("subscribeFiberAtoms")(
-  (fiber: Fiber, accessedAtoms: Set<BaseAtom.Atom<any>>) =>
-    Effect.gen(function* () {
-      const runtime = yield* DidactRuntime;
-      const { registry } = runtime;
-
-      const scope = yield* Option.match(fiber.componentScope, {
-        onNone: () => Effect.die("subscribeFiberAtoms requires an existing componentScope"),
-        onSome: (s) => Effect.succeed(s)
-      });
-
-      yield* Effect.forEach(
-        accessedAtoms,
-        (atom) => {
-          const stream = Registry.toStream(registry, atom).pipe(
-            Stream.drop(1),
-            Stream.tap(() => Effect.log(`[Atom Change] Atom value changed, queueing rerender`))
-          );
-          const subscription = Stream.runForEach(
-            stream,
-            () => queueFiberForRerender(fiber).pipe(
-              Effect.provideService(DidactRuntime, runtime)
-            )
-          );
-          return Effect.forkIn(subscription, scope);
-        },
-        { discard: true, concurrency: "unbounded" }
-      );
-    })
-);
 
 const updateFunctionComponent = Effect.fn("updateFunctionComponent")((fiber: Fiber) =>
   Effect.gen(function*() {
@@ -465,20 +408,32 @@ const updateFunctionComponent = Effect.fn("updateFunctionComponent")((fiber: Fib
       onSome: (alt) => Option.isSome(alt.latestStreamValue) && alt.isMultiEmissionStream
     });
 
-    if (hasAlternate && hasCachedValue) {
-      yield* Effect.log("[updateFunctionComponent] Using cached stream value from alternate");
-      const alt = Option.getOrThrow(fiber.alternate);
-      const vElement = Option.getOrThrow(alt.latestStreamValue);
+    // If this fiber is an ErrorBoundary in error state, we MUST recompute
+    // to allow rendering the fallback. Skips the cached fast-path.
+    const isBoundaryWithError = Option.isSome(fiber.errorBoundary) && fiber.errorBoundary.value.hasError === true;
 
-      fiber.latestStreamValue = alt.latestStreamValue;
-      fiber.accessedAtoms = alt.accessedAtoms;
-      fiber.componentScope = alt.componentScope;
-      alt.componentScope = Option.none();
+    if (hasAlternate && hasCachedValue && !isBoundaryWithError) {
+      const alt = Option.getOrThrow(fiber.alternate);
+
+      // Get the LATEST stream value BEFORE updating fiberRef
+      // If fiberRef exists, stream emissions may have updated the OLD fiber's latestStreamValue
+      const latestValue = Option.match(alt.fiberRef, {
+        onNone: () => alt.latestStreamValue,
+        onSome: (ref) => ref.current.latestStreamValue
+      });
+      const vElement = Option.getOrThrow(latestValue);
+
+      // Now update fiberRef so any NEW emissions update this new fiber
       fiber.fiberRef = alt.fiberRef;
       Option.match(fiber.fiberRef, {
         onNone: () => { },
         onSome: (ref) => { ref.current = fiber; }
       });
+
+      fiber.latestStreamValue = latestValue;
+      fiber.accessedAtoms = alt.accessedAtoms;
+      fiber.componentScope = alt.componentScope;
+      alt.componentScope = Option.none();
       fiber.isMultiEmissionStream = alt.isMultiEmissionStream;
 
       yield* reconcileChildren(fiber, [vElement]);
@@ -507,20 +462,24 @@ const updateFunctionComponent = Effect.fn("updateFunctionComponent")((fiber: Fib
     fiber.isMultiEmissionStream = isActualStream;
 
     const stream = normalizeToStream(output).pipe(
-      Stream.provideService(Registry.AtomRegistry, trackingRegistry),
+      Stream.provideService(AtomRegistry.AtomRegistry, trackingRegistry),
       Stream.provideService(DidactRuntime, runtime),
       Stream.provideService(FiberContext, { fiber })
     );
 
     const firstValueDeferred = yield* Deferred.make<VElement>();
 
+    // Capture accessed atoms container now; subscribe after first emission
     fiber.accessedAtoms = Option.some(accessedAtoms);
-    yield* resubscribeFiber(fiber, accessedAtoms);
 
-    const scope = yield* Option.match(fiber.componentScope, {
-      onNone: () => Effect.die("Expected componentScope to be created by resubscribeFiber"),
-      onSome: (s) => Effect.succeed(s)
+    // Prepare (or replace) component scope before starting the component stream
+    yield* Option.match(fiber.componentScope, {
+      onNone: () => Effect.void,
+      onSome: (scope) => Scope.close(scope as Scope.Scope.Closeable, Exit.void)
     });
+    const newScope = yield* Scope.make();
+    fiber.componentScope = Option.some(newScope);
+    const scope = newScope;
 
     const fiberRef: FiberRef = Option.match(fiber.fiberRef, {
       onNone: () => ({ current: fiber }),
@@ -550,27 +509,51 @@ const updateFunctionComponent = Effect.fn("updateFunctionComponent")((fiber: Fib
         const currentFiber = fiberRef.current;
         yield* handleFiberError(currentFiber, cause);
       })),
-      Effect.tap(() => Effect.log("[Stream] Subscription completed"))
     );
 
     yield* Effect.forkIn(subscription, scope);
 
     const firstVElement = yield* Deferred.await(firstValueDeferred);
 
+    // After first render, subscribe to accessed atoms within existing scope
+    yield* Effect.forEach(
+      accessedAtoms,
+      (atom) => {
+        const stream = AtomRegistry.toStream(registry, atom).pipe(
+          Stream.drop(1),
+        );
+        const sub = Stream.runForEach(
+          stream,
+          () => queueFiberForRerender(fiber).pipe(
+            Effect.provideService(DidactRuntime, runtime)
+          )
+        );
+        return Effect.forkIn(sub, scope);
+      },
+      { discard: true, concurrency: "unbounded" }
+    );
+
     fiber.latestStreamValue = Option.some(firstVElement);
     yield* reconcileChildren(fiber, [firstVElement]);
 
-    yield* subscribeFiberAtoms(fiber, accessedAtoms);
   })
 );
 
 const updateHostComponent = Effect.fn("updateHostComponent")((fiber: Fiber) =>
   Effect.gen(function*() {
-    if (Option.isNone(fiber.dom)) {
-      fiber.dom = Option.some(yield* createDom(fiber));
+    // FRAGMENT does not create a DOM node; just reconcile children
+    const isFragment = Option.match(fiber.type, {
+      onNone: () => false,
+      onSome: (t) => t === "FRAGMENT"
+    });
+
+    if (!isFragment) {
+      if (Option.isNone(fiber.dom)) {
+        fiber.dom = Option.some(yield* createDom(fiber));
+      }
     }
 
-    const children = fiber.props.children as VElement[] | undefined;
+    const children = fiber.props.children;
     yield* reconcileChildren(fiber, children || []);
   })
 );
@@ -582,6 +565,9 @@ const createDom = Effect.fn("createDom")((fiber: Fiber) =>
       onSome: (type) => {
         if (typeof type !== "string") {
           return Effect.die("createDom called on function component");
+        }
+        if (type === "FRAGMENT") {
+          return Effect.die("createDom called on fragment");
         }
         const node: Node = type === "TEXT_ELEMENT"
           ? document.createTextNode("")
@@ -598,7 +584,7 @@ const createDom = Effect.fn("createDom")((fiber: Fiber) =>
         onNone: () => { },
         onSome: (ref) => {
           if (typeof ref === "object" && "current" in ref) {
-            (ref as { current: Node | null }).current = dom;
+            (ref).current = dom;
           }
         }
       }
@@ -613,8 +599,44 @@ const isProperty = (key: string) => key !== "children" && key !== "ref" && key !
 const isNew = (prev: { [key: string]: unknown }, next: { [key: string]: unknown }) => (key: string) =>
   prev[key] !== next[key];
 
+const propertyUpdateMap: Record<string, "attribute" | "property" | "classList" | "booleanAttribute"> = {
+  // style: "attribute",
+  class: "classList",
+  className: "classList",
+  value: "property",
+  checked: "property",
+  // Add more as needed
+};
+
+function setDomProperty(el: HTMLElement, name: string, value: any): void {
+  const method = propertyUpdateMap[name] ||
+    (name.startsWith("data-") || name.startsWith("aria-") ? "attribute" : "attribute");
+
+  switch (method) {
+    case "attribute":
+      return el.setAttribute(name, String(value ?? ""));
+    case "property":
+      return void Reflect.set(el, name, value);
+    case "classList":
+      if (Array.isArray(value)) {
+        return value.forEach((v: string) => el.classList.add(v));
+      }
+      return el.setAttribute("class", String(value ?? ""));
+    case "booleanAttribute":
+      if (value) {
+        el.setAttribute(name, "");
+        return
+      } else {
+        el.removeAttribute(name);
+        return
+      }
+    default:
+      return el.setAttribute(name, String(value ?? ""));
+  }
+}
+
 const updateDom = Effect.fn("updateDom")(
-  (dom: Node, prevProps: { [key: string]: unknown }, nextProps: { [key: string]: unknown }, ownerFiber?: Fiber) =>
+  (dom: Node, prevProps: { [key: string]: unknown }, nextProps: { [key: string]: unknown }, ownerFiber: Fiber) =>
     Effect.gen(function*() {
       const runtime = yield* DidactRuntime;
       const { runFork, state } = runtime;
@@ -628,7 +650,7 @@ const updateDom = Effect.fn("updateDom")(
       }
 
       const stateSnapshot = yield* Ref.get(state);
-      const el = element as HTMLElement;
+      const el = element;
       const stored = stateSnapshot.listenerStore.get(el) ?? {};
 
       const eventsToRemove = Object.keys(prevProps)
@@ -644,42 +666,21 @@ const updateDom = Effect.fn("updateDom")(
         }
       }), { discard: true });
 
-      Object.keys(nextProps)
-        .filter(isProperty)
-        .filter(isNew(prevProps, nextProps))
-        .forEach((name) => {
-          if (el instanceof HTMLElement) {
-            const value = (nextProps as Record<string, unknown>)[name];
-            if (name === "style" && typeof value === "string") {
-              el.setAttribute("style", value);
-            } else if (name === "class" || name === "className") {
-              el.setAttribute("class", String(value ?? ""));
-            } else if (name === "value") {
-              if ("value" in el) {
-                try { Reflect.set(el as object, "value", value as unknown); } catch { }
-              } else {
-                el.setAttribute("value", String(value ?? ""));
-              }
-            } else if (name === "checked") {
-              if ("checked" in el) {
-                try { Reflect.set(el as object, "checked", Boolean(value)); } catch { }
-              } else if (value) {
-                el.setAttribute("checked", "");
-              } else {
-                el.removeAttribute("checked");
-              }
-            } else if ((name as string).startsWith("data-") || (name as string).startsWith("aria-")) {
-              el.setAttribute(name, String(value));
-            } else {
-              try { Reflect.set(el as object, name as PropertyKey, value as unknown); } catch { }
+      yield* Effect.sync(() => {
+        Object.keys(nextProps)
+          .filter(isProperty)
+          .filter(isNew(prevProps, nextProps))
+          .forEach((name) => {
+            if (el instanceof HTMLElement) {
+              setDomProperty(el, name, nextProps[name]);
             }
-          }
-        });
+          });
+      });
 
-      Object.keys(nextProps)
-        .filter(isEvent)
-        .filter(isNew(prevProps, nextProps))
-        .forEach((name) => {
+      const eventKeys = Object.keys(nextProps).filter(isEvent).filter(isNew(prevProps, nextProps));
+
+      yield* Effect.sync(() => {
+        eventKeys.forEach((name) => {
           const eventType = name.toLowerCase().substring(2);
           const handler = nextProps[name] as (event: Event) => unknown;
 
@@ -687,11 +688,16 @@ const updateDom = Effect.fn("updateDom")(
             const result = handler(event);
             if (Effect.isEffect(result)) {
               const effectHandle = (result as Effect.Effect<unknown, unknown, any>).pipe(
-                Effect.provideService(Registry.AtomRegistry, runtime.registry),
+                Effect.provideService(AtomRegistry.AtomRegistry, runtime.registry),
                 Effect.provideService(DidactRuntime, runtime),
-                Effect.catchAllCause((cause) => ownerFiber ? handleFiberError(ownerFiber, cause) : Effect.unit),
-                Effect.asUnit
-              ) as unknown as Effect.Effect<void, never, never>;
+                Effect.catchAllCause((cause) => {
+                  return Effect.gen(function*() {
+                    if (ownerFiber) {
+                      yield* handleFiberError(ownerFiber, cause);
+                    }
+                  });
+                })
+              );
               runFork(effectHandle);
             }
           };
@@ -703,6 +709,7 @@ const updateDom = Effect.fn("updateDom")(
           el.addEventListener(eventType, wrapper);
           stored[eventType] = wrapper;
         });
+      });
 
       yield* Ref.update(state, (s) => {
         s.listenerStore.set(el, stored);
@@ -750,7 +757,7 @@ const reconcileChildren = Effect.fn("reconcileChildren")(
 
       const newFibers: Fiber[] = [];
 
-      yield* Effect.forEach(elements, (element) => Effect.gen(function*() {
+      yield* Effect.forEach(elements, (element, childIndex) => Effect.gen(function*() {
         let matchedOldOpt: Option.Option<Fiber> = Option.none<Fiber>();
         const keyOpt = getKey(element.props as { [key: string]: unknown } | undefined);
 
@@ -803,11 +810,15 @@ const reconcileChildren = Effect.fn("reconcileChildren")(
 
             if (typeMatches) {
               const newProps = { ...element.props };
+              // Always preserve existing atom cache from matched fiber to maintain stable AtomHandle instances
               if (matched.props._atomCache) {
                 newProps._atomCache = matched.props._atomCache;
+              } else if (matchedOldOpt) {
+                // If matched fiber exists but cache missing (e.g., SSR hydration), initialize and copy over empty map
+                newProps._atomCache = new Map<number, AtomHandle<any, any>>();
               }
 
-              return {
+              const updatedFiber = {
                 type: matched.type,
                 props: newProps,
                 dom: matched.dom,
@@ -824,6 +835,7 @@ const reconcileChildren = Effect.fn("reconcileChildren")(
                 isMultiEmissionStream: false,
                 errorBoundary: matched.errorBoundary,
               };
+              return updatedFiber;
             } else {
               const fiberToDelete = matched;
               fiberToDelete.effectTag = Option.some("DELETION" as const);
@@ -848,6 +860,11 @@ const reconcileChildren = Effect.fn("reconcileChildren")(
             }
           })
         });
+
+        // Assign deterministic _dxPath for hydration. Root uses '' path.
+        const parentPath = (wipFiber.props && typeof wipFiber.props._dxPath === 'string') ? (wipFiber.props._dxPath as string) : '';
+        const childPath = parentPath === '' ? `p:${childIndex}` : `${parentPath}.${childIndex}`;
+        fiber.props._dxPath = childPath;
 
         newFibers.push(fiber);
       }), { discard: true });
@@ -887,23 +904,20 @@ const deleteFiber: (fiber: Fiber) => Effect.Effect<void, never, never> =
     })
   );
 
-const commitDeletion: (fiber: Fiber, domParent: Node) => Effect.Effect<void, never, DidactRuntime> = Effect.fn("commitDeletion")((fiber: Fiber, domParent: Node) =>
-  Effect.gen(function*() {
-    yield* Option.match(fiber.dom, {
+const commitDeletion: (fiber: Fiber, domParent: Node) =>
+  Effect.Effect<void, never, DidactRuntime> = Effect.fn("commitDeletion")((fiber: Fiber, domParent: Node) =>
+    Option.match(fiber.dom, {
       onSome: (dom) => Effect.sync(() => domParent.removeChild(dom)),
-      onNone: () => Effect.gen(function*() {
-        yield* Effect.iterate(fiber.child, {
-          while: (opt): opt is Option.Some<Fiber> => Option.isSome(opt),
-          body: (childOpt) => Effect.gen(function*() {
-            const child = childOpt.value;
-            yield* commitDeletion(child, domParent);
-            return child.sibling;
-          })
-        });
+      onNone: () => Effect.iterate(fiber.child, {
+        while: (opt): opt is Option.Some<Fiber> => Option.isSome(opt),
+        body: (childOpt) => Effect.gen(function*() {
+          const child = childOpt.value;
+          yield* commitDeletion(child, domParent);
+          return child.sibling;
+        })
       })
-    });
-  }),
-);
+    })
+  );
 
 const commitRoot = Effect.fn("commitRoot")(() =>
   Effect.gen(function*() {
@@ -977,43 +991,99 @@ const commitWork: (fiber: Fiber) => Effect.Effect<void, never, DidactRuntime> = 
       onNone: () => Effect.void,
       onSome: (parentFiber) => Option.match(parentFiber.dom, {
         onNone: () => Effect.void,
-        onSome: (domParent) => Effect.gen(function*() {
-          yield* Option.match(fiber.effectTag, {
-            onNone: () => Effect.void,
-            onSome: (tag) => Effect.gen(function*() {
-              if (tag === "PLACEMENT") {
-                yield* Option.match(fiber.dom, {
-                  onNone: () => Effect.void,
-                  onSome: (dom) => Effect.sync(() => domParent.appendChild(dom))
+        onSome: (domParent) => Option.match(fiber.effectTag, {
+          onNone: () => Effect.void,
+          onSome: (tag) => Effect.gen(function*() {
+            if (tag === "PLACEMENT") {
+              yield* Option.match(fiber.dom, {
+                onNone: () => Effect.void,
+                onSome: (dom) => Effect.sync(() => domParent.appendChild(dom))
+              });
+
+              // Gated Suspense resolution: only when a real child in the
+              // Suspense children branch commits (not fallback, not container)
+              yield* Effect.gen(function*() {
+                // Walk ancestors to determine branch context and locate boundary
+                let current: Option.Option<Fiber> = Option.some(fiber);
+                let inFallbackBranch = false;
+                let inHiddenChildrenBranch = false;
+                let childrenContainer: Option.Option<Fiber> = Option.none<Fiber>();
+                let nearestSuspense: Option.Option<Fiber> = Option.none<Fiber>();
+
+                while (Option.isSome(current)) {
+                  const f = current.value;
+
+                  // Detect Suspense boundary by boundary marker set in Suspense
+                  if (Option.isNone(nearestSuspense)) {
+                    const boundaryMarker = f.props && f.props["data-dx-suspense-boundary"];
+                    if (boundaryMarker === true) {
+                      nearestSuspense = current;
+                    }
+                  }
+
+                  // Detect branch markers on host/fragment fibers
+                  const branchProp = f.props && f.props["data-dx-suspense"];
+                  const marker = typeof branchProp === "string" ? branchProp : undefined;
+                  if (marker === "fallback") {
+                    inFallbackBranch = true;
+                  } else if (marker === "children-hidden") {
+                    if (!inHiddenChildrenBranch) {
+                      inHiddenChildrenBranch = true;
+                      childrenContainer = current;
+                    }
+                  } else if (marker === "children-visible") {
+                    // Track visible children branch (used for debug logging)
+                    if (Option.isNone(childrenContainer)) {
+                      childrenContainer = current;
+                    }
+                  }
+
+                  current = f.parent;
+                }
+
+                // Compute container placement match before early returns (for logging)
+                const isContainerPlacement = Option.match(childrenContainer, {
+                  onNone: () => false,
+                  onSome: (c) => c === fiber
                 });
 
-                yield* Option.match(fiber.parent, {
+                if (!inHiddenChildrenBranch || inFallbackBranch || isContainerPlacement) {
+                  return;
+                }
+
+                // Resolve the nearest Suspense boundary only (once)
+                yield* Option.match(nearestSuspense, {
                   onNone: () => Effect.void,
-                  onSome: (parent) => Option.match(parent.childFirstCommitDeferred, {
-                    onNone: () => Effect.void,
-                    onSome: (deferred) => Effect.gen(function*() {
-                      const done = yield* Deferred.isDone(deferred);
+                  onSome: (boundary) => Effect.gen(function*() {
+                    const deferredOpt = boundary.childFirstCommitDeferred;
+                    if (Option.isSome(deferredOpt)) {
+                      const done = yield* Deferred.isDone(deferredOpt.value);
                       if (!done) {
-                        yield* Deferred.succeed(deferred, undefined);
+                        const runtime = yield* DidactRuntime;
+                        yield* Effect.sync(() => {
+                          setTimeout(() => {
+                            runtime.runFork(Deferred.succeed(deferredOpt.value, undefined));
+                          }, 0);
+                        });
                       }
-                    })
+                    }
                   })
                 });
-              } else if (tag === "UPDATE") {
-                const prevProps = Option.match(fiber.alternate, {
-                  onNone: () => ({}),
-                  onSome: (alt) => alt.props
-                });
-                yield* Option.match(fiber.dom, {
-                  onNone: () => Effect.void,
-                  onSome: (dom) => updateDom(dom, prevProps, fiber.props, fiber)
-                });
-              } else if (tag === "DELETION") {
-                yield* commitDeletion(fiber, domParent);
-                return;
-              }
-            })
-          });
+              });
+            } else if (tag === "UPDATE") {
+              const prevProps = Option.match(fiber.alternate, {
+                onNone: () => ({}),
+                onSome: (alt) => alt.props
+              });
+              yield* Option.match(fiber.dom, {
+                onNone: () => Effect.void,
+                onSome: (dom) => updateDom(dom, prevProps, fiber.props, fiber)
+              });
+            } else if (tag === "DELETION") {
+              yield* commitDeletion(fiber, domParent);
+              return;
+            }
+          })
         })
       })
     });
@@ -1169,59 +1239,69 @@ export const Atom = {
   },
 } as const;
 
-const getChildFirstCommitAwaiter = (fiber: Fiber): Effect.Effect<void> => {
-  return Effect.gen(function*() {
-    const deferred = yield* Option.match(fiber.childFirstCommitDeferred, {
-      onNone: () => Effect.die("getChildFirstCommitAwaiter called on fiber without childFirstCommitDeferred"),
-      onSome: (d) => Effect.succeed(d)
-    });
-    yield* Deferred.await(deferred);
-  });
-};
-
 export const Suspense = (props: {
   fallback: VElement;
-  children: VElement[];
+  children?: VElement | VElement[];
 }): Stream.Stream<VElement, never, FiberContext> => {
-  if (!props.children || props.children.length === 0) {
+  const childrenArray = Array.isArray(props.children) ? props.children : props.children ? [props.children] : [];
+
+  if (childrenArray.length === 0) {
     throw new Error("Suspense requires at least one child");
   }
 
-  return Stream.unwrap(Effect.gen(function* () {
-    const { fiber } = yield* FiberContext;
-    const waitForChildCommit = getChildFirstCommitAwaiter(fiber);
+  const containerVisible = h("div", { style: "display: contents", key: "suspense-children", "data-dx-suspense": "children-visible" }, childrenArray);
+  const fallbackWrapped = h("div", { "data-dx-suspense": "fallback" }, [props.fallback]);
 
-    const childrenContainer = h("div", { style: "display: contents" }, props.children);
+  // First emission: fallback only
+  const first = h("FRAGMENT", {}, [fallbackWrapped]);
 
-    return Stream.concat(
-      Stream.succeed(props.fallback),
-      Stream.fromEffect(waitForChildCommit).pipe(
-        Stream.as(childrenContainer)
-      )
-    );
-  }));
+  return Stream.concat(
+    Stream.succeed(first),
+    // Switch to visible children on next macrotask to ensure fallback is observable
+    Stream.fromEffect(Effect.async<unknown, never, never>((resume) => {
+      const id = setTimeout(() => resume(Effect.succeed(undefined)), 0);
+      return Effect.sync(() => clearTimeout(id));
+    })).pipe(
+      Stream.as(h("FRAGMENT", {}, [containerVisible])),
+    )
+  );
 };
 
 export const ErrorBoundary = (props: {
   fallback: VElement;
   onError?: (cause: unknown) => void;
-  children: VElement[];
+  children?: VElement | VElement[];
 }): Stream.Stream<VElement, never, FiberContext> => {
-  if (!props.children || props.children.length === 0) {
+  const childrenArray = Array.isArray(props.children) ? props.children : props.children ? [props.children] : [];
+  if (childrenArray.length === 0) {
     throw new Error("ErrorBoundary requires at least one child");
   }
 
-  return Stream.unwrap(Effect.gen(function* () {
+  return Stream.unwrap(Effect.gen(function*() {
     const { fiber } = yield* FiberContext;
-    const existing = Option.getOrElse(fiber.errorBoundary, () => ({ fallback: props.fallback, hasError: false } as any));
-    const cfg = { fallback: props.fallback, onError: props.onError ?? existing.onError, hasError: existing.hasError ?? false } as { fallback: VElement; onError?: (cause: unknown) => void; hasError: boolean };
+
+    // Check if we already have an error boundary config (e.g., from handleFiberError mutation)
+    const existingCfg = Option.getOrUndefined(fiber.errorBoundary);
+
+    // If we already have a config (possibly mutated by error handler), preserve it
+    // Only update fallback/onError but keep hasError state
+    const cfg: ErrorBoundaryConfig = existingCfg ? {
+      fallback: props.fallback,
+      onError: props.onError,
+      hasError: existingCfg.hasError  // Preserve the hasError state from mutation
+    } : {
+      fallback: props.fallback,
+      onError: props.onError,
+      hasError: false  // Initial state
+    };
+
     fiber.errorBoundary = Option.some(cfg);
 
     if (cfg.hasError) {
       return Stream.succeed(props.fallback);
     }
 
-    const childrenContainer = h("div", { style: "display: contents" }, props.children);
+    const childrenContainer = h("div", { style: "display: contents" }, childrenArray);
     return Stream.succeed(childrenContainer);
   }));
 };
