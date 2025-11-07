@@ -30,7 +30,7 @@
     "types:check": "bun --filter '@didact/core' --filter 'demo' types:check",
     "types:watch": "bun --filter '@didact/core' --filter 'demo' types:watch",
     "ssr:demo": "bun --filter @didact/core build && bun --filter demo ssr",
-    "lint": "eslint ."
+    "lint": "eslint"
   },
   "dependencies": {
     "mprocs": "^0.7.3",

@@ -88,5 +88,11 @@ export const isPrimitive = (type: ElementType): type is Primitive =>
 /**
  * Check if element type is a component function
  */
-export const isComponent = (type: ElementType): type is ((props: any) => any) =>
+export const isComponent = (type: ElementType) =>
   typeof type === "function";
+
+export const isStream = (value: unknown): value is Stream.Stream<any, any, any> => (
+  typeof value === "object" &&
+  value !== null &&
+  Stream.StreamTypeId in value
+);

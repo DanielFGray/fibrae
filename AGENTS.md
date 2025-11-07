@@ -13,17 +13,15 @@ Building an Effect-first JSX renderer where components are Effect programs with 
 
 ## Core API Pattern
 ```typescript
-const Counter = (props) => {
-  return Effect.gen(function* () {
-    const count = yield* Atom.make(0);
-    const value = yield* Atom.get(count)
-    return (
-      <button onClick={() => Atom.update(count, n => n + 1)}>
-        Count: {value}
-      </button>
-    )
-  });
-}
+const Counter = (props) => Effect.gen(function* () {
+  const count = yield* Atom.make(0);
+  const value = yield* Atom.get(count)
+  return (
+    <button onClick={() => Atom.update(count, n => n + 1)}>
+      Count: {value}
+    </button>
+  )
+});
 ```
 
 **Key concepts:**

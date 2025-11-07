@@ -12,13 +12,14 @@ import {
   Atom as BaseAtom,
   Registry as AtomRegistry,
 } from "@effect-atom/atom";
-import type {
-  VElement,
-  ElementType,
-  Fiber,
-  FiberRef,
-  ErrorBoundaryConfig,
-  Primitive,
+import {
+  type VElement,
+  type ElementType,
+  type Fiber,
+  type FiberRef,
+  type ErrorBoundaryConfig,
+  type Primitive,
+  isStream,
 } from "./shared.js";
 
 // Re-export shared types for backwards compatibility
@@ -123,10 +124,8 @@ class AtomHandle<R, W = R> {
 
 const normalizeToStream = (v: VElement | Effect.Effect<VElement> | Stream.Stream<VElement>): Stream.Stream<VElement> => {
   if (Effect.isEffect(v)) return Stream.fromEffect(v);
-  if (typeof v === "object" && "pipe" in v && typeof v.pipe === "function") {
-    return v;
-  }
-  return Stream.succeed(v as VElement);
+  if (isStream(v)) return v;
+  return Stream.succeed(v);
 };
 
 const makeTrackingRegistry = (
@@ -216,10 +215,6 @@ const queueFiberForRerender = Effect.fn("queueFiberForRerender")((fiber: Fiber) 
   Effect.gen(function*() {
     const runtime = yield* DidactRuntime;
     const { state } = runtime;
-
-    const fiberType = Option.getOrElse(fiber.type, () => "<none>");
-    const hasErrBoundary = Option.isSome(fiber.errorBoundary);
-    const hasErrorState = hasErrBoundary ? Option.getOrElse(fiber.errorBoundary, () => ({ hasError: false })).hasError : false;
 
     const didSchedule = yield* Ref.modify(state, (s) => {
       const alreadyQueued = s.renderQueue.has(fiber);
@@ -862,7 +857,7 @@ const reconcileChildren = Effect.fn("reconcileChildren")(
         });
 
         // Assign deterministic _dxPath for hydration. Root uses '' path.
-        const parentPath = (wipFiber.props && typeof wipFiber.props._dxPath === 'string') ? (wipFiber.props._dxPath as string) : '';
+        const parentPath = (wipFiber.props && typeof wipFiber.props._dxPath === 'string') ? (wipFiber.props._dxPath) : '';
         const childPath = parentPath === '' ? `p:${childIndex}` : `${parentPath}.${childIndex}`;
         fiber.props._dxPath = childPath;
 

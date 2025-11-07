@@ -36,45 +36,40 @@ export const Counter = ({ label }: { label: string }) => {
 
 // Component that returns a stream with multiple emissions
 // Suspense will handle the "Loading..." fallback
-export const StreamCounter = () => {
-  console.log("[StreamCounter] Component function called!");
-  const items = [
-    h("div", {
-      "data-cy": "stream-counter",
-      style: "padding: 1rem; border: 2px solid #ff6600; border-radius: 8px; margin: 1rem 0;"
-    }, [
-      h("h3", {}, ["Stream Counter"]),
-      h("p", { "data-cy": "stream-status" }, ["Ready: 3"])
-    ]),
-    h("div", {
-      "data-cy": "stream-counter",
-      style: "padding: 1rem; border: 2px solid #ff6600; border-radius: 8px; margin: 1rem 0;"
-    }, [
-      h("h3", {}, ["Stream Counter"]),
-      h("p", { "data-cy": "stream-status" }, ["Ready: 2"])
-    ]),
-    h("div", {
-      "data-cy": "stream-counter",
-      style: "padding: 1rem; border: 2px solid #ff6600; border-radius: 8px; margin: 1rem 0."
-    }, [
-      h("h3", {}, ["Stream Counter"]),
-      h("p", { "data-cy": "stream-status" }, ["Ready: 1"])
-    ]),
-    h("div", {
-      "data-cy": "stream-counter",
-      style: "padding: 1rem; border: 2px solid #00ff00; border-radius: 8px; margin: 1rem 0;"
-    }, [
-      h("h3", {}, ["Stream Counter"]),
-      h("p", { "data-cy": "stream-status" }, ["Complete!"])
-    ])
-  ];
-
-  return pipe(
-    Stream.fromIterable(items),
-    Stream.schedule(Schedule.spaced("500 millis")),
-    Stream.tap(() => Effect.log("[StreamCounter] Stream emission!"))
-  );
-};
+export const StreamCounter = () => pipe(
+  Stream.fromIterable([
+    <div
+      data-cy="stream-counter"
+      style="padding: 1rem; border: 2px solid #ff6600; border-radius: 8px; margin: 1rem 0;"
+    >
+      <h3>Stream Counter</h3>
+      <p data-cy="stream-status">Ready: 3</p>
+    </div>,
+    <div
+      data-cy="stream-counter"
+      style="padding: 1rem; border: 2px solid #ff6600; border-radius: 8px; margin: 1rem 0;"
+    >
+      <h3>Stream Counter</h3>
+      <p data-cy="stream-status">Ready: 2</p>
+    </div>,
+    <div
+      data-cy="stream-counter"
+      style="padding: 1rem; border: 2px solid #ff6600; border-radius: 8px; margin: 1rem 0;"
+    >
+      <h3>Stream Counter</h3>
+      <p data-cy="stream-status">Ready: 1</p>
+    </div>,
+    <div
+      data-cy="stream-counter"
+      style="padding: 1rem; border: 2px solid #00ff00; border-radius: 8px; margin: 1rem 0;"
+    >
+      <h3>Stream Counter</h3>
+      <p data-cy="stream-status">Complete!</p>
+    </div>
+  ]),
+  Stream.schedule(Schedule.spaced("500 millis")),
+  Stream.tap(() => Effect.log("[StreamCounter] Stream emission!"))
+);
 
 export const TodoItem = ({
   text,

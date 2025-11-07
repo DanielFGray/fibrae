@@ -15,18 +15,8 @@ import {
   isPrimitive,
   isComponent,
   isProperty,
+  isStream,
 } from "./shared.js";
-
-/**
- * Type guard to check if a value is a Stream
- */
-const isStream = (value: unknown): value is Stream.Stream<any, any, any> => {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    Stream.StreamTypeId in value
-  );
-};
 
 // ============================================================================
 // Bridge Service - Phase 2: Server-Client Bridge Implementation
