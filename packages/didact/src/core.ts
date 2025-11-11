@@ -9,7 +9,7 @@ import * as Deferred from "effect/Deferred";
 import * as FiberSet from "effect/FiberSet";
 
 import {
-  Atom as BaseAtom,
+  Atom,
   Registry as AtomRegistry,
 } from "@effect-atom/atom";
 import {
@@ -36,91 +36,6 @@ export class FiberContext extends Effect.Tag("FiberContext")<
   { readonly fiber: Fiber }
 >() { }
 
-class AtomHandle<R, W = R> {
-  private _registry: Option.Option<AtomRegistry.Registry> = Option.none();
-  private readonly _atom: BaseAtom.Writable<R, W>;
-
-  constructor(atom: BaseAtom.Writable<R, W>) {
-    this._atom = atom;
-  }
-
-  _bindRegistry(registry: AtomRegistry.Registry): void {
-    this._registry = Option.some(registry);
-  }
-
-  get(): Effect.Effect<R, never, AtomRegistry.AtomRegistry> {
-    const self = this;
-    return Effect.gen(function*() {
-      const registry = yield* AtomRegistry.AtomRegistry;
-      self._bindRegistry(registry);
-      return registry.get(self._atom);
-    });
-  }
-
-  set(value: W): Effect.Effect<void, never, AtomRegistry.AtomRegistry> {
-    const self = this;
-    return Effect.gen(function*() {
-      const registry = yield* AtomRegistry.AtomRegistry;
-      registry.set(self._atom, value);
-    });
-  }
-
-  update(f: (r: R) => W): Effect.Effect<void, never, AtomRegistry.AtomRegistry> {
-    const self = this;
-    return Effect.gen(function*() {
-      const registry = yield* AtomRegistry.AtomRegistry;
-      registry.update(self._atom, f);
-    });
-  }
-
-  modify<A>(f: (r: R) => [returnValue: A, nextValue: W]): Effect.Effect<A, never, AtomRegistry.AtomRegistry> {
-    const self = this;
-    return Effect.gen(function*() {
-      const registry = yield* AtomRegistry.AtomRegistry;
-      return registry.modify(self._atom, f);
-    });
-  }
-
-  getSync(): R {
-    return Option.match(this._registry, {
-      onNone: () => {
-        throw new Error("AtomHandle not bound to registry - ensure you call .get() in component render before using sync methods");
-      },
-      onSome: (registry) => registry.get(this._atom)
-    });
-  }
-
-  setSync(value: W): void {
-    Option.match(this._registry, {
-      onNone: () => {
-        throw new Error("AtomHandle not bound to registry - ensure you call .get() in component render before using sync methods");
-      },
-      onSome: (registry) => registry.set(this._atom, value)
-    });
-  }
-
-  updateSync(f: (r: R) => W): void {
-    Option.match(this._registry, {
-      onNone: () => {
-        throw new Error("AtomHandle not bound to registry - ensure you call .get() in component render before using sync methods");
-      },
-      onSome: (registry) => registry.update(this._atom, f)
-    });
-  }
-
-  modifySync<A>(f: (r: R) => [returnValue: A, nextValue: W]): A {
-    return Option.match(this._registry, {
-      onNone: () => {
-        throw new Error("AtomHandle not bound to registry - ensure you call .get() in component render before using sync methods");
-      },
-      onSome: (registry) => registry.modify(this._atom, f)
-    });
-  }
-
-  get atom(): BaseAtom.Writable<R, W> {
-    return this._atom;
-  }
-}
 
 const normalizeToStream = (v: VElement | Effect.Effect<VElement> | Stream.Stream<VElement>): Stream.Stream<VElement> => {
   if (Effect.isEffect(v)) return Stream.fromEffect(v);
@@ -130,48 +45,22 @@ const normalizeToStream = (v: VElement | Effect.Effect<VElement> | Stream.Stream
 
 const makeTrackingRegistry = (
   realRegistry: AtomRegistry.Registry,
-  accessedAtoms: Set<BaseAtom.Atom<any>>
+  accessedAtoms: Set<Atom.Atom<any>>
 ): AtomRegistry.Registry => {
-  return {
-    [AtomRegistry.TypeId]: AtomRegistry.TypeId,
-    getNodes: () => realRegistry.getNodes(),
-    get: <A>(atom: BaseAtom.Atom<A>) => {
-      const actualAtom = atom instanceof AtomHandle ? atom.atom : atom;
-      accessedAtoms.add(actualAtom);
-      return realRegistry.get(actualAtom);
-    },
-    mount: <A>(atom: BaseAtom.Atom<A>) => {
-      const actualAtom = atom instanceof AtomHandle ? atom.atom : atom;
-      return realRegistry.mount(actualAtom);
-    },
-    refresh: <A>(atom: BaseAtom.Atom<A>) => {
-      const actualAtom = atom instanceof AtomHandle ? atom.atom : atom;
-      return realRegistry.refresh(actualAtom);
-    },
-    set: <R, W>(atom: BaseAtom.Writable<R, W>, value: W) => {
-      const actualAtom = atom instanceof AtomHandle ? atom.atom : atom;
-      return realRegistry.set(actualAtom, value);
-    },
-    setSerializable: (key: string, encoded: unknown) => realRegistry.setSerializable(key, encoded),
-    modify: <R, W, A>(atom: BaseAtom.Writable<R, W>, f: (_: R) => [returnValue: A, nextValue: W]) => {
-      const actualAtom = atom instanceof AtomHandle ? atom.atom : atom;
-      return realRegistry.modify(actualAtom, f);
-    },
-    update: <R, W>(atom: BaseAtom.Writable<R, W>, f: (_: R) => W) => {
-      const actualAtom = atom instanceof AtomHandle ? atom.atom : atom;
-      return realRegistry.update(actualAtom, f);
-    },
-    subscribe: <A>(
-      atom: BaseAtom.Atom<A>,
-      f: (_: A) => void,
-      options?: { readonly immediate?: boolean }
-    ) => {
-      const actualAtom = atom instanceof AtomHandle ? atom.atom : atom;
-      return realRegistry.subscribe(actualAtom, f, options);
-    },
-    reset: () => realRegistry.reset(),
-    dispose: () => realRegistry.dispose(),
-  };
+  return new Proxy(realRegistry as object, {
+    get(target, prop, receiver) {
+      if (prop === "get") {
+        return (atom: Atom.Atom<any>) => {
+          // Track accessed atom
+          accessedAtoms.add(atom);
+          // Forward to real registry
+
+          return realRegistry.get(atom);
+        };
+      }
+      return Reflect.get(target, prop, receiver);
+    }
+  }) as AtomRegistry.Registry;
 };
 
 export const CustomAtomRegistryLayer = AtomRegistry.layerOptions({
@@ -193,16 +82,15 @@ export class DidactRuntime extends Effect.Service<DidactRuntime>()("DidactRuntim
       renderQueue: new Set<Fiber>(),
       batchScheduled: false,
       listenerStore: new WeakMap<HTMLElement, Record<string, EventListener>>(),
-      atomHandleCache: new WeakMap<Fiber, Map<BaseAtom.Atom<any>, AtomHandle<any, any>>>(),
     });
 
     const runFork = yield* FiberSet.makeRuntime<AtomRegistry.AtomRegistry>();
 
     const AtomOps = {
-      get: <A>(atom: BaseAtom.Atom<A>): A => registry.get(atom),
-      set: <R, W>(atom: BaseAtom.Writable<R, W>, value: W): void => registry.set(atom, value),
-      update: <R, W>(atom: BaseAtom.Writable<R, W>, f: (_: R) => W): void => registry.update(atom, f),
-      modify: <R, W, A>(atom: BaseAtom.Writable<R, W>, f: (_: R) => [returnValue: A, nextValue: W]): A => registry.modify(atom, f),
+      get: <A>(atom: Atom.Atom<A>): A => registry.get(atom),
+      set: <R, W>(atom: Atom.Writable<R, W>, value: W): void => registry.set(atom, value),
+      update: <R, W>(atom: Atom.Writable<R, W>, f: (_: R) => W): void => registry.update(atom, f),
+      modify: <R, W, A>(atom: Atom.Writable<R, W>, f: (_: R) => [returnValue: A, nextValue: W]): A => registry.modify(atom, f),
     };
 
     return { state, registry, runtimeScope, runFork, AtomOps };
@@ -323,7 +211,7 @@ const processBatch = Effect.fn("processBatch")(() =>
 );
 
 Effect.fn("resubscribeFiber")(
-  (fiber: Fiber, accessedAtoms: Set<BaseAtom.Atom<any>>) =>
+  (fiber: Fiber, accessedAtoms: Set<Atom.Atom<any>>) =>
     Effect.gen(function*() {
       const runtime = yield* DidactRuntime;
       const { registry } = runtime;
@@ -435,9 +323,8 @@ const updateFunctionComponent = Effect.fn("updateFunctionComponent")((fiber: Fib
       return;
     }
 
-    fiber.props._atomCallIndex = 0;
 
-    const accessedAtoms = new Set<BaseAtom.Atom<any>>();
+    const accessedAtoms = new Set<Atom.Atom<any>>();
     const trackingRegistry = makeTrackingRegistry(registry, accessedAtoms);
 
     const output = yield* Option.match(fiber.type, {
@@ -447,7 +334,9 @@ const updateFunctionComponent = Effect.fn("updateFunctionComponent")((fiber: Fib
           return Effect.die("updateFunctionComponent called with non-function type");
         }
         const component = type as ((props: any) => VElement | Effect.Effect<VElement> | Stream.Stream<VElement>);
-        return Effect.sync(() => component(fiber.props));
+        return Effect.provideService(AtomRegistry.AtomRegistry, trackingRegistry)(
+          Effect.sync(() => component(fiber.props))
+        );
       }
     });
 
@@ -805,13 +694,6 @@ const reconcileChildren = Effect.fn("reconcileChildren")(
 
             if (typeMatches) {
               const newProps = { ...element.props };
-              // Always preserve existing atom cache from matched fiber to maintain stable AtomHandle instances
-              if (matched.props._atomCache) {
-                newProps._atomCache = matched.props._atomCache;
-              } else if (matchedOldOpt) {
-                // If matched fiber exists but cache missing (e.g., SSR hydration), initialize and copy over empty map
-                newProps._atomCache = new Map<number, AtomHandle<any, any>>();
-              }
 
               const updatedFiber = {
                 type: matched.type,
@@ -1209,30 +1091,7 @@ export function render(
   return program(container);
 }
 
-export const Atom = {
-  make: <A>(initial: A): Effect.Effect<AtomHandle<A, A>, never, FiberContext> => {
-    return Effect.gen(function*() {
-      const { fiber } = yield* FiberContext;
 
-      if (!fiber.props._atomCache) {
-        fiber.props._atomCache = new Map<number, AtomHandle<any, any>>();
-      }
-      const cache = fiber.props._atomCache as Map<number, AtomHandle<any, any>>;
-
-      if (fiber.props._atomCallIndex === undefined) {
-        fiber.props._atomCallIndex = 0;
-      }
-      const index = fiber.props._atomCallIndex as number;
-      fiber.props._atomCallIndex = index + 1;
-
-      if (!cache.has(index)) {
-        cache.set(index, new AtomHandle(BaseAtom.make(initial)));
-      }
-
-      return cache.get(index) as AtomHandle<A, A>;
-    });
-  },
-} as const;
 
 export const Suspense = (props: {
   fallback: VElement;

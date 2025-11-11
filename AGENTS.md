@@ -11,25 +11,12 @@ Building an Effect-first JSX renderer where components are Effect programs with 
   - `./docs/effect-docs.md` - Effect.ts APIs relevant to didact (FiberSet, Queue, Scope, etc.)
   - `./docs/effect-atom-core.md` - Complete Atom/AtomRegistry/AtomRuntime API reference
 
-## Core API Pattern
-```typescript
-const Counter = (props) => Effect.gen(function* () {
-  const count = yield* Atom.make(0);
-  const value = yield* Atom.get(count)
-  return (
-    <button onClick={() => Atom.update(count, n => n + 1)}>
-      Count: {value}
-    </button>
-  )
-});
-```
-
 **Key concepts:**
-  - Use `Atom.make/get/set/update` for reactive state
-  - Reading a Ref auto-subscribes the component to changes
+  - Use `Atom` for reactive state
   - Only changed components re-render (fine-grained updates)
   - Event handlers can return Effects (auto-executed)
   - Components should never need `Effect.runPromise` or to `Effect.runFork`, handled automatically by `DidactRuntime`
+  - Use Effect's wealth of APIs
 
 ## Files:
   - `./packages/didact/src/index.ts` - main source code
@@ -42,14 +29,6 @@ const Counter = (props) => Effect.gen(function* () {
     - Single test: `bun --filter demo cypress:run --spec "cypress/e2e/<test-name>.cy.ts"`
 
 Assume the vite dev server is already running. Do not try to run it with `bun dev`.
-
-## Current State
-  - ✅ Basic reactive Atom tracking
-  - ⏳ Fine-grained re-renders
-  - ⏳ Error Boundary component (error handling)
-  - ✅ Suspense component (async fallback)
-  - ✅ Stream support for manual control
-  - ⏳ Performance profiling/optimization
 
 ## Roadmap
   - Error Boundary component: catch component/stream failures and render fallback; optional `onError`.

@@ -11,8 +11,12 @@ import {
   TodoList,
 } from "./components.js";
 
+console.log("demo-effect.tsx: Starting Effect.gen");
+
 Effect.gen(function*() {
+  console.log("demo-effect.tsx: Inside gen function");
   const root = pipe(document.getElementById("root"), Option.fromNullable, Option.getOrThrow)
+  console.log("demo-effect.tsx: Found root element", root)
 
   // for testing purposes we are doing independent renderers to avoid crashing the whole app for one broken part
   // TODO: add error boundaries so we dont need this
@@ -38,10 +42,15 @@ Effect.gen(function*() {
   root.appendChild(tsxContainer);
 
   // Fork each render independently since render() returns Effect.never
+  console.log("demo-effect.tsx: About to fork renders");
   yield* Effect.fork(render(<StaticHeader />, staticContainer));
+  console.log("demo-effect.tsx: Forked StaticHeader");
   yield* Effect.fork(render(<Suspense fallback={<StreamCounterFallback />}><StreamCounter /></Suspense>, streamContainer));
+  console.log("demo-effect.tsx: Forked StreamCounter");
   yield* Effect.fork(render(<><Counter label={"Counter A"} /><Counter label={"Counter B"} /></>, counterContainer));
+  console.log("demo-effect.tsx: Forked Counter");
   yield* Effect.fork(render(<TodoList />, todoContainer));
+  console.log("demo-effect.tsx: Forked TodoList");
 
   return yield* Effect.never;
 }).pipe(

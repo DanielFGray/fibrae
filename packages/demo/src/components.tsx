@@ -3,12 +3,19 @@ import * as Stream from "effect/Stream";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import { pipe } from "effect/Function";
-import { h, Atom, Suspense, type VNode } from "@didact/core";
+import { h, Atom, AtomRegistry, Suspense, type VNode } from "@didact/core";
+
+// Effect pattern: define atoms at module level using Atom.family for parameterized state
+const counterAtom = Atom.family((label: string) => Atom.make(0));
+const todoItemCompletedAtom = Atom.family((text: string) => Atom.make(false));
+const todoItemTestCountAtom = Atom.family((text: string) => Atom.make(0));
+const todosAtom = Atom.make<string[]>([]);
 
 export const Counter = ({ label }: { label: string }) => {
   return Effect.gen(function*() {
-    const count = yield* Atom.make(0);
-    const value = yield* count.get();
+    const registry = yield* AtomRegistry.AtomRegistry;
+    const count = counterAtom(label); // Get cached atom for this label
+    const value = registry.get(count);
 
     return <div
       data-cy={label.toLowerCase().replace(" ", "-")}
@@ -17,16 +24,16 @@ export const Counter = ({ label }: { label: string }) => {
       <h3>{label} </h3>
       <p data-cy="counter-value">Count: {value}</p>
       <div style="display: flex; gap: 0.5rem;" >
-        <button data-cy="counter-increment" onClick={() => count.update((n: number) => n + 1)}>
+        <button data-cy="counter-increment" onClick={() => registry.update(count, (n: number) => n + 1)}>
           +
         </button>
         <button
           data-cy="counter-decrement"
-          onClick={() => count.update((n: number) => n - 1)}
+          onClick={() => registry.update(count, (n: number) => n - 1)}
         >
           -
         </button>
-        <button data-cy="counter-reset" onClick={() => count.set(0)}>
+        <button data-cy="counter-reset" onClick={() => registry.set(count, 0)}>
           Reset
         </button>
       </div>
@@ -79,10 +86,11 @@ export const TodoItem = ({
   onRemove: (text: string) => void;
 }) => {
   return Effect.gen(function*() {
-    const completed = yield* Atom.make(false);
-    const testCount = yield* Atom.make(0);
-    const isCompleted = yield* completed.get();
-    const testValue = yield* testCount.get();
+    const registry = yield* AtomRegistry.AtomRegistry;
+    const completed = todoItemCompletedAtom(text);
+    const testCount = todoItemTestCountAtom(text);
+    const isCompleted = registry.get(completed);
+    const testValue = registry.get(testCount);
 
     return h(
       "li",
@@ -98,7 +106,7 @@ export const TodoItem = ({
             "data-cy": "todo-checkbox",
             type: "checkbox",
             checked: isCompleted,
-            onChange: () => completed.update((v: boolean) => !v),
+            onChange: () => registry.update(completed, (v: boolean) => !v),
           },
           [],
         ),
@@ -117,7 +125,7 @@ export const TodoItem = ({
           {
             "data-cy": "todo-test-button",
             type: "button",
-            onClick: () => testCount.update((n: number) => n + 1),
+            onClick: () => registry.update(testCount, (n: number) => n + 1),
             style: "margin-left: 0.5rem; background: orange;",
           },
           [`Test: ${testValue}`],
@@ -139,17 +147,17 @@ export const TodoItem = ({
 
 export const TodoList = () => {
   return Effect.gen(function*() {
-    const todos = yield* Atom.make<string[]>([]);
+    const registry = yield* AtomRegistry.AtomRegistry;
 
     const addTodo = (currentInput: string) => {
-      return todos.update((list: string[]) => list.concat(currentInput));
+      return registry.update(todosAtom, (list: string[]) => list.concat(currentInput));
     };
 
     const removeTodo = (todoToRemove: string) => {
-      return todos.update((list: string[]) => list.filter((todo: string) => todo !== todoToRemove));
+      return registry.update(todosAtom, (list: string[]) => list.filter((todo: string) => todo !== todoToRemove));
     };
 
-    const todoList = yield* todos.get();
+    const todoList = registry.get(todosAtom);
 
     return h(
       "form",

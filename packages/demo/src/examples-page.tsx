@@ -8,25 +8,33 @@ import * as Logger from "effect/Logger";
 import * as LogLevel from "effect/LogLevel";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
-import { render, Atom, Suspense, ErrorBoundary, type VNode } from "@didact/core";
+import { render, Atom, AtomRegistry, Suspense, ErrorBoundary, type VNode } from "@didact/core";
+
+// Module-scope atoms/families
+const counterAtom = Atom.family((label: string) => Atom.make(0));
+const todosAtom = Atom.make<string[]>([]);
+const todoCompletedAtom = Atom.family((id: string) => Atom.make(false));
+const queryAtom = Atom.make("");
+const debouncedQueryAtom = Atom.make("");
+const isSearchingAtom = Atom.make(false);
 
 // Example 1: Simple Counter
 const Counter = ({ label }: { label: string }) => {
   return Effect.gen(function*() {
-    const count = yield* Atom.make(0);
-    const value = yield* count.get();
+    const value = yield* Atom.get(counterAtom(label));
+    const registry = yield* AtomRegistry.AtomRegistry;
 
     return (
       <div data-cy="example-counter">
         <h3>{label}</h3>
         <p data-cy="counter-value">Count: {value}</p>
-        <button data-cy="counter-increment" onClick={() => count.update((n: number) => n + 1)}>
+        <button data-cy="counter-increment" onClick={() => registry.update(counterAtom(label), (n: number) => n + 1)}>
           +
         </button>
-        <button data-cy="counter-decrement" onClick={() => count.update((n: number) => n - 1)}>
+        <button data-cy="counter-decrement" onClick={() => registry.update(counterAtom(label), (n: number) => n - 1)}>
           -
         </button>
-        <button data-cy="counter-reset" onClick={() => count.set(0)}>
+        <button data-cy="counter-reset" onClick={() => registry.set(counterAtom(label), 0)}>
           Reset
         </button>
       </div>
@@ -58,8 +66,9 @@ const TodoItem = ({
   onRemove: (text: string) => void;
 }) => {
   return Effect.gen(function*() {
-    const completed = yield* Atom.make(false);
-    const isCompleted = yield* completed.get();
+    const registry = yield* AtomRegistry.AtomRegistry;
+    const completed = todoCompletedAtom(text);
+    const isCompleted = yield* Atom.get(completed);
 
     return (
       <li data-cy="todo-item" style="display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 0;">
@@ -67,7 +76,7 @@ const TodoItem = ({
           data-cy="todo-checkbox"
           type="checkbox"
           checked={isCompleted}
-          onChange={() => completed.update((v: boolean) => !v)}
+          onChange={() => registry.update(completed, (v: boolean) => !v)}
         />
         <span
           data-cy="todo-text"
@@ -91,17 +100,17 @@ const TodoItem = ({
 // Example 3: Todo List with form submission
 const TodoList = () => {
   return Effect.gen(function*() {
-    const todos = yield* Atom.make<string[]>([]);
-    const todoList = yield* todos.get();
+    const registry = yield* AtomRegistry.AtomRegistry;
+    const todoList = yield* Atom.get(todosAtom);
 
     const addTodo = (currentInput: string) => {
-      return todos.update((list: string[]) => list.concat(currentInput));
+      return Effect.sync(() => registry.update(todosAtom, (list: string[]) => list.concat(currentInput)));
     };
 
     const removeTodo = (todoToRemove: string) => {
-      return todos.update((list: string[]) =>
+      return Effect.sync(() => registry.update(todosAtom, (list: string[]) =>
         list.filter((todo: string) => todo !== todoToRemove)
-      );
+      ));
     };
 
     return (
@@ -158,21 +167,19 @@ const StaticHeader = () => (
 // This attempts to use a debounced Effect pattern - will it work?
 const DebouncedSearch = () => {
   return Effect.gen(function*() {
-    const query = yield* Atom.make("");
-    const debouncedQuery = yield* Atom.make("");
-    const isSearching = yield* Atom.make(false);
+    const registry = yield* AtomRegistry.AtomRegistry;
 
-    const currentQuery = yield* query.get();
-    const currentDebouncedQuery = yield* debouncedQuery.get();
-    const searching = yield* isSearching.get();
+    const currentQuery = yield* Atom.get(queryAtom);
+    const currentDebouncedQuery = yield* Atom.get(debouncedQueryAtom);
+    const searching = yield* Atom.get(isSearchingAtom);
 
     // Try to debounce with Effect.delay - stress test!
     const performSearch = (value: string) => pipe(
-      Effect.sync(() => isSearching.set(true)),
+      Effect.sync(() => registry.set(isSearchingAtom, true)),
       Effect.flatMap(() => Effect.delay(Effect.void, "300 millis")),
       Effect.flatMap(() => Effect.sync(() => {
-        debouncedQuery.set(value);
-        isSearching.set(false);
+        registry.set(debouncedQueryAtom, value);
+        registry.set(isSearchingAtom, false);
       }))
     );
 
@@ -193,7 +200,7 @@ const DebouncedSearch = () => {
           value={currentQuery}
           onInput={(e: InputEvent) => {
             const value = (e.target as HTMLInputElement).value;
-            query.set(value);
+            registry.set(queryAtom, value);
             // Return an Effect that will be auto-executed - stress test!
             return performSearch(value);
           }}
@@ -225,14 +232,15 @@ const DebouncedSearch = () => {
 
 // Example 6: Service-based component (like React Context)
 // This tests if Effect.Service works across multiple components with shared Atoms
+const themeAtom = Atom.make<"light" | "dark">("dark");
 class ThemeService extends Effect.Service<ThemeService>()("ThemeService", {
   accessors: true,
   effect: Effect.gen(function*() {
-    const currentTheme = yield* Atom.make<"light" | "dark">("dark");
+    const registry = yield* AtomRegistry.AtomRegistry;
 
     return {
-      getTheme: () => currentTheme.get(),
-      toggleTheme: () => currentTheme.update((t: "light" | "dark") => t === "light" ? "dark" : "light")
+      getTheme: () => Atom.get(themeAtom),
+      toggleTheme: () => Effect.sync(() => registry.update(themeAtom, (t: "light" | "dark") => t === "light" ? "dark" : "light"))
     };
   })
 }) { }

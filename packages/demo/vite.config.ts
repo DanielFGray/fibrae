@@ -17,16 +17,31 @@ export default defineConfig({
     exclude: [
       '@opentelemetry/sdk-trace-node',
       '@opentelemetry/sdk-node',
-      '@opentelemetry/auto-instrumentations-node'
+      '@opentelemetry/auto-instrumentations-node',
+    ],
+    include: [
+      '@effect-atom/atom',
+      'effect',
+      '@effect/platform',
+      '@effect/platform-browser',
     ]
   },
   resolve: {
-    alias: {
-      '@opentelemetry/sdk-trace-node': '@opentelemetry/sdk-trace-web',
+    alias: [
+      {
+        find: '@opentelemetry/sdk-trace-node',
+        replacement: '@opentelemetry/sdk-trace-web'
+      },
       // Force all subpath imports like "effect/Effect" to resolve
       // to the single root install to avoid version mismatch warnings.
-      'effect': path.resolve(path.join(import.meta.dirname, '..', '..', 'node_modules', 'effect')),
-    },
+      {
+        find: /^effect(\/.*)?$/,
+        replacement: (match, subpath) => {
+          const effectRoot = path.resolve(path.join(import.meta.dirname, '..', '..', 'node_modules', '.bun', 'effect@3.19.3', 'node_modules', 'effect'));
+          return subpath ? effectRoot + subpath : effectRoot;
+        }
+      }
+    ],
     dedupe: [
       'effect'
     ]

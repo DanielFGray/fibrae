@@ -1,6 +1,6 @@
 import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
-import type { VElement, ElementType } from "../rewrite.js";
+import type { VElement, ElementType } from "../core.js";
 
 // A simple Fragment support for Didact
 export const Fragment = "FRAGMENT" as const;
@@ -8,8 +8,7 @@ export type FragmentType = typeof Fragment;
 
 export type JSXType =
   | typeof Fragment
-  | string
-  | ((props: object) => VElement | Stream.Stream<VElement, any, any> | Effect.Effect<VElement, any, any>);
+  | ((props: object) => VElement | Stream.Stream<VElement> | Effect.Effect<VElement>);
 
 export type PropsWithChildren<T = object> = T & {
   children?: VElement | string | (VElement | string)[];
@@ -56,7 +55,7 @@ export function jsx(
   if (normalizedProps.children !== undefined) {
     const ch = normalizedProps.children;
     const arr = Array.isArray(ch) ? ch : [ch];
-    
+
     finalChildren = arr.flatMap(child => {
       const normalized = normalizeChild(child);
       return normalized === null ? [] : Array.isArray(normalized) ? normalized : [normalized];
