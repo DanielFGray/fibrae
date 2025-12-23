@@ -83,7 +83,7 @@ export const TodoItem = ({
   onRemove,
 }: {
   text: string;
-  onRemove: (text: string) => void;
+  onRemove: (text: string) => Effect.Effect<void> | void;
 }) => {
   return Effect.gen(function*() {
     const registry = yield* AtomRegistry.AtomRegistry;
