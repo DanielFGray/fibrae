@@ -1,6 +1,12 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
+    "beads": {
+      "type": "local",
+      "command": [
+        "beads-mcp"
+      ]
+    },
     "effect-docs": {
       "type": "local",
       "command": [

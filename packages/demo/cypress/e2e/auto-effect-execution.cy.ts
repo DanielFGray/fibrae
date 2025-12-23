@@ -16,14 +16,20 @@ describe("can click counters", () => {
   it("handles multiple rapid clicks", () => {
     cy.getCy("counter-b").within(() => {
       cy.getCy("counter-value").should("contain", "Count: 0");
-      cy.getCy("counter-increment").click().click().click();
+      // Requery between clicks since DOM may be replaced during re-render
+      cy.getCy("counter-increment").click();
+      cy.getCy("counter-increment").click();
+      cy.getCy("counter-increment").click();
       cy.getCy("counter-value").should("contain", "Count: 3");
     });
   });
 
   it("counter decrement and reset work", () => {
     cy.getCy("counter-a").within(() => {
-      cy.getCy("counter-increment").click().click().click();
+      // Requery between clicks since DOM may be replaced during re-render
+      cy.getCy("counter-increment").click();
+      cy.getCy("counter-increment").click();
+      cy.getCy("counter-increment").click();
       cy.getCy("counter-value").should("contain", "Count: 3");
       cy.getCy("counter-decrement").click();
       cy.getCy("counter-value").should("contain", "Count: 2");

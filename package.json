@@ -19,7 +19,7 @@
     }
   },
   "scripts": {
-    "dev": "mprocs zsh 'bun dev:demo' 'bun run test' 'bun build:watch'",
+    "dev": "mprocs 'bun dev:demo' 'bun run test' 'bun build:watch'",
     "dev:demo": "bun --filter demo dev:server",
     "test": "bun --filter demo cypress:open --e2e --browser=chromium",
     "cypress:run": "cd packages/demo && bun cypress:run",
@@ -35,20 +35,20 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@effect-atom/atom": "0.3.4",
-    "@effect/platform": "^0.93.0",
-    "@effect/platform-browser": "^0.73.0",
-    "@effect/platform-bun": "^0.83.0",
-    "@effect/platform-node": "^0.100.0",
-    "mprocs": "^0.7.3",
+    "@effect-atom/atom": "0.4.11",
+    "@effect/platform": "^0.94.0",
+    "@effect/platform-browser": "^0.74.0",
+    "@effect/platform-bun": "^0.87.0",
+    "@effect/platform-node": "^0.104.0",
+    "mprocs": "^0.8.1",
     "npm-run-all": "^4.1.5"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
-    "eslint": "^9.39.1",
+    "@eslint/js": "^9.39.2",
+    "eslint": "^9.39.2",
     "globals": "^16.5.0",
     "jiti": "^2.6.1",
-    "typescript-eslint": "^8.46.4"
+    "typescript-eslint": "^8.50.0"
   },
   "overrides": {
     "effect": "catalog:"

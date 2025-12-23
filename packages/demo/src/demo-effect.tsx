@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
-import { render, Suspense } from "@didact/core";
+import { render, Suspense, ErrorBoundary } from "@didact/core";
 import {
   StaticHeader,
   StreamCounter,
@@ -11,46 +11,65 @@ import {
   TodoList,
 } from "./components.js";
 
-console.log("demo-effect.tsx: Starting Effect.gen");
+// Simple error fallback component
+const ErrorFallback = (props: { section: string }) => (
+  <div style="padding: 1rem; background: #ff4444; color: white; border-radius: 4px; margin: 0.5rem 0;">
+    Error in {props.section}
+  </div>
+);
 
 Effect.gen(function*() {
-  console.log("demo-effect.tsx: Inside gen function");
-  const root = pipe(document.getElementById("root"), Option.fromNullable, Option.getOrThrow)
-  console.log("demo-effect.tsx: Found root element", root)
+  const root = pipe(document.getElementById("root"), Option.fromNullable, Option.getOrThrow);
 
-  // for testing purposes we are doing independent renderers to avoid crashing the whole app for one broken part
-  // TODO: add error boundaries so we dont need this
-
+  // Create containers for each section
   const staticContainer = document.createElement("div");
   staticContainer.setAttribute('id', "static-container");
-  root.appendChild(staticContainer)
+  root.appendChild(staticContainer);
 
   const counterContainer = document.createElement("div");
   counterContainer.setAttribute('id', "counter-container");
-  root.appendChild(counterContainer)
+  root.appendChild(counterContainer);
 
   const todoContainer = document.createElement("div");
   todoContainer.setAttribute('id', "todo-container");
-  root.appendChild(todoContainer)
+  root.appendChild(todoContainer);
 
   const streamContainer = document.createElement("div");
   streamContainer.setAttribute('id', "stream-container");
   root.appendChild(streamContainer);
 
-  const tsxContainer = document.createElement("div");
-  tsxContainer.setAttribute('id', "tsx-container");
-  root.appendChild(tsxContainer);
-
-  // Fork each render independently since render() returns Effect.never
-  console.log("demo-effect.tsx: About to fork renders");
-  yield* Effect.fork(render(<StaticHeader />, staticContainer));
-  console.log("demo-effect.tsx: Forked StaticHeader");
-  yield* Effect.fork(render(<Suspense fallback={<StreamCounterFallback />}><StreamCounter /></Suspense>, streamContainer));
-  console.log("demo-effect.tsx: Forked StreamCounter");
-  yield* Effect.fork(render(<><Counter label={"Counter A"} /><Counter label={"Counter B"} /></>, counterContainer));
-  console.log("demo-effect.tsx: Forked Counter");
-  yield* Effect.fork(render(<TodoList />, todoContainer));
-  console.log("demo-effect.tsx: Forked TodoList");
+  // Fork each render independently for parallel execution
+  // Each section wrapped in ErrorBoundary so errors don't crash sibling sections
+  yield* Effect.fork(render(
+    <ErrorBoundary fallback={<ErrorFallback section="Static Header" />}>
+      <StaticHeader />
+    </ErrorBoundary>,
+    staticContainer
+  ));
+  
+  yield* Effect.fork(render(
+    <ErrorBoundary fallback={<ErrorFallback section="Stream Counter" />}>
+      <Suspense fallback={<StreamCounterFallback />}>
+        <StreamCounter />
+      </Suspense>
+    </ErrorBoundary>,
+    streamContainer
+  ));
+  
+  yield* Effect.fork(render(
+    <ErrorBoundary fallback={<ErrorFallback section="Counters" />}>
+      <Counter label="Counter A" />
+      <Counter label="Counter B" />
+    </ErrorBoundary>,
+    counterContainer
+  ));
+  
+  yield* Effect.fork(render(
+    <ErrorBoundary fallback={<ErrorFallback section="Todo List" />}>
+      <TodoList />
+    </ErrorBoundary>,
+    todoContainer
+  ));
 
   return yield* Effect.never;
 }).pipe(

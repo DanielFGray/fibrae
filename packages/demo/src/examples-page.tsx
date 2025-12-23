@@ -270,9 +270,6 @@ class UserService extends Effect.Service<UserService>()("UserService", {
 
 const ThemedUserCard = () => {
   return Effect.gen(function*() {
-    // Testing: Can we access services in components?
-
-    // Testing: Does getTheme() properly track the Atom?
     const theme = yield* ThemeService.getTheme();
     const user = yield* UserService.getCurrentUser();
 
@@ -302,11 +299,9 @@ const ThemedUserCard = () => {
 
 const UserList = () => {
   return Effect.gen(function*() {
-    // Testing: Same services, should share the same Atom instance
     const themeService = yield* ThemeService;
     const userService = yield* UserService;
 
-    // Testing: Should this component re-render when ThemeService atom changes?
     const theme = yield* themeService.getTheme();
     const users = yield* userService.getUsers();
 
@@ -339,41 +334,30 @@ Effect.gen(function*() {
     Option.getOrThrow
   );
 
+  // Helper to create section with header and render container
+  const createSection = (title: string, description: string) => {
+    const section = document.createElement("div");
+    section.className = "example-section";
+    const header = document.createElement("h2");
+    header.textContent = title;
+    const desc = document.createElement("p");
+    desc.textContent = description;
+    const container = document.createElement("div");
+    section.appendChild(header);
+    section.appendChild(desc);
+    section.appendChild(container);
+    root.appendChild(section);
+    return container;  // Return container for render(), not section
+  };
+
   // Create sections for each example
-  const counterSection = document.createElement("div");
-  counterSection.className = "example-section";
-  counterSection.innerHTML = "<h2>Example 1: Simple Counter</h2><p>Basic reactive state with Atom.make()</p>";
-  root.appendChild(counterSection);
-
-  const staticSection = document.createElement("div");
-  staticSection.className = "example-section";
-  staticSection.innerHTML = "<h2>Example 2: Static Components</h2><p>Components without state</p>";
-  root.appendChild(staticSection);
-
-  const streamSection = document.createElement("div");
-  streamSection.className = "example-section";
-  streamSection.innerHTML = "<h2>Example 3: Stream with Suspense</h2><p>Progressive rendering with fallback</p>";
-  root.appendChild(streamSection);
-
-  const todoSection = document.createElement("div");
-  todoSection.className = "example-section";
-  todoSection.innerHTML = "<h2>Example 4: Todo List with Child Components</h2><p>Form submission and nested components</p>";
-  root.appendChild(todoSection);
-
-  const searchSection = document.createElement("div");
-  searchSection.className = "example-section";
-  searchSection.innerHTML = "<h2>Example 5: Debounced Search 🔬</h2><p>Testing: Effect.delay in event handlers + multiple atom updates</p>";
-  root.appendChild(searchSection);
-
-  const serviceSection = document.createElement("div");
-  serviceSection.className = "example-section";
-  serviceSection.innerHTML = "<h2>Example 6: Effect Services 🔬</h2><p>Testing: Shared services with Atoms + async Effect.sleep (1-2 sec delays)</p>";
-  root.appendChild(serviceSection);
-
-  const errorSection = document.createElement("div");
-  errorSection.className = "example-section";
-  errorSection.innerHTML = "<h2>Example 7: Error Boundaries</h2><p>Render-time, event, and stream errors</p>";
-  root.appendChild(errorSection);
+  const counterContainer = createSection("Example 1: Simple Counter", "Basic reactive state with Atom.make()");
+  const staticContainer = createSection("Example 2: Static Components", "Components without state");
+  const streamContainer = createSection("Example 3: Stream with Suspense", "Progressive rendering with fallback");
+  const todoContainer = createSection("Example 4: Todo List with Child Components", "Form submission and nested components");
+  const searchContainer = createSection("Example 5: Debounced Search 🔬", "Testing: Effect.delay in event handlers + multiple atom updates");
+  const serviceContainer = createSection("Example 6: Effect Services 🔬", "Testing: Shared services with Atoms + async Effect.sleep (1-2 sec delays)");
+  const errorContainer = createSection("Example 7: Error Boundaries", "Render-time, event, and stream errors");
 
   // Demo components for ErrorBoundary
   const CrashDuringRender = () => {
@@ -386,46 +370,79 @@ Effect.gen(function*() {
     </div>
   );
 
+  // Stream that emits once then fails (tests post-first-emission failure)
   const StreamFailer = () => {
     const ok = <div data-cy="stream-ok">Stream OK once</div>;
     const fail = Effect.delay(Effect.fail(new Error("stream-crash")), "300 millis");
     return Stream.concat(Stream.succeed(ok), Stream.fromEffect(fail));
   };
 
+  // Stream that fails before first emission (tests pre-first-emission failure)
+  const StreamFailerImmediate = () => {
+    return Stream.fromEffect(Effect.fail(new Error("stream-crash-immediate")));
+  };
+
+  // Stream that takes longer than Suspense threshold then fails
+  // Tests that ErrorBoundary takes precedence over Suspense fallback
+  const SlowThenFail = () => {
+    // Delay 200ms (> 100ms threshold) so Suspense shows loading, then fail
+    return Stream.fromEffect(
+      Effect.delay(Effect.fail(new Error("slow-then-fail")), "200 millis")
+    );
+  };
+
   // Render each example independently
   yield* Effect.fork(render(
     <Counter label="Example Counter" />,
-    counterSection
+    counterContainer
   ));
 
   yield* Effect.fork(render(
     <StaticHeader />,
-    staticSection
+    staticContainer
   ));
 
   yield* Effect.fork(render(
     <Suspense fallback={<div data-cy="stream-loading"> Loading stream...</div>}><StreamCounter /></Suspense>,
-    streamSection
+    streamContainer
   ));
 
-  yield* Effect.fork(render(<TodoList />, todoSection));
+  yield* Effect.fork(render(<TodoList />, todoContainer));
 
-  yield* Effect.fork(render(<DebouncedSearch />, searchSection));
+  yield* Effect.fork(render(<DebouncedSearch />, searchContainer));
 
   // Service example needs to provide the services to the render
+  // Use render's layer option so services have access to AtomRegistry
   const serviceLayer = Layer.merge(ThemeService.Default, UserService.Default);
 
   yield* Effect.fork(render(
     <><ThemedUserCard /><UserList /></>,
-    serviceSection
-  ).pipe(Effect.provide(serviceLayer)));
+    serviceContainer,
+    { layer: serviceLayer }
+  ));
 
-  // Error boundary renders - SIMPLIFIED TO ONE TEST
+  // Error boundary renders - test all error scenarios
   yield* Effect.fork(render(
-    <ErrorBoundary fallback={<div data-cy="fallback-render">Render Error</div>}>
-      <CrashDuringRender />
-    </ErrorBoundary>,
-    errorSection
+    <>
+      <ErrorBoundary fallback={<div data-cy="fallback-render">Render Error</div>}>
+        <CrashDuringRender />
+      </ErrorBoundary>
+      <ErrorBoundary fallback={<div data-cy="fallback-event">Event Error</div>}>
+        <EventFailer />
+      </ErrorBoundary>
+      <ErrorBoundary fallback={<div data-cy="fallback-stream">Stream Error</div>}>
+        <StreamFailer />
+      </ErrorBoundary>
+      <ErrorBoundary fallback={<div data-cy="fallback-stream-immediate">Stream Immediate Error</div>}>
+        <StreamFailerImmediate />
+      </ErrorBoundary>
+      <ErrorBoundary fallback={<div data-cy="fallback-suspense-error">Suspense Error Precedence</div>}>
+        <Suspense fallback={<div data-cy="suspense-loading">Loading slow component...</div>}>
+          <SlowThenFail />
+        </Suspense>
+      </ErrorBoundary>
+    </>,
+    errorContainer
   ));
 
   return yield* Effect.never;

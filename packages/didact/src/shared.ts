@@ -6,9 +6,9 @@ import * as Deferred from "effect/Deferred";
 import { Atom as BaseAtom } from "@effect-atom/atom";
 
 /**
- * Primitive element types: HTML tags, text nodes, or fragments
+ * Primitive element types: HTML tags, text nodes, fragments, error boundary, or suspense
  */
-export type Primitive = keyof HTMLElementTagNameMap | "TEXT_ELEMENT" | "FRAGMENT";
+export type Primitive = keyof HTMLElementTagNameMap | "TEXT_ELEMENT" | "FRAGMENT" | "ERROR_BOUNDARY" | "SUSPENSE";
 
 /**
  * Element type can be a primitive or a component function

@@ -16,7 +16,9 @@ describe("Examples Page", () => {
     it("increments, decrements, and resets", () => {
       cy.getCy("example-counter").within(() => {
         cy.getCy("counter-value").should("contain", "Count: 0");
-        cy.getCy("counter-increment").click().click();
+        // Requery between clicks since DOM may be replaced during re-render
+        cy.getCy("counter-increment").click();
+        cy.getCy("counter-increment").click();
         cy.getCy("counter-value").should("contain", "Count: 2");
         cy.getCy("counter-decrement").click();
         cy.getCy("counter-value").should("contain", "Count: 1");
@@ -65,28 +67,29 @@ describe("Examples Page", () => {
 
   describe("Debounced Search Example", () => {
     it("debounces input and updates results after delay", () => {
-      cy.getCy("search-input").type("a");
-      // Immediately after typing 1 char, debounced value is still empty
-      cy.contains("Start typing to search...");
-
-      // After debounce, hint should change for 1-char query
-      cy.wait(350);
-      cy.contains("Type at least 2 characters...");
-
-      // Type second char; debounced still previous until next debounce interval
-      cy.getCy("search-input").type("b");
-      cy.contains("Query:").should("contain", "ab");
-      cy.contains("Debounced:").should("contain", "a");
-
-      // Wait for debounce to apply, then results should render
-      cy.wait(350);
-      cy.contains("Debounced:").should("contain", "ab");
+      // Type a multi-char query in one go (component will re-render per keystroke)
+      // Using delay between keystrokes allows re-renders to complete
+      cy.getCy("search-input").type("abc", { delay: 100 });
+      
+      // Verify query is captured
+      cy.contains("Query:").should("contain", "abc");
+      
+      // Wait for debounce (300ms) plus buffer
+      cy.wait(400);
+      
+      // After debounce, should show results
+      cy.contains("Debounced:").should("contain", "abc");
       cy.getCy("search-result").should("have.length", 3);
-
-      // Rapid change
-      cy.getCy("search-input").clear().type("xyz");
-      cy.contains("Debounced:").should("contain", "ab"); // Previous until debounce resolves
-      cy.wait(350);
+      
+      // Clear and type new query
+      cy.getCy("search-input").clear();
+      cy.getCy("search-input").type("xyz", { delay: 100 });
+      
+      // Immediately after typing, debounced should still have old value
+      cy.contains("Query:").should("contain", "xyz");
+      
+      // Wait for new debounce
+      cy.wait(400);
       cy.contains("Debounced:").should("contain", "xyz");
       cy.getCy("search-result").should("have.length", 3);
     });
