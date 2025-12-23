@@ -255,7 +255,10 @@ const registerNodeCleanup = (
   }));
 
 /**
- * Subscribe to atom changes for reactivity
+ * Subscribe to atom changes for reactivity.
+ * Uses registry.subscribe directly (like atom-react) instead of streams.
+ * This is simpler and more efficient - subscriptions are synchronous
+ * and cleanup is handled via scope finalizers.
  */
 const subscribeToAtoms = (
   atoms: Set<Atom.Atom<unknown>>,
@@ -265,14 +268,14 @@ const subscribeToAtoms = (
 ): Effect.Effect<void, never, never> =>
   Effect.forEach(
     atoms,
-    (atom) => {
-      const atomStream = AtomRegistry.toStream(runtime.registry, atom).pipe(
-        Stream.drop(1) // Skip initial value
-      );
-      const sub = Stream.runForEach(atomStream, () => Effect.sync(onUpdate));
-      return Effect.forkIn(sub, scope);
-    },
-    { discard: true, concurrency: "unbounded" }
+    (atom) =>
+      Effect.gen(function*() {
+        // Subscribe immediately - returns unsubscribe function
+        const unsubscribe = runtime.registry.subscribe(atom, onUpdate);
+        // Register unsubscribe to run when scope closes
+        yield* Scope.addFinalizer(scope, Effect.sync(unsubscribe));
+      }),
+    { discard: true }
   );
 
 /**

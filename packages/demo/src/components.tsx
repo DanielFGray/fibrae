@@ -89,8 +89,8 @@ export const TodoItem = ({
     const registry = yield* AtomRegistry.AtomRegistry;
     const completed = todoItemCompletedAtom(text);
     const testCount = todoItemTestCountAtom(text);
-    const isCompleted = registry.get(completed);
-    const testValue = registry.get(testCount);
+    const isCompleted = yield* Atom.get(completed);
+    const testValue = yield* Atom.get(testCount);
 
     return h(
       "li",
@@ -150,14 +150,14 @@ export const TodoList = () => {
     const registry = yield* AtomRegistry.AtomRegistry;
 
     const addTodo = (currentInput: string) => {
-      return registry.update(todosAtom, (list: string[]) => list.concat(currentInput));
+      return Effect.sync(() => registry.update(todosAtom, (list: string[]) => list.concat(currentInput)));
     };
 
     const removeTodo = (todoToRemove: string) => {
-      return registry.update(todosAtom, (list: string[]) => list.filter((todo: string) => todo !== todoToRemove));
+      return Effect.sync(() => registry.update(todosAtom, (list: string[]) => list.filter((todo: string) => todo !== todoToRemove)));
     };
 
-    const todoList = registry.get(todosAtom);
+    const todoList = yield* Atom.get(todosAtom);
 
     return h(
       "form",
