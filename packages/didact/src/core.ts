@@ -363,6 +363,22 @@ const renderVElementToDOM = (
               // Queue re-render on atom change
               runtime.runFork(
                 Effect.gen(function*() {
+                  // Capture focus state before re-render
+                  const activeElement = document.activeElement as HTMLElement | null;
+                  const hasFocusInWrapper = activeElement && wrapper.contains(activeElement);
+                  const focusData = hasFocusInWrapper && activeElement ? {
+                    tagName: activeElement.tagName,
+                    dataAttributes: Object.fromEntries(
+                      Array.from(activeElement.attributes)
+                        .filter(attr => attr.name.startsWith("data-"))
+                        .map(attr => [attr.name, attr.value])
+                    ),
+                    name: activeElement.getAttribute("name"),
+                    id: activeElement.id,
+                    selectionStart: "selectionStart" in activeElement ? (activeElement as HTMLInputElement).selectionStart : null,
+                    selectionEnd: "selectionEnd" in activeElement ? (activeElement as HTMLInputElement).selectionEnd : null,
+                  } : null;
+                  
                   // Clear old content via scope (triggers finalizers, removes DOM nodes)
                   const newContentScope = yield* clearContentScope(contentScopeRef);
                   
@@ -385,6 +401,33 @@ const renderVElementToDOM = (
                       Effect.catchAll((e) => Effect.logError("Re-render child error", e))
                     )
                   );
+                  
+                  // Restore focus after re-render
+                  if (focusData) {
+                    const candidates = wrapper.querySelectorAll(focusData.tagName);
+                    for (const candidate of candidates) {
+                      const el = candidate as HTMLElement;
+                      // Match by id first, then name, then data attributes
+                      const matchById = focusData.id && el.id === focusData.id;
+                      const matchByName = focusData.name && el.getAttribute("name") === focusData.name;
+                      const matchByData = Object.entries(focusData.dataAttributes).length > 0 &&
+                        Object.entries(focusData.dataAttributes).every(
+                          ([attr, value]) => el.getAttribute(attr) === value
+                        );
+                      
+                      if (matchById || matchByName || matchByData) {
+                        el.focus();
+                        // Restore cursor position for inputs/textareas
+                        if (focusData.selectionStart !== null && "setSelectionRange" in el) {
+                          (el as HTMLInputElement).setSelectionRange(
+                            focusData.selectionStart,
+                            focusData.selectionEnd ?? focusData.selectionStart
+                          );
+                        }
+                        break;
+                      }
+                    }
+                  }
                 }).pipe(
                   Effect.catchAllCause((cause) => Effect.logError("Re-render error", cause))
                 )
