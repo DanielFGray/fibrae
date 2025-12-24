@@ -221,9 +221,10 @@ const attachEventListeners = (
           // Try to get error boundary channel from context to report errors
           const errorChannel = context ? Context.getOption(context, ErrorBoundaryChannel) : Option.none();
           
-          const errorHandler = Option.isSome(errorChannel)
-            ? (cause: unknown) => errorChannel.value.reportError(cause)
-            : (cause: unknown) => Effect.logError("Event handler error (no boundary)", cause);
+          const errorHandler = Option.match(errorChannel, {
+            onNone: () => (cause: unknown) => Effect.logError("Event handler error (no boundary)", cause),
+            onSome: (channel) => (cause: unknown) => channel.reportError(cause)
+          });
           
           runtime.runFork(
             effectWithServices.pipe(
@@ -450,9 +451,10 @@ const renderVElementToDOM = (
           // Fork subscription for remaining emissions
           // Try to report stream errors to error boundary channel if available
           const maybeErrorChannel = Context.getOption(currentContext, ErrorBoundaryChannel);
-          const streamErrorHandler = Option.isSome(maybeErrorChannel)
-            ? (cause: unknown) => maybeErrorChannel.value.reportError(cause)
-            : (cause: unknown) => Effect.logError("Component stream error (no boundary)", cause);
+          const streamErrorHandler = Option.match(maybeErrorChannel, {
+            onNone: () => (cause: unknown) => Effect.logError("Component stream error (no boundary)", cause),
+            onSome: (channel) => (cause: unknown) => channel.reportError(cause)
+          });
           
           const subscription = Stream.runForEach(remainingStream, (emitted) =>
             Effect.gen(function*() {
@@ -822,9 +824,10 @@ const hydrateVElementToDOM = (
 
           // Fork subscription for remaining emissions
           const maybeErrorChannel = Context.getOption(currentContext, ErrorBoundaryChannel);
-          const streamErrorHandler = Option.isSome(maybeErrorChannel)
-            ? (cause: unknown) => maybeErrorChannel.value.reportError(cause)
-            : (cause: unknown) => Effect.logError("Component stream error (no boundary)", cause);
+          const streamErrorHandler = Option.match(maybeErrorChannel, {
+            onNone: () => (cause: unknown) => Effect.logError("Component stream error (no boundary)", cause),
+            onSome: (channel) => (cause: unknown) => channel.reportError(cause)
+          });
 
           const subscription = Stream.runForEach(remainingStream, (emitted) =>
             Effect.gen(function* () {
@@ -896,22 +899,22 @@ const hydrateVElementToDOM = (
         { index: 0, cursor: Option.some(domNode) },
         {
           while: (state) => state.index < children.length && Option.isSome(state.cursor),
-          body: (state) => Effect.gen(function* () {
-            if (Option.isNone(state.cursor)) {
-              return yield* Effect.fail(new HydrationMismatch({
-                expected: `${children.length} children`,
-                actual: `${state.index} children`,
-                path: buildPath(path)
-              }));
-            }
-            const nextCursor = yield* hydrateVElementToDOM(
-              children[state.index],
-              Option.getOrThrow(state.cursor),
-              runtime,
-              parentScope,
-              [...path, { tag: "fragment", index: state.index }]
-            );
-            return { index: state.index + 1, cursor: nextCursor };
+          body: (state) => Option.match(state.cursor, {
+            onNone: () => Effect.fail(new HydrationMismatch({
+              expected: `${children.length} children`,
+              actual: `${state.index} children`,
+              path: buildPath(path)
+            })),
+            onSome: (cursorNode) => Effect.gen(function* () {
+              const nextCursor = yield* hydrateVElementToDOM(
+                children[state.index],
+                cursorNode,
+                runtime,
+                parentScope,
+                [...path, { tag: "fragment", index: state.index }]
+              );
+              return { index: state.index + 1, cursor: nextCursor };
+            })
           })
         }
       );
@@ -929,15 +932,18 @@ const hydrateVElementToDOM = (
         { index: 0, cursor: Option.fromNullable(wrapper.firstChild as Node) },
         {
           while: (state) => state.index < children.length && Option.isSome(state.cursor),
-          body: (state) => Effect.gen(function* () {
-            const nextCursor = yield* hydrateVElementToDOM(
-              children[state.index], 
-              Option.getOrThrow(state.cursor), 
-              runtime, 
-              parentScope, 
-              [...path, { tag: "error_boundary", index: state.index }]
-            );
-            return { index: state.index + 1, cursor: nextCursor };
+          body: (state) => Option.match(state.cursor, {
+            onNone: () => Effect.succeed({ index: state.index, cursor: Option.none<Node>() }),
+            onSome: (cursorNode) => Effect.gen(function* () {
+              const nextCursor = yield* hydrateVElementToDOM(
+                children[state.index], 
+                cursorNode, 
+                runtime, 
+                parentScope, 
+                [...path, { tag: "error_boundary", index: state.index }]
+              );
+              return { index: state.index + 1, cursor: nextCursor };
+            })
           })
         }
       );
@@ -962,60 +968,55 @@ const hydrateVElementToDOM = (
           {
             while: (state) => {
               if (state.index >= children.length) return false;
-              if (Option.isNone(state.cursor)) return false;
-              // Stop if we hit closing marker
-              const node = state.cursor.value;
-              if (node.nodeType === Node.COMMENT_NODE && 
-                  (node as Comment).data.includes("/didact:sus")) {
-                return false;
-              }
-              return true;
+              return Option.match(state.cursor, {
+                onNone: () => false,
+                onSome: (node) => {
+                  // Stop if we hit closing marker
+                  if (node.nodeType === Node.COMMENT_NODE && 
+                      (node as Comment).data.includes("/didact:sus")) {
+                    return false;
+                  }
+                  return true;
+                }
+              });
             },
-            body: (state) => Effect.gen(function* () {
-              const nextCursor = yield* hydrateVElementToDOM(
-                children[state.index],
-                Option.getOrThrow(state.cursor),
-                runtime,
-                parentScope,
-                [...path, { tag: "suspense", index: state.index }]
-              );
-              return { index: state.index + 1, cursor: nextCursor };
+            body: (state) => Option.match(state.cursor, {
+              onNone: () => Effect.succeed({ index: state.index, cursor: Option.none<Node>() }),
+              onSome: (cursorNode) => Effect.gen(function* () {
+                const nextCursor = yield* hydrateVElementToDOM(
+                  children[state.index],
+                  cursorNode,
+                  runtime,
+                  parentScope,
+                  [...path, { tag: "suspense", index: state.index }]
+                );
+                return { index: state.index + 1, cursor: nextCursor };
+              })
             })
           }
         );
         
         // Skip past the closing marker to return the next sibling
-        if (Option.isSome(finalState.cursor)) {
-          const maybeClosingMarker = finalState.cursor.value;
-          if (maybeClosingMarker.nodeType === Node.COMMENT_NODE &&
-              (maybeClosingMarker as Comment).data.includes("/didact:sus")) {
-            return Option.fromNullable(maybeClosingMarker.nextSibling);
+        return Option.match(finalState.cursor, {
+          onNone: () => Option.none<Node>(),
+          onSome: (maybeClosingMarker) => {
+            if (maybeClosingMarker.nodeType === Node.COMMENT_NODE &&
+                (maybeClosingMarker as Comment).data.includes("/didact:sus")) {
+              return Option.fromNullable(maybeClosingMarker.nextSibling);
+            }
+            return Option.some(maybeClosingMarker);
           }
-          return finalState.cursor;
-        }
-        return Option.none();
+        });
         
       } else {
-        // No markers found - legacy SSR without markers, hydrate children directly
-        // This path also handles client-only rendering
-        const finalState = yield* Effect.iterate(
-          { index: 0, cursor: Option.fromNullable(domNode as Node) },
-          {
-            while: (state) => state.index < children.length && Option.isSome(state.cursor),
-            body: (state) => Effect.gen(function* () {
-              const nextCursor = yield* hydrateVElementToDOM(
-                children[state.index],
-                Option.getOrThrow(state.cursor),
-                runtime,
-                parentScope,
-                [...path, { tag: "suspense", index: state.index }]
-              );
-              return { index: state.index + 1, cursor: nextCursor };
-            })
-          }
-        );
-        
-        return finalState.cursor;
+        // No Suspense markers found - this means SSR output doesn't match expected format
+        return yield* Effect.fail(new HydrationMismatch({
+          expected: "Suspense comment marker (<!--didact:sus:resolved--> or <!--didact:sus:fallback-->)",
+          actual: domNode.nodeType === Node.COMMENT_NODE 
+            ? `comment: ${(domNode as Comment).data}` 
+            : domNode.nodeName,
+          path: buildPath(path)
+        }));
       }
 
     } else if (isHostElement(type)) {
@@ -1051,22 +1052,22 @@ const hydrateVElementToDOM = (
         { index: 0, cursor: Option.fromNullable(el.firstChild as Node) },
         {
           while: (state) => state.index < vChildren.length,
-          body: (state) => Effect.gen(function* () {
-            if (Option.isNone(state.cursor)) {
-              return yield* Effect.fail(new HydrationMismatch({
-                expected: `child at index ${state.index}`,
-                actual: "no more DOM nodes",
-                path: buildPath([...path, { tag: type, index: state.index }])
-              }));
-            }
-            const nextCursor = yield* hydrateVElementToDOM(
-              vChildren[state.index],
-              Option.getOrThrow(state.cursor),
-              runtime,
-              childScope,
-              [...path, { tag: type, index: state.index }]
-            );
-            return { index: state.index + 1, cursor: nextCursor };
+          body: (state) => Option.match(state.cursor, {
+            onNone: () => Effect.fail(new HydrationMismatch({
+              expected: `child at index ${state.index}`,
+              actual: "no more DOM nodes",
+              path: buildPath([...path, { tag: type, index: state.index }])
+            })),
+            onSome: (cursorNode) => Effect.gen(function* () {
+              const nextCursor = yield* hydrateVElementToDOM(
+                vChildren[state.index],
+                cursorNode,
+                runtime,
+                childScope,
+                [...path, { tag: type, index: state.index }]
+              );
+              return { index: state.index + 1, cursor: nextCursor };
+            })
           })
         }
       );
