@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev:server": "vite dev",
+    "dev:ssr": "bun server/index.ts",
+    "dev:all": "run-p dev:server dev:ssr",
     "client:build": "vite build",
     "build": "run-s types:check client:build",
     "types:watch": "tsc -p . --noEmit --watch",

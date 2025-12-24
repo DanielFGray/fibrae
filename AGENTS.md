@@ -31,6 +31,36 @@ Building an Effect-first JSX renderer where components are Effect programs with 
 
 Assume the vite dev server is already running. Do not try to run it with `bun dev`.
 
+## TDD: Red/Green/Refactor
+
+**Follow Test-Driven Development strictly when implementing features or fixing bugs:**
+
+1. **RED** - Write a failing test first
+   - Create the Cypress E2E test that describes the expected behavior
+   - Run the test and confirm it fails (for the right reason)
+   - Do NOT write implementation code yet
+
+2. **GREEN** - Write minimal code to pass
+   - Implement just enough to make the test pass
+   - Avoid over-engineering or adding unrequested features
+   - Run the test and confirm it passes
+
+3. **REFACTOR** - Clean up while tests stay green
+   - Improve code quality, remove duplication
+   - Run tests after each change to ensure nothing breaks
+
+**Why this matters:**
+- Prevents writing code that isn't tested
+- Catches assumptions early (the test might fail for unexpected reasons)
+- Keeps implementation focused and minimal
+- Creates a safety net before refactoring
+
+**Anti-patterns to avoid:**
+- Writing implementation before tests
+- Writing tests that pass immediately (test the test!)
+- Skipping the refactor step
+- Writing multiple features before running tests
+
 ## Roadmap
   - Error Boundary component: catch component/stream failures and render fallback; optional `onError`.
   - Stream errors: surface pre-first-emission failures to boundary; terminate subscription on later failures and trigger boundary.

@@ -1,3 +1,5 @@
 # bv (beads viewer) local config and caches
 .bv/
-dev-server-logs.json
+*logs.json
+dist
+*.log

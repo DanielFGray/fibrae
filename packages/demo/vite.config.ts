@@ -6,6 +6,12 @@ export default defineConfig({
   define: {
     global: 'globalThis',
   },
+  server: {
+    proxy: {
+      // Proxy SSR requests to Effect HTTP server
+      '/ssr': 'http://localhost:3001',
+    },
+  },
   esbuild: {
     jsx: 'transform',
     jsxDev: false,

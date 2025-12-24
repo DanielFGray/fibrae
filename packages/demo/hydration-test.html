@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hydration Test</title>
+</head>
+<body>
+  <!-- Pre-rendered HTML (simulating SSR output) - no whitespace between elements -->
+  <div id="root" data-cy="hydration-root"><div><p data-cy="hydration-count">0</p><button data-cy="hydration-button">Click me</button></div></div>
+  <script type="module" src="/src/hydration-test.tsx"></script>
+</body>
+</html>

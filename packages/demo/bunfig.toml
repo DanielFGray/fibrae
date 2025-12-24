@@ -1,0 +1,4 @@
+# Configure JSX for Didact runtime
+# This tells Bun to use @didact/core/jsx-runtime for JSX transformation
+jsx = "react-jsx"
+jsxImportSource = "@didact/core"

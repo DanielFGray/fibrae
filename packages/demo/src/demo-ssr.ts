@@ -1,11 +1,14 @@
+import * as Effect from "effect/Effect";
+import { BunRuntime } from "@effect/platform-bun";
 import { h } from "@didact/core";
-import { renderToStringPromise } from "@didact/core/server";
+import { renderToString } from "@didact/core/server";
 import { App } from "./components-ssr.js";
 
-const appElement = h(App);
-const body = await renderToStringPromise(appElement);
+const program = Effect.gen(function* () {
+  const appElement = h(App);
+  const { html: body } = yield* renderToString(appElement);
 
-const html = `<!doctype html>
+  const html = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -18,5 +21,8 @@ const html = `<!doctype html>
 </html>
 `;
 
-// SSR output to stdout (not Effect-based, intentional for pipe redirection)
-process.stdout.write(html);
+  // SSR output to stdout for pipe redirection
+  process.stdout.write(html);
+});
+
+BunRuntime.runMain(program);

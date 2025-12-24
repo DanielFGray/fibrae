@@ -7,5 +7,5 @@
     "emitDeclarationOnly": false
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.*", "src/server.ts"]
+  "exclude": ["node_modules", "dist", "**/*.test.*"]
 }

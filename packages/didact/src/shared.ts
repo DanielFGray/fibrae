@@ -3,6 +3,7 @@ import * as Stream from "effect/Stream";
 import * as Effect from "effect/Effect";
 import * as Scope from "effect/Scope";
 import * as Deferred from "effect/Deferred";
+import * as Data from "effect/Data";
 import { Atom as BaseAtom } from "@effect-atom/atom";
 
 /**
@@ -96,3 +97,36 @@ export const isStream = (value: unknown): value is Stream.Stream<any, any, any> 
   value !== null &&
   Stream.StreamTypeId in value
 );
+
+// =============================================================================
+// Hydration Errors
+// =============================================================================
+
+/**
+ * Error thrown when DOM structure doesn't match VElement tree during hydration.
+ * 
+ * This is a tagged error that can be caught via Effect.catchTag("HydrationMismatch", ...).
+ * 
+ * Structural mismatches (tag name, child count) indicate a bug where server and client
+ * rendered different component trees.
+ * 
+ * @example
+ * ```typescript
+ * yield* render(<App />, container, { initialState }).pipe(
+ *   Effect.catchTag("HydrationMismatch", (err) => {
+ *     console.error(`Hydration failed at ${err.path}: expected ${err.expected}, got ${err.actual}`);
+ *     // Fallback: clear container and do fresh render
+ *     container.innerHTML = "";
+ *     return render(<App />, container);
+ *   })
+ * );
+ * ```
+ */
+export class HydrationMismatch extends Data.TaggedError("HydrationMismatch")<{
+  /** What the VElement tree expected (e.g., "div", "3 children") */
+  readonly expected: string;
+  /** What the DOM actually had (e.g., "span", "2 children") */
+  readonly actual: string;
+  /** Human-readable path to the mismatch location (e.g., "div > ul > li:2") */
+  readonly path: string;
+}> {}
