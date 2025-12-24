@@ -12,25 +12,22 @@ describe("SSR Counter with State Hydration", () => {
   });
 
   it("hydrates and marks container when complete", () => {
-    // Wait for hydration to complete (root element gets data-hydrated="true")
-    cy.get("#root", { timeout: 5000 }).should("have.attr", "data-hydrated", "true");
+    // Wait for hydration by verifying the button becomes interactive
+    // Click and verify count changes - this proves event handlers are attached
+    cy.getCy("ssr-increment").click();
+    cy.getCy("ssr-count").should("contain", "1");
   });
 
   it("preserves server-rendered state during hydration", () => {
     // Initial count from server should be 0
     cy.getCy("ssr-count").should("contain", "0");
 
-    // Wait for hydration
-    cy.get("#root", { timeout: 5000 }).should("have.attr", "data-hydrated", "true");
-
-    // Count should still be 0 after hydration (state preserved)
-    cy.getCy("ssr-count").should("contain", "0");
+    // Verify hydration completed by clicking - count should go to 1 (not reset)
+    cy.getCy("ssr-increment").click();
+    cy.getCy("ssr-count").should("contain", "1");
   });
 
   it("attaches event handlers and enables interactivity", () => {
-    // Wait for hydration
-    cy.get("#root", { timeout: 5000 }).should("have.attr", "data-hydrated", "true");
-
     // Click increment button once
     cy.getCy("ssr-increment").click();
     cy.getCy("ssr-count").should("contain", "1");

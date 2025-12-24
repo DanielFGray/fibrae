@@ -17,7 +17,7 @@ import {
 } from "@effect/platform-bun";
 import { h } from "@didact/core";
 import { renderToString } from "@didact/core/server";
-import { CounterApp, TodoApp, SuspenseApp, setInitialTodos } from "../src/ssr-app.js";
+import { CounterApp, TodoApp, SuspenseApp, SlowSuspenseApp, setInitialTodos } from "../src/ssr-app.js";
 
 // Path to todos JSON file (relative to server directory)
 const TODOS_FILE = new URL("./todos.json", import.meta.url).pathname;
@@ -126,6 +126,14 @@ const suspenseHandler = Effect.gen(function* () {
 });
 
 /**
+ * Slow Suspense SSR handler - renders Suspense boundary with fallback (content too slow)
+ */
+const slowSuspenseHandler = Effect.gen(function* () {
+  const { html, dehydratedState } = yield* renderToString(h(SlowSuspenseApp));
+  return HttpServerResponse.html(buildPage(html, dehydratedState, "ssr-hydrate-suspense-slow.tsx"));
+});
+
+/**
  * Router with SSR routes
  */
 const router = HttpRouter.empty.pipe(
@@ -138,7 +146,9 @@ const router = HttpRouter.empty.pipe(
   HttpRouter.post("/ssr/todo/reset", todoResetHandler),
   HttpRouter.post("/ssr/todo/save", todoSaveHandler),
   // Suspense scenario
-  HttpRouter.get("/ssr/suspense", suspenseHandler)
+  HttpRouter.get("/ssr/suspense", suspenseHandler),
+  // Slow Suspense scenario (fallback)
+  HttpRouter.get("/ssr/suspense-slow", slowSuspenseHandler)
 );
 
 /**

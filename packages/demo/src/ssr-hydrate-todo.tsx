@@ -13,12 +13,7 @@ const container = document.getElementById("root") as HTMLElement;
 const initialState = window.__DIDACT_STATE__;
 
 // Run the hydration
-Effect.gen(function* () {
-  yield* Effect.fork(render(<TodoApp />, container, { initialState: initialState as Parameters<typeof render>[2]["initialState"] }));
-  yield* Effect.sleep("10 millis");
-  container.setAttribute("data-hydrated", "true");
-  return yield* Effect.never;
-}).pipe(
+render(<TodoApp />, container, { initialState: initialState as Parameters<typeof render>[2]["initialState"] }).pipe(
   Effect.catchAllDefect((e) => Effect.log("Hydration error:", e)),
   BrowserPlatform.BrowserRuntime.runMain,
 );

@@ -12,6 +12,7 @@
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import * as Option from "effect/Option";
+import * as Deferred from "effect/Deferred";
 
 import {
   Atom,
@@ -226,16 +227,43 @@ const renderVElementToString = (
       return result.right;
 
     } else if (type === "SUSPENSE") {
-      // Suspense boundary - wrap with comment markers for hydration
-      // Phase 4: Always render resolved state (Phase 5 will handle fallback/timeout)
+      // Suspense boundary - race child rendering against timeout
+      // Phase 5: If children complete first → resolved marker
+      //          If timeout fires first → fallback marker
+      const fallback = vElement.props.fallback as VElement;
+      const threshold = (vElement.props.threshold as number) ?? 100;
       const children = vElement.props.children as VElement[];
-      let childrenHtml = "";
-      for (const child of children) {
-        childrenHtml += yield* renderVElementToString(child);
-      }
       
-      // Wrap content with markers: <!--didact:sus:resolved--> content <!--/didact:sus-->
-      return `<!--didact:sus:resolved-->${childrenHtml}<!--/didact:sus-->`;
+      // Create a Deferred to signal when children complete
+      const childrenComplete = yield* Deferred.make<string, unknown>();
+      
+      // Fork: render children to string
+      yield* Effect.fork(
+        Effect.gen(function* () {
+          let childrenHtml = "";
+          for (const child of children) {
+            childrenHtml += yield* renderVElementToString(child);
+          }
+          yield* Deferred.succeed(childrenComplete, childrenHtml);
+        }).pipe(
+          Effect.catchAll((e) => Deferred.fail(childrenComplete, e))
+        )
+      );
+      
+      // Race: children completing vs timeout
+      const result = yield* Effect.race(
+        Deferred.await(childrenComplete).pipe(Effect.map((html) => ({ type: "resolved" as const, html }))),
+        Effect.sleep(`${threshold} millis`).pipe(Effect.as({ type: "timeout" as const }))
+      );
+      
+      if (result.type === "resolved") {
+        // Children completed before timeout - render with resolved marker
+        return `<!--didact:sus:resolved-->${result.html}<!--/didact:sus-->`;
+      } else {
+        // Timeout fired first - render fallback with fallback marker
+        const fallbackHtml = yield* renderVElementToString(fallback);
+        return `<!--didact:sus:fallback-->${fallbackHtml}<!--/didact:sus-->`;
+      }
 
     } else if (isHostElement(type)) {
       // Regular HTML element

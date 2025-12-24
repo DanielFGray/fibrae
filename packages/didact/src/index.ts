@@ -1,6 +1,22 @@
-// Canonical entry exports core renderer
-export type * from "./core.js";
-export * from "./core.js";
+// =============================================================================
+// Public API
+// =============================================================================
+
+// Main render function
+export { render } from "./core.js";
+
+// Runtime
+export { DidactRuntime, CustomAtomRegistryLayer } from "./runtime.js";
+
+// Built-in components
+export { Suspense, ErrorBoundary } from "./components.js";
+
+// Element creation (JSX factory)
+export { h, createTextElement } from "./h.js";
+
+// Types
+export type { VElement, ElementType, Primitive } from "./shared.js";
+export type { VElement as VNode } from "./shared.js";
 
 // Re-export upstream Effect Atom APIs for consumers
 export { Atom, Registry as AtomRegistry } from "@effect-atom/atom";

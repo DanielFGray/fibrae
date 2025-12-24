@@ -4,9 +4,8 @@
  * Tests various SSR + hydration scenarios:
  * 1. Counter with state hydration
  * 2. Todo list with persistent storage
- * 3. (Future) Suspense with resolved data
- * 4. (Future) Suspense with fallback
- * 5. (Future) Hydration mismatch recovery
+ * 3. Suspense with resolved data
+ * 4. Suspense with fallback
  */
 
 describe("SSR Scenarios", () => {
@@ -22,18 +21,20 @@ describe("SSR Scenarios", () => {
     });
 
     it("hydrates and marks container when complete", () => {
-      cy.get("#root", { timeout: 5000 }).should("have.attr", "data-hydrated", "true");
+      // Verify hydration by clicking - button should work
+      cy.getCy("ssr-increment").click();
+      cy.getCy("ssr-count").should("contain", "1");
     });
 
     it("preserves server-rendered state during hydration", () => {
+      // Initial count from server should be 0
       cy.getCy("ssr-count").should("contain", "0");
-      cy.get("#root", { timeout: 5000 }).should("have.attr", "data-hydrated", "true");
-      cy.getCy("ssr-count").should("contain", "0");
+      // Click to verify hydration - count goes to 1 (not reset)
+      cy.getCy("ssr-increment").click();
+      cy.getCy("ssr-count").should("contain", "1");
     });
 
     it("attaches event handlers and enables interactivity", () => {
-      cy.get("#root", { timeout: 5000 }).should("have.attr", "data-hydrated", "true");
-
       cy.getCy("ssr-increment").click();
       cy.getCy("ssr-count").should("contain", "1");
 
@@ -60,9 +61,7 @@ describe("SSR Scenarios", () => {
     });
 
     it("hydrates and enables adding todos", () => {
-      cy.get("#root", { timeout: 5000 }).should("have.attr", "data-hydrated", "true");
-
-      // Add a todo
+      // Add a todo - this verifies hydration is complete
       cy.getCy("ssr-todo-input").type("Buy milk");
       cy.getCy("ssr-todo-add").click();
 
@@ -72,8 +71,6 @@ describe("SSR Scenarios", () => {
     });
 
     it("persists todos across page reloads", () => {
-      cy.get("#root", { timeout: 5000 }).should("have.attr", "data-hydrated", "true");
-
       // Add a todo
       cy.getCy("ssr-todo-input").type("Walk the dog");
       cy.getCy("ssr-todo-add").click();
@@ -86,8 +83,6 @@ describe("SSR Scenarios", () => {
     });
 
     it("can remove todos after hydration", () => {
-      cy.get("#root", { timeout: 5000 }).should("have.attr", "data-hydrated", "true");
-
       // Add two todos
       cy.getCy("ssr-todo-input").type("Task 1");
       cy.getCy("ssr-todo-add").click();
@@ -146,6 +141,59 @@ describe("SSR Scenarios", () => {
       // Click again to be sure
       cy.getCy("ssr-suspense-button").click();
       cy.getCy("ssr-suspense-clicks").should("contain", "Clicks: 2");
+    });
+  });
+
+  describe("Suspense with Slow Content (Fallback)", () => {
+    it("emits fallback marker when content is slow", () => {
+      // Check raw SSR HTML response (before hydration modifies it)
+      cy.request("/ssr/suspense-slow").then((response) => {
+        const html = response.body;
+        // Should have opening marker with "fallback" state
+        expect(html).to.include("<!--didact:sus:fallback-->");
+        // Should have closing marker
+        expect(html).to.include("<!--/didact:sus-->");
+        // Should NOT have resolved marker (content was too slow)
+        expect(html).to.not.include("<!--didact:sus:resolved-->");
+      });
+    });
+
+    it("renders fallback content in SSR HTML", () => {
+      cy.visit("/ssr/suspense-slow");
+      // The fallback should be visible initially
+      cy.getCy("ssr-slow-fallback").should("exist");
+      cy.getCy("ssr-slow-fallback").should("contain", "Loading slow content...");
+    });
+
+    it("hydrates and swaps fallback for real content", () => {
+      cy.visit("/ssr/suspense-slow");
+      // Initially shows fallback
+      cy.getCy("ssr-slow-fallback").should("exist");
+      
+      // After hydration + content load, should show real content
+      // The delay is 500ms in the component, plus some buffer for hydration
+      cy.getCy("ssr-slow-content", { timeout: 3000 }).should("exist");
+      cy.getCy("ssr-slow-content").should("contain", "This content loaded after delay");
+      
+      // Fallback should be gone
+      cy.getCy("ssr-slow-fallback").should("not.exist");
+    });
+
+    it("attaches event handlers after content swap", () => {
+      cy.visit("/ssr/suspense-slow");
+      // Wait for real content to appear
+      cy.getCy("ssr-slow-content", { timeout: 3000 }).should("exist");
+      
+      // Initial click count should be 0
+      cy.getCy("ssr-slow-clicks").should("contain", "Clicks: 0");
+      
+      // Click the button - if hydration worked, this will update the count
+      cy.getCy("ssr-slow-button").click();
+      cy.getCy("ssr-slow-clicks").should("contain", "Clicks: 1");
+      
+      // Click again to be sure
+      cy.getCy("ssr-slow-button").click();
+      cy.getCy("ssr-slow-clicks").should("contain", "Clicks: 2");
     });
   });
 });
