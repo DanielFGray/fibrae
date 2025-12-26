@@ -12,7 +12,7 @@ import * as FiberRef from "effect/FiberRef";
 
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import { type VElement, type ElementType, type Primitive } from "./shared.js";
-import { DidactRuntime } from "./runtime.js";
+import { DidactRuntime, runForkWithRuntime } from "./runtime.js";
 import { setDomProperty, attachEventListeners, isProperty } from "./dom.js";
 import { normalizeToStream, makeTrackingRegistry, subscribeToAtoms } from "./tracking.js";
 import { clearContentScope, registerNodeCleanup } from "./scope-utils.js";
@@ -122,7 +122,7 @@ export const renderVElementToDOM = (
           if (accessedAtoms.size > 0) {
             yield* subscribeToAtoms(accessedAtoms, () => {
               // Queue re-render on atom change
-              runtime.runFork(
+              runForkWithRuntime(runtime)(
                 Effect.gen(function*() {
                   // Capture focus state before re-render
                   const activeElement = document.activeElement as HTMLElement | null;
@@ -190,6 +190,8 @@ export const renderVElementToDOM = (
                     }
                   }
                 }).pipe(
+                  // Provide captured context to re-render fiber so services (Navigator, etc.) are available
+                  Effect.provide(currentContext),
                   Effect.catchAllCause((cause) => Effect.logError("Re-render error", cause))
                 )
               );
@@ -407,11 +409,8 @@ export const renderVElementToDOM = (
         }
       }
 
-      // Capture runtime context for event handlers to access user-provided services
-      const currentContext = yield* FiberRef.get(FiberRef.currentContext) as Effect.Effect<Context.Context<any>, never, never>;
-
-      // Attach event listeners with context for service access
-      attachEventListeners(el, vElement.props as Record<string, unknown>, runtime, currentContext);
+      // Attach event listeners - uses runForkWithRuntime internally for full context
+      attachEventListeners(el, vElement.props as Record<string, unknown>, runtime);
 
       // Handle ref
       const ref = vElement.props.ref;

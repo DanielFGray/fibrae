@@ -16,8 +16,10 @@ import {
   BunPath,
 } from "@effect/platform-bun";
 import { h } from "@didact/core";
-import { renderToString } from "@didact/core/server";
+import { renderToStringWith, SSRAtomRegistryLayer } from "@didact/core/server";
+import { Router } from "@didact/core/router";
 import { CounterApp, TodoApp, SuspenseApp, SlowSuspenseApp, setInitialTodos } from "../src/ssr-app.js";
+import { SSRRouter, App, createSSRRouterHandlers } from "../src/ssr-router-app.js";
 
 // Path to todos JSON file (relative to server directory)
 const TODOS_FILE = new URL("./todos.json", import.meta.url).pathname;
@@ -35,6 +37,29 @@ const buildPage = (html: string, dehydratedState: unknown[], hydrationScript: st
 <body>
 <div id="root">${html}</div>
 <script>window.__DIDACT_STATE__ = ${JSON.stringify(dehydratedState)};</script>
+<script type="module" src="http://localhost:5173/src/${hydrationScript}"></script>
+</body>
+</html>`;
+
+/**
+ * Helper to build SSR router HTML page (includes router state)
+ */
+const buildRouterPage = (
+  html: string, 
+  atomState: unknown[], 
+  routerState: unknown,
+  hydrationScript: string
+) => `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Didact SSR Router</title>
+</head>
+<body>
+<div id="root">${html}</div>
+<script>window.__DIDACT_STATE__ = ${JSON.stringify(atomState)};
+window.__DIDACT_ROUTER__ = ${JSON.stringify(routerState)};</script>
 <script type="module" src="http://localhost:5173/src/${hydrationScript}"></script>
 </body>
 </html>`;
@@ -133,6 +158,64 @@ const slowSuspenseHandler = Effect.gen(function* () {
   return HttpServerResponse.html(buildPage(html, dehydratedState, "ssr-hydrate-suspense-slow.tsx"));
 });
 
+// =============================================================================
+// SSR Router Handlers
+// =============================================================================
+
+/**
+ * Create the SSR router handlers layer (server-side loaders)
+ */
+const ssrRouterHandlersLayer = createSSRRouterHandlers(true);
+
+/**
+ * SSR Router handler - matches request pathname and renders route
+ * 
+ * This handler:
+ * 1. Creates serverLayer to match route and run loader
+ * 2. Renders the route component wrapped in App shell in the same context
+ * 3. Returns HTML with dehydrated atom and router state
+ */
+const ssrRouterHandler = (ssrPathname: string) =>
+  Effect.gen(function* () {
+    // Create server layer for this request
+    // basePath is the mount point of this SSR app (/ssr/router)
+    const serverLayer = Router.serverLayer({
+      router: SSRRouter,
+      pathname: ssrPathname,
+      search: "",
+      basePath: "/ssr/router",
+    });
+    
+    // Combined layer: SSRAtomRegistryLayer + RouterHandlers -> serverLayer -> provides History, Navigator, CurrentRouteElement
+    const fullLayer = Layer.provideMerge(
+      serverLayer,
+      Layer.merge(ssrRouterHandlersLayer, SSRAtomRegistryLayer)
+    );
+    
+    // Get the rendered element and state, then render in the same context
+    const { html, atomState, state } = yield* Effect.gen(function* () {
+      const { element, state } = yield* Router.CurrentRouteElement;
+      
+      // Wrap in App shell - pass element as child via third argument
+      const app = h(App, {}, [element]);
+      
+      // Render to string - uses same AtomRegistry/Navigator context
+      const { html, dehydratedState: atomState } = yield* renderToStringWith(app);
+      
+      return { html, atomState, state };
+    }).pipe(Effect.provide(fullLayer));
+    
+    // Build page with both atom and router state
+    return HttpServerResponse.html(
+      buildRouterPage(html, atomState, state, "ssr-hydrate-router.tsx")
+    );
+  }).pipe(
+    Effect.catchAll((e) => {
+      console.error("SSR Router error:", e);
+      return HttpServerResponse.text(`SSR Error: ${e}`, { status: 500 });
+    })
+  );
+
 /**
  * Router with SSR routes
  */
@@ -148,7 +231,15 @@ const router = HttpRouter.empty.pipe(
   // Suspense scenario
   HttpRouter.get("/ssr/suspense", suspenseHandler),
   // Slow Suspense scenario (fallback)
-  HttpRouter.get("/ssr/suspense-slow", slowSuspenseHandler)
+  HttpRouter.get("/ssr/suspense-slow", slowSuspenseHandler),
+  // SSR Router scenarios - match all /ssr/router/* paths
+  HttpRouter.get("/ssr/router", ssrRouterHandler("/")),
+  HttpRouter.get("/ssr/router/posts", ssrRouterHandler("/posts")),
+  HttpRouter.get("/ssr/router/posts/:id", 
+    HttpRouter.params.pipe(
+      Effect.flatMap(({ id }) => ssrRouterHandler(`/posts/${id}`))
+    )
+  )
 );
 
 /**

@@ -20,3 +20,6 @@ export type { VElement as VNode } from "./shared.js";
 
 // Re-export upstream Effect Atom APIs for consumers
 export { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
+
+// Server-side rendering
+export { renderToStringWith, renderToString, SSRAtomRegistryLayer, Hydration } from "./server.js";

@@ -10,7 +10,7 @@ import * as FiberRef from "effect/FiberRef";
 
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import { type VElement, type ElementType, type Primitive, HydrationMismatch } from "./shared.js";
-import { DidactRuntime } from "./runtime.js";
+import { DidactRuntime, runForkWithRuntime } from "./runtime.js";
 import { attachEventListeners } from "./dom.js";
 import { normalizeToStream, makeTrackingRegistry, subscribeToAtoms } from "./tracking.js";
 import { clearContentScope, registerNodeCleanup } from "./scope-utils.js";
@@ -133,7 +133,7 @@ export const hydrateVElementToDOM = (
           // Subscribe to atom changes for reactivity
           if (accessedAtoms.size > 0) {
             yield* subscribeToAtoms(accessedAtoms, () => {
-              runtime.runFork(
+              runForkWithRuntime(runtime)(
                 Effect.gen(function*() {
                   const newContentScope = yield* clearContentScope(contentScopeRef);
 
@@ -453,11 +453,8 @@ export const hydrateVElementToDOM = (
         }));
       }
 
-      // Capture runtime context for event handlers
-      const currentContext = yield* FiberRef.get(FiberRef.currentContext) as Effect.Effect<Context.Context<unknown>, never, never>;
-
-      // Attach event listeners (this is the key hydration step!)
-      attachEventListeners(el, vElement.props as Record<string, unknown>, runtime, currentContext);
+      // Attach event listeners - uses runForkWithRuntime internally for full context
+      attachEventListeners(el, vElement.props as Record<string, unknown>, runtime);
 
       // Handle ref
       const ref = vElement.props.ref;

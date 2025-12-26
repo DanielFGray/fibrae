@@ -28,6 +28,10 @@
     "./shared": {
       "import": "./dist/shared.js",
       "types": "./dist/shared.d.ts"
+    },
+    "./router": {
+      "import": "./dist/router/index.js",
+      "types": "./dist/router/index.d.ts"
     }
   },
   "scripts": {

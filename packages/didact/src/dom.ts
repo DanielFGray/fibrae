@@ -1,9 +1,5 @@
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
-import * as Context from "effect/Context";
-import { Registry as AtomRegistry } from "@effect-atom/atom";
-import { DidactRuntime } from "./runtime.js";
-import { ErrorBoundaryChannel } from "./components.js";
+import { DidactRuntime, runForkWithRuntime } from "./runtime.js";
 
 // =============================================================================
 // DOM Property Handling
@@ -54,14 +50,13 @@ export const setDomProperty = (el: HTMLElement, name: string, value: unknown): v
 };
 
 /**
- * Attach event listeners to a DOM element
- * @param context - The current Effect context for service access (ThemeService, ErrorBoundaryChannel, etc.)
+ * Attach event listeners to a DOM element.
+ * Uses runForkWithRuntime to get the full application context.
  */
 export const attachEventListeners = (
   el: HTMLElement,
   props: Record<string, unknown>,
-  runtime: DidactRuntime,
-  context?: Context.Context<unknown>
+  runtime: DidactRuntime
 ): void => {
   for (const [key, handler] of Object.entries(props)) {
     if (isEvent(key) && typeof handler === "function") {
@@ -71,31 +66,11 @@ export const attachEventListeners = (
         const result = (handler as (e: Event) => unknown)(event);
 
         if (Effect.isEffect(result)) {
-          // Build the effect with full context if available, otherwise just basic services
-          const effectWithServices = context
-            ? (result as Effect.Effect<unknown, unknown, never>).pipe(
-              Effect.provide(context),
-              // Also add DidactRuntime in case it's needed but not in context
-              Effect.provideService(DidactRuntime, runtime)
-            )
-            : (result as Effect.Effect<unknown, unknown, AtomRegistry.AtomRegistry>).pipe(
-              Effect.provideService(AtomRegistry.AtomRegistry, runtime.registry),
-              Effect.provideService(DidactRuntime, runtime)
-            );
-
-          // Try to get error boundary channel from context to report errors
-          const errorChannel = context ? Context.getOption(context, ErrorBoundaryChannel) : Option.none();
-
-          const errorHandler = Option.match(errorChannel, {
-            onNone: () => (cause: unknown) => Effect.logError("Event handler error (no boundary)", cause),
-            onSome: (channel) => (cause: unknown) => channel.reportError(cause)
-          });
-
-          runtime.runFork(
-            effectWithServices.pipe(
-              Effect.catchAllCause(errorHandler)
-            )
+          // Use runForkWithRuntime to get the full application context
+          const effectWithErrorHandling = (result as Effect.Effect<unknown, unknown, unknown>).pipe(
+            Effect.catchAllCause((cause) => Effect.logError("Event handler error", cause))
           );
+          runForkWithRuntime(runtime)(effectWithErrorHandling);
         }
       });
     }

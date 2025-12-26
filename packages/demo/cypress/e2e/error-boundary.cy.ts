@@ -21,13 +21,23 @@ describe("Error Boundaries", () => {
   });
 
   it("shows fallback when stream fails after first emission", () => {
-    // Stream emits once successfully first
-    cy.getCy("stream-ok", { timeout: 5000 }).should("exist");
-    cy.getCy("stream-ok").should("contain", "Stream OK once");
+    // Debug: log what's in the error container
+    cy.getCy("error-container", { timeout: 5000 }).then(($el) => {
+      cy.log("Error container HTML:", $el.html());
+    });
+    
+    // Stream emits once successfully first - should see "Stream OK once" before error
+    cy.getCy("stream-ok", { timeout: 5000 })
+      .should("exist")
+      .and("contain", "Stream OK once");
     
     // After 300ms delay, stream fails - ErrorBoundary should catch
-    cy.getCy("fallback-stream", { timeout: 5000 }).should("exist");
-    cy.getCy("fallback-stream").should("contain", "Stream Error");
+    cy.getCy("fallback-stream", { timeout: 5000 })
+      .should("exist")
+      .and("contain", "Stream Error");
+    
+    // The stream-ok should be gone once fallback appears
+    cy.getCy("stream-ok").should("not.exist");
   });
 
   it("shows fallback when stream fails before first emission", () => {

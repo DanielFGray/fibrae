@@ -2,8 +2,36 @@ import * as Effect from "effect/Effect";
 import * as Scope from "effect/Scope";
 import * as FiberSet from "effect/FiberSet";
 import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
+import * as Option from "effect/Option";
+import * as Context from "effect/Context";
 
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
+import type { Fiber } from "./shared.js";
+
+// =============================================================================
+// Fiber State (per render tree)
+// =============================================================================
+
+export interface FiberState {
+  currentRoot: Option.Option<Fiber>;
+  wipRoot: Option.Option<Fiber>;
+  nextUnitOfWork: Option.Option<Fiber>;
+  deletions: Fiber[];
+  renderQueue: Set<Fiber>;
+  batchScheduled: boolean;
+  listenerStore: WeakMap<HTMLElement, Record<string, EventListener>>;
+}
+
+export const makeFiberState = (): FiberState => ({
+  currentRoot: Option.none(),
+  wipRoot: Option.none(),
+  nextUnitOfWork: Option.none(),
+  deletions: [],
+  renderQueue: new Set(),
+  batchScheduled: false,
+  listenerStore: new WeakMap(),
+});
 
 // =============================================================================
 // Runtime Service
@@ -20,6 +48,13 @@ export class DidactRuntime extends Effect.Service<DidactRuntime>()("DidactRuntim
     const registry = yield* AtomRegistry.AtomRegistry;
     const rootScope = yield* Scope.make();
     const runFork = yield* FiberSet.makeRuntime<AtomRegistry.AtomRegistry>();
+    
+    // Store the full context in a Ref so it can be updated after all layers are built
+    // Initially empty - will be set by render() after user layers are applied
+    const fullContextRef = yield* Ref.make<Context.Context<unknown>>(Context.empty() as Context.Context<unknown>);
+    
+    // Each render tree gets its own fiber state
+    const fiberState = yield* Ref.make(makeFiberState());
 
     const AtomOps = {
       get: <A>(atom: Atom.Atom<A>): A => registry.get(atom),
@@ -28,7 +63,7 @@ export class DidactRuntime extends Effect.Service<DidactRuntime>()("DidactRuntim
       modify: <R, W, A>(atom: Atom.Writable<R, W>, f: (_: R) => [returnValue: A, nextValue: W]): A => registry.modify(atom, f),
     };
 
-    return { registry, rootScope, runFork, AtomOps };
+    return { registry, rootScope, runFork, AtomOps, fiberState, fullContextRef };
   }),
 }) {
   static Live = DidactRuntime.Default;
@@ -40,3 +75,20 @@ export class DidactRuntime extends Effect.Service<DidactRuntime>()("DidactRuntim
    */
   static LiveWithRegistry = Layer.merge(DidactRuntime.Default, CustomAtomRegistryLayer);
 }
+
+/**
+ * Fork an effect with the full application context.
+ * 
+ * The fullContextRef contains ALL services (DidactRuntime, AtomRegistry, Navigator, etc.)
+ * captured at render() time after all layers are built.
+ * 
+ * IMPORTANT: fullContextRef must be set by render() before this is called.
+ */
+export const runForkWithRuntime = (runtime: DidactRuntime) => 
+  <A, E>(effect: Effect.Effect<A, E, unknown>) => {
+    const withContext = Effect.gen(function* () {
+      const fullContext = yield* Ref.get(runtime.fullContextRef);
+      return yield* Effect.provide(effect, fullContext as Context.Context<never>);
+    });
+    return runtime.runFork(withContext as Effect.Effect<unknown, unknown, AtomRegistry.AtomRegistry>);
+  };

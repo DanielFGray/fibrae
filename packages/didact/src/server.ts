@@ -66,6 +66,13 @@ const SSRAtomRegistryLayer = AtomRegistry.layerOptions({
   scheduleTask: (f: () => void) => f(),
 });
 
+/**
+ * Exported for SSR scenarios that need to compose with other layers.
+ * Use this when you need to provide additional services (e.g., Navigator, RouterHandlers)
+ * alongside the AtomRegistry.
+ */
+export { SSRAtomRegistryLayer };
+
 // =============================================================================
 // HTML Escaping
 // =============================================================================
@@ -355,6 +362,50 @@ export const renderToString = (
   }).pipe(
     Effect.provide(SSRAtomRegistryLayer)
   );
+
+/**
+ * Render a VElement tree to HTML, requiring AtomRegistry and any other
+ * services the component tree needs.
+ * 
+ * Use this when your components require additional services (Navigator, RouterHandlers, etc.)
+ * that you want to provide yourself.
+ * 
+ * @example
+ * ```typescript
+ * import { renderToStringWith, SSRAtomRegistryLayer } from "@didact/core/server";
+ * 
+ * const program = Effect.gen(function* () {
+ *   const { html, dehydratedState } = yield* renderToStringWith(<App />);
+ *   return { html, dehydratedState };
+ * });
+ * 
+ * // Run with composed layers
+ * const result = Effect.runPromise(
+ *   program.pipe(
+ *     Effect.provide(Layer.mergeAll(
+ *       SSRAtomRegistryLayer,
+ *       navigatorLayer,
+ *       routerHandlersLayer
+ *     ))
+ *   )
+ * );
+ * ```
+ */
+export const renderToStringWith = <R>(
+  element: VElement,
+  _options?: RenderOptions
+): Effect.Effect<RenderResult, unknown, AtomRegistry.AtomRegistry | R> =>
+  Effect.gen(function* () {
+    const registry = yield* AtomRegistry.AtomRegistry;
+
+    // Render the element
+    const html = yield* renderVElementToString(element);
+
+    // Dehydrate the registry state
+    const dehydratedState = Hydration.dehydrate(registry);
+
+    return { html, dehydratedState };
+  });
 
 // Re-export Hydration for convenience
 export { Hydration };

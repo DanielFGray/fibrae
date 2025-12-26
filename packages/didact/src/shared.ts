@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Scope from "effect/Scope";
 import * as Deferred from "effect/Deferred";
 import * as Data from "effect/Data";
+import * as Context from "effect/Context";
 import { Atom as BaseAtom } from "@effect-atom/atom";
 
 /**
@@ -34,6 +35,22 @@ export interface VElement {
  * Mutable reference to a fiber for component instances
  */
 export type FiberRef = { current: Fiber };
+
+/**
+ * Suspense boundary configuration
+ * 
+ * Supports optimistic rendering: try children first, show fallback if they take
+ * too long. Suspended fibers are "parked" to continue processing in background.
+ */
+export type SuspenseConfig = {
+  fallback: VElement;
+  threshold: number;
+  showingFallback: boolean;
+  /** Reference to the original child fiber that's still processing in background */
+  parkedFiber: Option.Option<Fiber>;
+  /** Deferred that signals when parked fiber completes first render */
+  parkedComplete: Option.Option<Deferred.Deferred<void>>;
+};
 
 /**
  * Error boundary configuration
@@ -67,6 +84,13 @@ export interface Fiber {
   fiberRef: Option.Option<FiberRef>;
   isMultiEmissionStream: boolean;
   errorBoundary: Option.Option<ErrorBoundaryConfig>;
+  suspense: Option.Option<SuspenseConfig>;
+  /** Context captured during render phase, used for event handlers in commit phase */
+  renderContext: Option.Option<Context.Context<unknown>>;
+  /** True if this fiber is parked (suspended) - scope should not be closed on deletion */
+  isParked: boolean;
+  /** True when fiber is being restored from parked state - skip component re-execution */
+  isUnparking: boolean;
 }
 
 /**

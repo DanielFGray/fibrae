@@ -41,6 +41,7 @@ const Counter = ({ label }: { label: string }) => Effect.gen(function*() {
 });
 
 // Example 2: Stream Component with Suspense
+// Initial delay ensures Suspense fallback is shown (threshold defaults to 100ms)
 const StreamCounter = () => {
   const items = [
     <div data-cy="stream-status"><p>Ready: 3</p></div>,
@@ -50,7 +51,9 @@ const StreamCounter = () => {
   ];
 
   return pipe(
-    Stream.fromIterable(items),
+    // Delay before first emission to trigger Suspense fallback
+    Stream.fromEffect(Effect.sleep("200 millis")),
+    Stream.flatMap(() => Stream.fromIterable(items)),
     Stream.schedule(Schedule.spaced("500 millis"))
   );
 };
@@ -318,7 +321,7 @@ Effect.gen(function*() {
   );
 
   // Helper to create section with header and render container
-  const createSection = (title: string, description: string) => {
+  const createSection = (title: string, description: string, dataCy?: string) => {
     const section = document.createElement("div");
     section.className = "example-section";
     const header = document.createElement("h2");
@@ -326,6 +329,9 @@ Effect.gen(function*() {
     const desc = document.createElement("p");
     desc.textContent = description;
     const container = document.createElement("div");
+    if (dataCy) {
+      container.setAttribute("data-cy", dataCy);
+    }
     section.appendChild(header);
     section.appendChild(desc);
     section.appendChild(container);
@@ -340,7 +346,7 @@ Effect.gen(function*() {
   const todoContainer = createSection("Example 4: Todo List with Child Components", "Form submission and nested components");
   const searchContainer = createSection("Example 5: Debounced Search 🔬", "Testing: Effect.delay in event handlers + multiple atom updates");
   const serviceContainer = createSection("Example 6: Effect Services 🔬", "Testing: Shared services with Atoms + async Effect.sleep (1-2 sec delays)");
-  const errorContainer = createSection("Example 7: Error Boundaries", "Render-time, event, and stream errors");
+  const errorContainer = createSection("Example 7: Error Boundaries", "Render-time, event, and stream errors", "error-container");
 
   // Demo components for ErrorBoundary
   const CrashDuringRender = () => {
