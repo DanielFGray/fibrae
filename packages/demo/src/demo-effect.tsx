@@ -37,15 +37,14 @@ const postsRoute = Route.get("posts", "/posts");
 const postRoute = Route.get("post")`/posts/${Route.param("id", Schema.NumberFromString)}`;
 
 // Build the router
-const appRouter = Router.make("app")
-  .add(
-    Router.group("main")
-      .add(homeRoute)
-      .add(counterRoute)
-      .add(todosRoute)
-      .add(postsRoute)
-      .add(postRoute)
-  );
+const appRouter = Router.make("app").add(
+  Router.group("main")
+    .add(homeRoute)
+    .add(counterRoute)
+    .add(todosRoute)
+    .add(postsRoute)
+    .add(postRoute),
+);
 
 // Create Link component bound to router
 const Link = createLink(appRouter);
@@ -60,9 +59,21 @@ const todoCompletedAtom = Atom.family((id: number) => Atom.make(false));
 
 // Mock posts data
 const posts = [
-  { id: 1, title: "Getting Started with Fibrae", excerpt: "Learn the basics of Effect-first rendering" },
-  { id: 2, title: "Understanding Atoms", excerpt: "Reactive state management with fine-grained updates" },
-  { id: 3, title: "Building with Streams", excerpt: "Progressive rendering and async data" },
+  {
+    id: 1,
+    title: "Getting Started with Fibrae",
+    excerpt: "Learn the basics of Effect-first rendering",
+  },
+  {
+    id: 2,
+    title: "Understanding Atoms",
+    excerpt: "Reactive state management with fine-grained updates",
+  },
+  {
+    id: 3,
+    title: "Building with Streams",
+    excerpt: "Progressive rendering and async data",
+  },
 ];
 
 // =============================================================================
@@ -104,10 +115,7 @@ const CounterPage = () =>
           >
             -
           </button>
-          <button
-            data-cy="counter-reset"
-            onClick={() => registry.set(counterAtom, 0)}
-          >
+          <button data-cy="counter-reset" onClick={() => registry.set(counterAtom, 0)}>
             Reset
           </button>
         </div>
@@ -115,14 +123,23 @@ const CounterPage = () =>
     );
   });
 
-const TodoItem = ({ todo, onRemove }: { todo: { id: number; text: string }; onRemove: (id: number) => void }) =>
+const TodoItem = ({
+  todo,
+  onRemove,
+}: {
+  todo: { id: number; text: string };
+  onRemove: (id: number) => void;
+}) =>
   Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;
     const completedAtom = todoCompletedAtom(todo.id);
     const isCompleted = yield* Atom.get(completedAtom);
 
     return (
-      <li data-cy="todo-item" style="display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 0;">
+      <li
+        data-cy="todo-item"
+        style="display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 0;"
+      >
         <input
           data-cy="todo-checkbox"
           type="checkbox"
@@ -135,11 +152,7 @@ const TodoItem = ({ todo, onRemove }: { todo: { id: number; text: string }; onRe
         >
           {todo.text}
         </span>
-        <button
-          data-cy="todo-remove"
-          onClick={() => onRemove(todo.id)}
-          style="margin-left: auto;"
-        >
+        <button data-cy="todo-remove" onClick={() => onRemove(todo.id)} style="margin-left: auto;">
           Remove
         </button>
       </li>
@@ -235,9 +248,7 @@ const PostsPage = ({ searchParams }: { searchParams: { sort?: string } }) =>
               <Link data-cy={`post-link-${post.id}`} to="post" params={{ id: post.id }}>
                 <span data-cy="post-link">{post.title}</span>
               </Link>
-              <p style="margin: 0.25rem 0 0 0; color: #888; font-size: 0.9em;">
-                {post.excerpt}
-              </p>
+              <p style="margin: 0.25rem 0 0 0; color: #888; font-size: 0.9em;">{post.excerpt}</p>
             </li>
           ))}
         </ul>
@@ -271,27 +282,24 @@ const PostDetailPage = ({ id }: { id: number }) => {
 // Route Handlers (using RouterBuilder)
 // =============================================================================
 
-const AppRoutesLive = RouterBuilder.group(
-  appRouter,
-  "main",
-  (handlers) =>
-    handlers
-      .handle("home", {
-        component: () => <HomePage />,
-      })
-      .handle("counter", {
-        component: () => <CounterPage />,
-      })
-      .handle("todos", {
-        component: () => <TodosPage />,
-      })
-      .handle("posts", {
-        component: ({ searchParams }) => <PostsPage searchParams={searchParams} />,
-      })
-      .handle("post", {
-        loader: ({ path }) => path.id as number,
-        component: ({ loaderData }) => <PostDetailPage id={loaderData} />,
-      })
+const AppRoutesLive = RouterBuilder.group(appRouter, "main", (handlers) =>
+  handlers
+    .handle("home", {
+      component: () => <HomePage />,
+    })
+    .handle("counter", {
+      component: () => <CounterPage />,
+    })
+    .handle("todos", {
+      component: () => <TodosPage />,
+    })
+    .handle("posts", {
+      component: ({ searchParams }) => <PostsPage searchParams={searchParams} />,
+    })
+    .handle("post", {
+      loader: ({ path }) => path.id as number,
+      component: ({ loaderData }) => <PostDetailPage id={loaderData} />,
+    }),
 );
 
 // =============================================================================
@@ -351,20 +359,16 @@ const App = () =>
 const routerLayer = pipe(
   NavigatorLive(appRouter),
   Layer.provideMerge(BrowserHistoryLive),
-  Layer.provideMerge(AppRoutesLive)
+  Layer.provideMerge(AppRoutesLive),
 );
 
 Effect.gen(function* () {
-  const root = pipe(
-    document.getElementById("root"),
-    Option.fromNullable,
-    Option.getOrThrow
-  );
+  const root = pipe(document.getElementById("root"), Option.fromNullable, Option.getOrThrow);
 
   yield* render(<App />, root, { layer: routerLayer });
 
   return yield* Effect.never;
 }).pipe(
   Effect.catchAllDefect((e) => Effect.log(e)),
-  BrowserPlatform.BrowserRuntime.runMain
+  BrowserPlatform.BrowserRuntime.runMain,
 );

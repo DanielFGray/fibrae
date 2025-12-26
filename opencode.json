@@ -3,16 +3,11 @@
   "mcp": {
     "beads": {
       "type": "local",
-      "command": [
-        "beads-mcp"
-      ]
+      "command": ["beads-mcp"]
     },
     "effect-docs": {
       "type": "local",
-      "command": [
-        "bunx",
-        "effect-mcp@latest"
-      ],
+      "command": ["bunx", "effect-mcp@latest"],
       "enabled": true
     }
   }

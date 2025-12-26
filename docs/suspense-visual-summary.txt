@@ -1,0 +1,249 @@
+╔═══════════════════════════════════════════════════════════════════════════╗
+║           REACT SUSPENSE: VISUAL ARCHITECTURE SUMMARY                    ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+THE FIVE-PHASE FLOW
+═══════════════════════════════════════════════════════════════════════════
+
+PHASE 1: DETECTION
+────────────────────────────────────────────────────────────────────────────
+Component.render() during work loop
+       │
+       │ throws Promise
+       ▼
+throwException() catches
+       │
+       ├─ Check: value.then? (is it a Wakeable?)
+       ├─ Set: sourceFiber.flags |= Incomplete
+       ├─ Find: suspenseBoundary = getSuspenseHandler()
+       ├─ Mark: suspenseBoundary.flags |= ShouldCapture
+       └─ Store: suspenseBoundary.updateQueue = Set([promise])
+
+STATUS: DidCapture → ShouldCapture | Incomplete flag set
+
+
+PHASE 2: INCOMPLETE DETECTION  
+────────────────────────────────────────────────────────────────────────────
+completeUnitOfWork() tries to complete suspended fiber
+       │
+       ├─ Check: (fiber.flags & Incomplete)?
+       │  YES → exit complete phase
+       │         call unwindUnitOfWork()
+       │  NO  → continue normal completion
+       ▼
+unwindUnitOfWork() starts
+
+STATUS: Incomplete flag triggers unwind
+
+
+PHASE 3: UNWIND & CAPTURE
+────────────────────────────────────────────────────────────────────────────
+unwindUnitOfWork() walks UP fiber tree
+       │
+       ├─ Pop contexts at each level
+       │
+       ├─ Check: (fiber.flags & ShouldCapture)?
+       │  YES → Convert flags!
+       │         flags = (flags & ~ShouldCapture) | DidCapture
+       │         Return this fiber
+       │  NO  → Continue unwinding to parent
+       │
+       └─ If unwound to root: exit (unhandled suspension)
+
+STATUS: ShouldCapture → DidCapture | Exit unwind, re-enter begin
+
+
+PHASE 4: FALLBACK RENDERING
+────────────────────────────────────────────────────────────────────────────
+Work loop calls beginWork() on captured boundary (with DidCapture flag)
+       │
+       ├─ updateSuspenseComponent()
+       │
+       ├─ Check: (flags & DidCapture)?
+       │  YES → showFallback = true
+       │         memoizedState = SUSPENDED_MARKER
+       │         Render: fallback JSX
+       │  NO  → showFallback = false
+       │         memoizedState = null
+       │         Render: primary JSX
+       │
+       └─ Wrap primary in Offscreen component (hidden)
+
+STATUS: DidCapture flag determines which children to render
+
+
+PHASE 5: RETRY (ASYNC)
+────────────────────────────────────────────────────────────────────────────
+When Promise resolves:
+       │
+       ├─ attachPingListener() callback fires
+       │
+       ├─ pingSuspendedRoot() called
+       │  ├─ markRootPinged(root, lanes)
+       │  └─ scheduleCallback() → work loop restarts
+       │
+       └─ Boundary re-renders
+          ├─ If content loads: showFallback = false → show content
+          └─ If still suspends: repeat from Phase 1
+
+STATUS: Promise resolution triggers new render cycle
+
+
+THE FLAG STATE MACHINE
+═══════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ BOUNDARY FIBER STATE TRANSITIONS                                       │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  Initial:                                                               │
+│  flags: NoFlags  memoizedState: null  → showing primary                │
+│                                                                         │
+│  After child throws:                                                    │
+│  flags: ShouldCapture  memoizedState: null  → needs capture             │
+│                                                                         │
+│  During unwind:                                                         │
+│  flags: DidCapture  memoizedState: null  → re-entering begin phase      │
+│                                                                         │
+│  After fallback renders:                                                │
+│  flags: NoFlags  memoizedState: SUSPENDED_MARKER  → showing fallback    │
+│                                                                         │
+│  After retry (if resolved):                                             │
+│  flags: NoFlags  memoizedState: null  → showing primary again           │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+CRITICAL DATA STRUCTURES
+═══════════════════════════════════════════════════════════════════════════
+
+Fiber:
+  ├─ flags (bitmask)
+  │  ├─ Incomplete        (child threw, chain broken)
+  │  ├─ ShouldCapture     (suspension detected, needs unwinding)
+  │  └─ DidCapture        (suspension caught, rendering fallback)
+  │
+  ├─ memoizedState
+  │  ├─ null              (showing content)
+  │  └─ SUSPENDED_MARKER  (showing fallback)
+  │
+  ├─ updateQueue
+  │  └─ Set<Wakeable>     (promises to retry)
+  │
+  └─ return / child / sibling
+     └─ tree navigation
+
+Stack Context:
+  └─ suspenseStack[]
+     └─ Top = nearest Suspense boundary
+
+
+HANDLER STACK (CONTEXT-LIKE)
+═══════════════════════════════════════════════════════════════════════════
+
+During render of Suspense boundary:
+
+ENTER:
+  suspenseStack.push(suspenseFiber)
+  
+  RENDER CHILDREN:
+    If child throws:
+      getSuspenseHandler() → suspenseFiber (from stack top)
+      Mark suspenseFiber with ShouldCapture
+  
+EXIT:
+  suspenseStack.pop()
+
+
+NESTED BOUNDARIES EXAMPLE
+═══════════════════════════════════════════════════════════════════════════
+
+<Root>
+  <SuspenseA> (outer)
+    <SuspenseB> (inner)
+      <Component throws Promise />
+    </SuspenseB>
+  </SuspenseA>
+</Root>
+
+Stack progression:
+  ENTER SuspenseA: stack = [A]
+  ENTER SuspenseB: stack = [A, B]
+  Component throws: getSuspenseHandler() → B (nearest)
+  EXIT SuspenseB: stack = [A] (if needs retry)
+  
+B's fallback renders, promise resolves
+  B retries, now succeeds
+  Component rendered
+
+
+THE PING LISTENER MECHANISM
+═══════════════════════════════════════════════════════════════════════════
+
+Phase 1 (Detection):
+  Promise thrown
+  └─ attachPingListener(root, promise, lanes)
+     └─ pingCache.set(promise, lanes)
+     └─ promise.then(ping, ping)
+
+async ──→ Promise resolves ──→ ping callback fires
+
+  pingSuspendedRoot():
+    ├─ pingCache.delete(promise)
+    ├─ markRootPinged(root, lanes)
+    ├─ scheduleCallback()
+    └─ Work loop restarts
+
+Work loop:
+  Boundary re-renders
+  └─ If content available: success
+  └─ If still throws: return to Phase 1 (loop)
+
+
+KEY INSIGHT: THE EXCEPTION MODEL
+═══════════════════════════════════════════════════════════════════════════
+
+React doesn't check state or poll for readiness.
+Instead:
+
+1. Component throws exception during render
+2. Exception caught by work loop (like try-catch)
+3. Nearest Suspense boundary marked (like error boundary)
+4. Boundary re-rendered with fallback (two-pass rendering)
+5. Promise listener attached (async coordination)
+6. When promise resolves: retry (re-render)
+
+This is ELEGANT because:
+  ✓ No polling overhead
+  ✓ No callback management
+  ✓ Natural exception flow
+  ✓ Works with nested boundaries automatically
+  ✓ Clear separation: sync (flags) + async (listeners)
+
+
+QUICK FLAG REFERENCE
+═══════════════════════════════════════════════════════════════════════════
+
+Use this during debugging:
+
+flags & Incomplete?
+  → Child suspended, don't try to complete this fiber
+  → Switch to unwind phase instead
+
+flags & ShouldCapture?
+  → Suspension detected at this boundary
+  → Will convert to DidCapture during unwind
+  → Will re-render with fallback
+
+flags & DidCapture?
+  → Already caught and converting
+  → Re-entering begin phase
+  → Show fallback on this re-render
+
+
+═══════════════════════════════════════════════════════════════════════════════
+See full documentation in:
+  - react-suspense-fiber-architecture.md (detailed)
+  - suspense-implementation-guide.md (how-to)
+  - suspense-quick-reference.md (lookup)
+═══════════════════════════════════════════════════════════════════════════════

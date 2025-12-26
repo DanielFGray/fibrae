@@ -1,0 +1,108 @@
+id: prefer-effect-fn-typed
+language: TypeScript
+message: Use Effect.fn for traced functions instead of Effect.gen (with return type)
+severity: warning
+note: "Effect.fn provides better stack traces and automatic span creation for observability"
+rule:
+  any:
+    - pattern: |
+        function $NAME($$$ARGS): $TYPE {
+          return Effect.gen(function* () $BODY);
+        }
+    - pattern: |
+        function $NAME($$$ARGS): $TYPE {
+          return Effect.gen(function*() $BODY);
+        }
+fix: |
+  const $NAME = Effect.fn("$NAME")(function*($$$ARGS): $TYPE $BODY);
+
+---
+id: prefer-effect-fn-arrow-typed
+language: TypeScript
+message: Use Effect.fn for traced functions instead of arrow with Effect.gen (with return type)
+severity: warning
+note: "Effect.fn provides better stack traces and automatic span creation for observability"
+rule:
+  any:
+    - pattern: |
+        const $NAME = ($$$ARGS): $TYPE =>
+          Effect.gen(function* () $BODY);
+    - pattern: |
+        const $NAME = ($$$ARGS): $TYPE =>
+          Effect.gen(function*() $BODY);
+fix: |
+  const $NAME = Effect.fn("$NAME")(function*($$$ARGS): $TYPE $BODY);
+
+---
+id: prefer-effect-fn-arrow-braces-typed
+language: TypeScript
+message: Use Effect.fn for traced functions instead of arrow with Effect.gen (with return type)
+severity: warning
+note: "Effect.fn provides better stack traces and automatic span creation for observability"
+rule:
+  any:
+    - pattern: |
+        const $NAME = ($$$ARGS): $TYPE => {
+          return Effect.gen(function* () $BODY);
+        }
+    - pattern: |
+        const $NAME = ($$$ARGS): $TYPE => {
+          return Effect.gen(function*() $BODY);
+        }
+fix: |
+  const $NAME = Effect.fn("$NAME")(function*($$$ARGS): $TYPE $BODY);
+
+---
+id: prefer-effect-fn
+language: TypeScript
+message: Use Effect.fn for traced functions instead of function declarations with Effect.gen
+severity: warning
+note: "Effect.fn provides better stack traces and automatic span creation for observability"
+rule:
+  any:
+    - pattern: |
+        function $NAME($$$ARGS) {
+          return Effect.gen(function* () $BODY);
+        }
+    - pattern: |
+        function $NAME($$$ARGS) {
+          return Effect.gen(function*() $BODY);
+        }
+fix: |
+  const $NAME = Effect.fn("$NAME")(function*($$$ARGS) $BODY);
+
+---
+id: prefer-effect-fn-arrow
+language: TypeScript
+message: Use Effect.fn for traced functions instead of arrow with Effect.gen
+severity: warning
+note: "Effect.fn provides better stack traces and automatic span creation for observability"
+rule:
+  any:
+    - pattern: |
+        const $NAME = ($$$ARGS) =>
+          Effect.gen(function* () $BODY);
+    - pattern: |
+        const $NAME = ($$$ARGS) =>
+          Effect.gen(function*() $BODY);
+fix: |
+  const $NAME = Effect.fn("$NAME")(function*($$$ARGS) $BODY);
+
+---
+id: prefer-effect-fn-arrow-braces
+language: TypeScript
+message: Use Effect.fn for traced functions instead of arrow with Effect.gen
+severity: warning
+note: "Effect.fn provides better stack traces and automatic span creation for observability"
+rule:
+  any:
+    - pattern: |
+        const $NAME = ($$$ARGS) => {
+          return Effect.gen(function* () $BODY);
+        }
+    - pattern: |
+        const $NAME = ($$$ARGS) => {
+          return Effect.gen(function*() $BODY);
+        }
+fix: |
+  const $NAME = Effect.fn("$NAME")(function*($$$ARGS) $BODY);

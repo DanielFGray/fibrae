@@ -24,12 +24,8 @@ const App = () => (
   </div>
 );
 
-Effect.gen(function*() {
-  const root = pipe(
-    document.getElementById("root"),
-    Option.fromNullable,
-    Option.getOrThrow
-  );
+Effect.gen(function* () {
+  const root = pipe(document.getElementById("root"), Option.fromNullable, Option.getOrThrow);
 
   console.log("Starting render...");
   yield* render(<App />, root);
@@ -42,5 +38,5 @@ Effect.gen(function*() {
     return Effect.never;
   }),
   Effect.provide(Logger.minimumLogLevel(LogLevel.Debug)),
-  Effect.runFork
+  Effect.runFork,
 );

@@ -4,9 +4,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'packages/fibrae/src/**'
-      - 'packages/fibrae/package.json'
-      - 'bun.lock'
+      - "packages/fibrae/src/**"
+      - "packages/fibrae/package.json"
+      - "bun.lock"
   workflow_dispatch:
 
 permissions:
@@ -68,8 +68,8 @@ jobs:
       - name: Setup Node for npm publishing
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Publish to npm
         run: cd packages/fibrae && npm publish --access public --provenance

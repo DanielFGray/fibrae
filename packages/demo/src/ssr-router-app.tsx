@@ -1,6 +1,6 @@
 /**
  * SSR Router App - shared component for testing SSR/hydration.
- * 
+ *
  * Used by both server and client:
  * - Server: imports this, uses serverLayer to render
  * - Client: imports this, uses browserLayer to hydrate
@@ -38,9 +38,7 @@ export { RouterOutlet };
 /**
  * Home page component
  */
-export function HomePage(props: {
-  loaderData: { message: string; source: string };
-}): VElement {
+export function HomePage(props: { loaderData: { message: string; source: string } }): VElement {
   return (
     <div>
       <h2>Home Page</h2>
@@ -101,9 +99,13 @@ export function PostPage(props: {
 export function Navigation(): VElement {
   return (
     <nav>
-      <Link to="home" data-cy="nav-link-home">Home</Link>
+      <Link to="home" data-cy="nav-link-home">
+        Home
+      </Link>
       {" | "}
-      <Link to="posts" data-cy="nav-link-posts">Posts</Link>
+      <Link to="posts" data-cy="nav-link-posts">
+        Posts
+      </Link>
     </nav>
   );
 }
@@ -114,46 +116,43 @@ export function Navigation(): VElement {
 
 /**
  * Create the handler layer for the router.
- * 
+ *
  * @param isServer - Whether this is running on the server (affects loader source)
  */
 export function createSSRRouterHandlers(isServer: boolean) {
   const source = isServer ? "server" : "client";
-  
-  return RouterBuilder.group(
-    SSRRouter,
-    "ssr",
-    (handlers) =>
-      handlers
-        .handle("home", {
-          loader: () => ({
-            message: `Hello from ${source} loader`,
-            source,
-          }),
-          component: (props) => <HomePage loaderData={props.loaderData} />,
-        })
-        .handle("posts", {
-          loader: () => ({
-            posts: [
-              { id: 1, title: "First Post" },
-              { id: 2, title: "Second Post" },
-              { id: 3, title: "Third Post" },
-            ],
-            source,
-          }),
-          component: (props) => <PostsPage loaderData={props.loaderData} />,
-        })
-        .handle("post", {
-          loader: ({ path }) => ({
-            id: path.id as number,
-            title: `Post ${path.id}`,
-            content: `Content for post ${path.id}`,
-            source,
-          }),
-          component: (props) => (
-            <PostPage loaderData={props.loaderData} path={props.path as { id: number }} />
-          ),
-        })
+
+  return RouterBuilder.group(SSRRouter, "ssr", (handlers) =>
+    handlers
+      .handle("home", {
+        loader: () => ({
+          message: `Hello from ${source} loader`,
+          source,
+        }),
+        component: (props) => <HomePage loaderData={props.loaderData} />,
+      })
+      .handle("posts", {
+        loader: () => ({
+          posts: [
+            { id: 1, title: "First Post" },
+            { id: 2, title: "Second Post" },
+            { id: 3, title: "Third Post" },
+          ],
+          source,
+        }),
+        component: (props) => <PostsPage loaderData={props.loaderData} />,
+      })
+      .handle("post", {
+        loader: ({ path }) => ({
+          id: path.id as number,
+          title: `Post ${path.id}`,
+          content: `Content for post ${path.id}`,
+          source,
+        }),
+        component: (props) => (
+          <PostPage loaderData={props.loaderData} path={props.path as { id: number }} />
+        ),
+      }),
   );
 }
 

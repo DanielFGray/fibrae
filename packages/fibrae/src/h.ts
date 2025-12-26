@@ -1,7 +1,4 @@
-import * as Effect from "effect/Effect";
-import * as Stream from "effect/Stream";
-
-import { type VElement, type ElementType, type Primitive } from "./shared.js";
+import { type VElement, type ElementType, type Primitive, type VChild, type VNode } from "./shared.js";
 
 // =============================================================================
 // Element Creation
@@ -21,33 +18,34 @@ export const createTextElement = (text: string): VElement => ({
 /**
  * Create a virtual element (JSX factory)
  */
-export function h<T>(
+export function h(
   type: Primitive,
   props?: { [key: string]: unknown },
-  children?: (VElement | string)[]
+  children?: VChild[],
 ): VElement;
 export function h<T>(
-  type: (props: T) => VElement | Stream.Stream<VElement, unknown, never>,
+  type: (props: T) => VNode,
   props?: { [key: string]: unknown },
-  children?: (VElement | string)[]
-): VElement;
-export function h<T>(
-  type: (props: T) => Effect.Effect<VElement, unknown, never>,
-  props?: { [key: string]: unknown },
-  children?: (VElement | string)[]
+  children?: VChild[],
 ): VElement;
 export function h<T>(
   type: ElementType<T>,
   props: { [key: string]: unknown } = {},
-  children: (VElement | string)[] = [],
+  children: VChild[] = [],
 ): VElement {
   return {
     type: type as ElementType,
     props: {
       ...props,
-      children: children.map((child) =>
-        typeof child === "object" ? child : createTextElement(child),
-      ),
+      children: children
+        .filter((child) => child !== false && child !== null && child !== undefined)
+        .map((child) => {
+          if (typeof child === "object" && !Array.isArray(child)) {
+            return child as VElement;
+          }
+          // eslint-disable-next-line @typescript-eslint/no-base-to-string
+          return createTextElement(String(child));
+        }),
     },
   };
 }

@@ -7,38 +7,44 @@ import { h } from "fibrae";
  */
 
 export const Counter = ({ label }: { label: string }) => {
-  return <div
-    data-cy={label.toLowerCase().replace(" ", "-")}
-    style="padding: 1rem; border: 2px solid #666; border-radius: 8px; margin: 1rem 0;"
-  >
-    <h3>{label}</h3>
-    <p data-cy="counter-value">Count: 0</p>
-    <div style="display: flex; gap: 0.5rem;">
-      <button data-cy="counter-increment">+</button>
-      <button data-cy="counter-decrement">-</button>
-      <button data-cy="counter-reset">Reset</button>
+  return (
+    <div
+      data-cy={label.toLowerCase().replace(" ", "-")}
+      style="padding: 1rem; border: 2px solid #666; border-radius: 8px; margin: 1rem 0;"
+    >
+      <h3>{label}</h3>
+      <p data-cy="counter-value">Count: 0</p>
+      <div style="display: flex; gap: 0.5rem;">
+        <button data-cy="counter-increment">+</button>
+        <button data-cy="counter-decrement">-</button>
+        <button data-cy="counter-reset">Reset</button>
+      </div>
     </div>
-  </div>;
+  );
 };
 
 export const TodoList = () => {
-  return <form
-    data-cy="todo-list"
-    style="padding: 1rem; border: 2px solid #44aa44; border-radius: 8px; margin: 1rem 0;"
-  >
-    <h3>Effect Todo List</h3>
-    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-      <input
-        data-cy="todo-input"
-        type="text"
-        name="todoInput"
-        placeholder="What needs to be done?"
-        style="flex: 1; padding: 0.5rem;"
-      />
-      <button data-cy="todo-add" type="submit">Add</button>
-    </div>
-    <ul style="list-style: none; padding: 0;" />
-  </form>;
+  return (
+    <form
+      data-cy="todo-list"
+      style="padding: 1rem; border: 2px solid #44aa44; border-radius: 8px; margin: 1rem 0;"
+    >
+      <h3>Effect Todo List</h3>
+      <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+        <input
+          data-cy="todo-input"
+          type="text"
+          name="todoInput"
+          placeholder="What needs to be done?"
+          style="flex: 1; padding: 0.5rem;"
+        />
+        <button data-cy="todo-add" type="submit">
+          Add
+        </button>
+      </div>
+      <ul style="list-style: none; padding: 0;" />
+    </form>
+  );
 };
 
 export const StaticHeader = () => (
@@ -63,12 +69,10 @@ export const StreamCounterPlaceholder = () => (
 );
 
 // Composite App component for SSR
-export const App = () => h("div", {}, [
-  h(StaticHeader),
-  h(StreamCounterPlaceholder),
+export const App = () =>
   h("div", {}, [
-    h(Counter, { label: "Counter A" }),
-    h(Counter, { label: "Counter B" }),
-  ]),
-  h(TodoList),
-]);
+    h(StaticHeader),
+    h(StreamCounterPlaceholder),
+    h("div", {}, [h(Counter, { label: "Counter A" }), h(Counter, { label: "Counter B" })]),
+    h(TodoList),
+  ]);

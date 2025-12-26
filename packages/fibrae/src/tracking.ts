@@ -16,7 +16,7 @@ import { FibraeRuntime } from "./runtime.js";
  * Error type is preserved through the conversion.
  */
 export const normalizeToStream = <E>(
-  value: VElement | Effect.Effect<VElement, E, never> | Stream.Stream<VElement, E, never>
+  value: VElement | Effect.Effect<VElement, E, never> | Stream.Stream<VElement, E, never>,
 ): Stream.Stream<VElement, E, never> => {
   if (isStream(value)) return value;
   if (Effect.isEffect(value)) return Stream.fromEffect(value);
@@ -32,7 +32,7 @@ export const normalizeToStream = <E>(
  */
 export const makeTrackingRegistry = (
   realRegistry: AtomRegistry.Registry,
-  accessedAtoms: Set<Atom.Atom<unknown>>
+  accessedAtoms: Set<Atom.Atom<unknown>>,
 ): AtomRegistry.Registry => {
   return new Proxy(realRegistry as object, {
     get(target, prop, receiver) {
@@ -43,7 +43,7 @@ export const makeTrackingRegistry = (
         };
       }
       return Reflect.get(target, prop, receiver);
-    }
+    },
   }) as AtomRegistry.Registry;
 };
 
@@ -57,16 +57,16 @@ export const subscribeToAtoms = (
   atoms: Set<Atom.Atom<unknown>>,
   onUpdate: () => void,
   runtime: FibraeRuntime,
-  scope: Scope.Scope.Closeable
+  scope: Scope.Scope.Closeable,
 ): Effect.Effect<void, never, never> =>
   Effect.forEach(
     atoms,
     (atom) =>
-      Effect.gen(function*() {
+      Effect.gen(function* () {
         // Subscribe immediately - returns unsubscribe function
         const unsubscribe = runtime.registry.subscribe(atom, onUpdate);
         // Register unsubscribe to run when scope closes
         yield* Scope.addFinalizer(scope, Effect.sync(unsubscribe));
       }),
-    { discard: true }
+    { discard: true },
   );

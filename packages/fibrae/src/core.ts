@@ -16,24 +16,33 @@ import { renderFiber, hydrateFiber } from "./fiber-render.js";
 /**
  * Render a VElement tree to a container.
  * Returns an Effect that runs forever (until interrupted).
- * 
+ *
  * If the container already has children, hydration mode is used:
  * - Existing DOM nodes are reused (not replaced)
  * - Event handlers are attached to existing elements
  * - Throws HydrationMismatch if structure doesn't match
- * 
+ *
  * @param element - The VElement tree to render
  * @param container - The DOM container to render into
  * @param options - Optional configuration
  * @param options.layer - Additional layer to provide (will have access to AtomRegistry)
  * @param options.initialState - Dehydrated atom state from SSR (enables atom hydration)
  */
-export function render(element: VElement, container: HTMLElement): Effect.Effect<never, never, never>;
-export function render(element: VElement, container: HTMLElement, options: {
-  layer?: Layer.Layer<unknown, unknown, AtomRegistry.AtomRegistry>;
-  initialState?: ReadonlyArray<Hydration.DehydratedAtom>;
-}): Effect.Effect<never, never, never>;
-export function render(element: VElement): (container: HTMLElement) => Effect.Effect<never, never, never>;
+export function render(
+  element: VElement,
+  container: HTMLElement,
+): Effect.Effect<never, never, never>;
+export function render(
+  element: VElement,
+  container: HTMLElement,
+  options: {
+    layer?: Layer.Layer<unknown, unknown, AtomRegistry.AtomRegistry>;
+    initialState?: ReadonlyArray<Hydration.DehydratedAtom>;
+  },
+): Effect.Effect<never, never, never>;
+export function render(
+  element: VElement,
+): (container: HTMLElement) => Effect.Effect<never, never, never>;
 export function render(
   element: VElement,
   container?: HTMLElement,
@@ -43,13 +52,15 @@ export function render(
   },
 ) {
   const program = (cont: HTMLElement) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const runtime = yield* FibraeRuntime;
       const registry = yield* AtomRegistry.AtomRegistry;
 
       // Capture the full context NOW (after all layers are built) and store it in runtime
       // This ensures user-provided services like Navigator are available for forked effects
-      const fullContext = (yield* FiberRef.get(FiberRef.currentContext)) as Context.Context<unknown>;
+      const fullContext = (yield* FiberRef.get(
+        FiberRef.currentContext,
+      )) as Context.Context<unknown>;
       yield* Ref.set(runtime.fullContextRef, fullContext);
 
       // If initialState provided, hydrate atoms first
@@ -76,8 +87,8 @@ export function render(
       Effect.provide(
         options?.layer
           ? Layer.provideMerge(options.layer, FibraeRuntime.LiveWithRegistry)
-          : FibraeRuntime.LiveWithRegistry
-      )
+          : FibraeRuntime.LiveWithRegistry,
+      ),
     );
 
   if (container === undefined) {

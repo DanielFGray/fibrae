@@ -1,6 +1,6 @@
 import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
-import type { VElement, ElementType } from "../shared.js";
+import type { VElement, ElementType, VChild, VNode } from "../shared.js";
 
 // A simple Fragment support for Fibrae
 export const Fragment = "FRAGMENT" as const;
@@ -11,7 +11,7 @@ export type JSXType =
   | ((props: object) => VElement | Stream.Stream<VElement> | Effect.Effect<VElement>);
 
 export type PropsWithChildren<T = object> = T & {
-  children?: VElement | string | (VElement | string)[];
+  children?: VChild;
 };
 
 function createTextElement(text: string | number | bigint): VElement {
@@ -25,7 +25,7 @@ function createTextElement(text: string | number | bigint): VElement {
 }
 
 function normalizeChild(child: unknown): VElement | VElement[] | null {
-  if (child === null || child === undefined || typeof child === "boolean") {
+  if (child === null || child === undefined || child === false || child === true) {
     return null;
   }
   if (typeof child === "string" || typeof child === "number" || typeof child === "bigint") {
@@ -33,7 +33,7 @@ function normalizeChild(child: unknown): VElement | VElement[] | null {
   }
   // Handle arrays of children
   if (Array.isArray(child)) {
-    return child.flatMap(c => {
+    return child.flatMap((c) => {
       const normalized = normalizeChild(c);
       return normalized === null ? [] : Array.isArray(normalized) ? normalized : [normalized];
     });
@@ -45,7 +45,7 @@ function normalizeChild(child: unknown): VElement | VElement[] | null {
 export function jsx(
   type: JSXType,
   props: PropsWithChildren<{ [key: string]: unknown }> | null,
-  ...children: (VElement | string)[]
+  ...children: VChild[]
 ): VElement {
   const normalizedProps = props ?? {};
 
@@ -56,13 +56,13 @@ export function jsx(
     const ch = normalizedProps.children;
     const arr = Array.isArray(ch) ? ch : [ch];
 
-    finalChildren = arr.flatMap(child => {
+    finalChildren = arr.flatMap((child) => {
       const normalized = normalizeChild(child);
       return normalized === null ? [] : Array.isArray(normalized) ? normalized : [normalized];
     });
   } else if (children.length > 0) {
     // Fall back to rest args for classic JSX runtime
-    finalChildren = children.flatMap(child => {
+    finalChildren = children.flatMap((child) => {
       const normalized = normalizeChild(child);
       return normalized === null ? [] : Array.isArray(normalized) ? normalized : [normalized];
     });
@@ -87,14 +87,22 @@ export const h = jsx;
 
 // Provide minimal global JSX types for the demo
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
-    // JSX.Element is VElement, but we use 'any' to bypass component return type checking
-    // This allows components to return Effect<VElement> or Stream<VElement>
-    type Element = any;
+    // JSX expressions always produce VElement
+    // Component functions are stored in the type field and invoked later by the renderer
+    type Element = VElement;
 
-    // Allow any HTML tag with any props for now
+    // What function components can return (TS 5.1+)
+    // This allows components to return Effect<VElement> or Stream<VElement>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    type ElementType =
+      | keyof IntrinsicElements
+      | ((props: any) => VNode);
+
+    // Allow any HTML tag with reasonable props
     interface IntrinsicElements {
-      [elemName: string]: any;
+      [elemName: string]: Record<string, unknown>;
     }
 
     // Support an optional key prop

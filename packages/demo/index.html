@@ -1,112 +1,115 @@
 <!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fibrae Demo</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        margin: 0;
+        padding: 0;
+        background: #1a1a1a;
+        color: #e0e0e0;
+      }
+      #root {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 1rem;
+      }
+      nav {
+        display: flex;
+        gap: 1rem;
+        padding: 1rem;
+        background: #2a2a2a;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+      }
+      nav a {
+        color: #888;
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        transition: all 0.2s;
+      }
+      nav a:hover {
+        color: #e0e0e0;
+        background: #333;
+      }
+      nav a.active {
+        color: #4ade80;
+        background: #2d4a3e;
+        font-weight: bold;
+      }
+      .page {
+        padding: 1rem;
+        background: #2a2a2a;
+        border-radius: 8px;
+      }
+      h1,
+      h2,
+      h3 {
+        margin-top: 0;
+      }
+      button {
+        background: #4a4a4a;
+        color: #e0e0e0;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #5a5a5a;
+      }
+      input[type="text"] {
+        background: #333;
+        color: #e0e0e0;
+        border: 1px solid #444;
+        padding: 0.5rem;
+        border-radius: 4px;
+      }
+      .history-controls {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #444;
+      }
+      .post-list {
+        list-style: none;
+        padding: 0;
+      }
+      .post-list li {
+        padding: 0.75rem;
+        background: #333;
+        margin: 0.5rem 0;
+        border-radius: 4px;
+      }
+      .post-list a {
+        color: #4ade80;
+        text-decoration: none;
+      }
+      .post-list a:hover {
+        text-decoration: underline;
+      }
+      .sort-controls {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+    </style>
+  </head>
 
-<head>
-  <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fibrae Demo</title>
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #1a1a1a;
-      color: #e0e0e0;
-    }
-    #root {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 1rem;
-    }
-    nav {
-      display: flex;
-      gap: 1rem;
-      padding: 1rem;
-      background: #2a2a2a;
-      border-radius: 8px;
-      margin-bottom: 1rem;
-    }
-    nav a {
-      color: #888;
-      text-decoration: none;
-      padding: 0.5rem 1rem;
-      border-radius: 4px;
-      transition: all 0.2s;
-    }
-    nav a:hover {
-      color: #e0e0e0;
-      background: #333;
-    }
-    nav a.active {
-      color: #4ade80;
-      background: #2d4a3e;
-      font-weight: bold;
-    }
-    .page {
-      padding: 1rem;
-      background: #2a2a2a;
-      border-radius: 8px;
-    }
-    h1, h2, h3 {
-      margin-top: 0;
-    }
-    button {
-      background: #4a4a4a;
-      color: #e0e0e0;
-      border: none;
-      padding: 0.5rem 1rem;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #5a5a5a;
-    }
-    input[type="text"] {
-      background: #333;
-      color: #e0e0e0;
-      border: 1px solid #444;
-      padding: 0.5rem;
-      border-radius: 4px;
-    }
-    .history-controls {
-      display: flex;
-      gap: 0.5rem;
-      margin-top: 1rem;
-      padding-top: 1rem;
-      border-top: 1px solid #444;
-    }
-    .post-list {
-      list-style: none;
-      padding: 0;
-    }
-    .post-list li {
-      padding: 0.75rem;
-      background: #333;
-      margin: 0.5rem 0;
-      border-radius: 4px;
-    }
-    .post-list a {
-      color: #4ade80;
-      text-decoration: none;
-    }
-    .post-list a:hover {
-      text-decoration: underline;
-    }
-    .sort-controls {
-      display: flex;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-    }
-  </style>
-</head>
-
-<body>
-  <div id="root"></div>
-  <script type="module" src="/src/demo-effect.tsx"></script>
-</body>
-
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/demo-effect.tsx"></script>
+  </body>
 </html>

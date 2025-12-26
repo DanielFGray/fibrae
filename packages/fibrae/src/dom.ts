@@ -8,7 +8,10 @@ import { FibraeRuntime, runForkWithRuntime } from "./runtime.js";
 /**
  * Property update strategies for different DOM properties
  */
-export const propertyUpdateMap: Record<string, "attribute" | "property" | "classList" | "booleanAttribute"> = {
+export const propertyUpdateMap: Record<
+  string,
+  "attribute" | "property" | "classList" | "booleanAttribute"
+> = {
   class: "classList",
   className: "classList",
   value: "property",
@@ -16,13 +19,15 @@ export const propertyUpdateMap: Record<string, "attribute" | "property" | "class
 };
 
 export const isEvent = (key: string) => key.startsWith("on");
-export const isProperty = (key: string) => key !== "children" && key !== "ref" && key !== "key" && !isEvent(key);
+export const isProperty = (key: string) =>
+  key !== "children" && key !== "ref" && key !== "key" && !isEvent(key);
 
 /**
  * Set a DOM property using the appropriate method
  */
 export const setDomProperty = (el: HTMLElement, name: string, value: unknown): void => {
-  const method = propertyUpdateMap[name] ||
+  const method =
+    propertyUpdateMap[name] ||
     (name.startsWith("data-") || name.startsWith("aria-") ? "attribute" : "attribute");
 
   switch (method) {
@@ -56,7 +61,7 @@ export const setDomProperty = (el: HTMLElement, name: string, value: unknown): v
 export const attachEventListeners = (
   el: HTMLElement,
   props: Record<string, unknown>,
-  runtime: FibraeRuntime
+  runtime: FibraeRuntime,
 ): void => {
   for (const [key, handler] of Object.entries(props)) {
     if (isEvent(key) && typeof handler === "function") {
@@ -68,7 +73,7 @@ export const attachEventListeners = (
         if (Effect.isEffect(result)) {
           // Use runForkWithRuntime to get the full application context
           const effectWithErrorHandling = (result as Effect.Effect<unknown, unknown, unknown>).pipe(
-            Effect.catchAllCause((cause) => Effect.logError("Event handler error", cause))
+            Effect.catchAllCause((cause) => Effect.logError("Event handler error", cause)),
           );
           runForkWithRuntime(runtime)(effectWithErrorHandling);
         }

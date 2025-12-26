@@ -1,9 +1,9 @@
 /**
  * Server-side rendering for Fibrae
- * 
+ *
  * Renders VElement trees to HTML strings for SSR.
  * Integrates with @effect-atom/atom's Hydration module for state serialization.
- * 
+ *
  * Key design decisions (see docs/ssr-hydration-design.md):
  * - Streams restart on client (no server continuation)
  * - Atoms must use Atom.serializable() for state transfer
@@ -14,18 +14,8 @@ import * as Stream from "effect/Stream";
 import * as Option from "effect/Option";
 import * as Deferred from "effect/Deferred";
 
-import {
-  Atom,
-  Registry as AtomRegistry,
-  Hydration,
-} from "@effect-atom/atom";
-import {
-  type VElement,
-  type ElementType,
-  type Primitive,
-  isStream,
-  isProperty,
-} from "./shared.js";
+import { Atom, Registry as AtomRegistry, Hydration } from "@effect-atom/atom";
+import { type VElement, type ElementType, type Primitive, isStream, isProperty } from "./shared.js";
 
 // =============================================================================
 // Types
@@ -33,7 +23,7 @@ import {
 
 /**
  * Result of renderToString - HTML plus serialized state
- * 
+ *
  * The dehydratedState can be serialized and embedded in your HTML however
  * you prefer (script tag, data attribute, separate endpoint, etc.).
  * On the client, pass this state to render() via the initialState option.
@@ -136,8 +126,20 @@ const renderAttributes = (props: Record<string, unknown>): string => {
 // =============================================================================
 
 const VOID_ELEMENTS = new Set([
-  "area", "base", "br", "col", "embed", "hr", "img", "input",
-  "link", "meta", "param", "source", "track", "wbr",
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr",
 ]);
 
 // =============================================================================
@@ -153,15 +155,14 @@ const isFunctionComponent = (type: ElementType): type is Exclude<ElementType, Pr
 /**
  * Check if a type is a host element (string tag)
  */
-const isHostElement = (type: ElementType): type is Primitive =>
-  typeof type === "string";
+const isHostElement = (type: ElementType): type is Primitive => typeof type === "string";
 
 /**
  * Render a VElement to HTML string.
  * This is an Effect that requires AtomRegistry.
  */
 const renderVElementToString = (
-  vElement: VElement
+  vElement: VElement,
 ): Effect.Effect<string, unknown, AtomRegistry.AtomRegistry> =>
   Effect.gen(function* () {
     const type = vElement.type;
@@ -172,7 +173,7 @@ const renderVElementToString = (
         try: () => type(vElement.props),
         catch: (e) => e,
       });
-      
+
       const output = yield* outputEffect;
 
       // Normalize to get the VElement
@@ -187,7 +188,11 @@ const renderVElementToString = (
         childVElement = first.value;
       } else if (Effect.isEffect(output)) {
         // Await the effect
-        childVElement = yield* output as Effect.Effect<VElement, unknown, AtomRegistry.AtomRegistry>;
+        childVElement = yield* output as Effect.Effect<
+          VElement,
+          unknown,
+          AtomRegistry.AtomRegistry
+        >;
       } else {
         // Plain VElement
         childVElement = output as VElement;
@@ -195,11 +200,9 @@ const renderVElementToString = (
 
       // Recursively render the result
       return yield* renderVElementToString(childVElement);
-
     } else if (type === "TEXT_ELEMENT") {
       // Text node - escape and return
       return escapeHtml(String(vElement.props.nodeValue ?? ""));
-
     } else if (type === "FRAGMENT") {
       // Fragment - render children directly
       const children = vElement.props.children ?? [];
@@ -208,7 +211,6 @@ const renderVElementToString = (
         html += yield* renderVElementToString(child);
       }
       return html;
-
     } else if (type === "ERROR_BOUNDARY") {
       // Error boundary - try to render children, catch errors and render fallback
       const fallback = vElement.props.fallback as VElement;
@@ -221,7 +223,7 @@ const renderVElementToString = (
             html += yield* renderVElementToString(child);
           }
           return html;
-        })
+        }),
       );
 
       if (result._tag === "Left") {
@@ -232,7 +234,6 @@ const renderVElementToString = (
       }
 
       return result.right;
-
     } else if (type === "SUSPENSE") {
       // Suspense boundary - race child rendering against timeout
       // Phase 5: If children complete first → resolved marker
@@ -240,10 +241,10 @@ const renderVElementToString = (
       const fallback = vElement.props.fallback as VElement;
       const threshold = (vElement.props.threshold as number) ?? 100;
       const children = vElement.props.children as VElement[];
-      
+
       // Create a Deferred to signal when children complete
       const childrenComplete = yield* Deferred.make<string, unknown>();
-      
+
       // Fork: render children to string
       yield* Effect.fork(
         Effect.gen(function* () {
@@ -252,17 +253,17 @@ const renderVElementToString = (
             childrenHtml += yield* renderVElementToString(child);
           }
           yield* Deferred.succeed(childrenComplete, childrenHtml);
-        }).pipe(
-          Effect.catchAll((e) => Deferred.fail(childrenComplete, e))
-        )
+        }).pipe(Effect.catchAll((e) => Deferred.fail(childrenComplete, e))),
       );
-      
+
       // Race: children completing vs timeout
       const result = yield* Effect.race(
-        Deferred.await(childrenComplete).pipe(Effect.map((html) => ({ type: "resolved" as const, html }))),
-        Effect.sleep(`${threshold} millis`).pipe(Effect.as({ type: "timeout" as const }))
+        Deferred.await(childrenComplete).pipe(
+          Effect.map((html) => ({ type: "resolved" as const, html })),
+        ),
+        Effect.sleep(`${threshold} millis`).pipe(Effect.as({ type: "timeout" as const })),
       );
-      
+
       if (result.type === "resolved") {
         // Children completed before timeout - render with resolved marker
         return `<!--fibrae:sus:resolved-->${result.html}<!--/fibrae:sus-->`;
@@ -271,11 +272,10 @@ const renderVElementToString = (
         const fallbackHtml = yield* renderVElementToString(fallback);
         return `<!--fibrae:sus:fallback-->${fallbackHtml}<!--/fibrae:sus-->`;
       }
-
     } else if (isHostElement(type)) {
       // Regular HTML element
       const attrs = renderAttributes(vElement.props as Record<string, unknown>);
-      
+
       // Add data-key for keyed elements (needed for hydration)
       const key = vElement.props.key;
       const keyAttr = key != null ? ` data-key="${escapeHtml(String(key))}"` : "";
@@ -312,24 +312,24 @@ const renderVElementToString = (
 
 /**
  * Render a VElement tree to an HTML string with serialized state.
- * 
+ *
  * Returns the HTML and the dehydrated atom state array. You can serialize
  * and embed the state in your HTML however you prefer (script tag, data
  * attribute, separate endpoint, etc.).
- * 
+ *
  * On the client, pass this state to render() via the initialState option
  * to hydrate atom values before DOM hydration.
- * 
+ *
  * Note: Atoms must use `Atom.serializable({ key, schema })` to be included
  * in the dehydrated state.
- * 
+ *
  * @example
  * ```typescript
  * import { renderToString } from "fibrae/server";
- * 
+ *
  * const program = Effect.gen(function* () {
  *   const { html, dehydratedState } = yield* renderToString(<App />);
- *   
+ *
  *   // Embed state however you prefer
  *   const page = `
  *     <!DOCTYPE html>
@@ -347,7 +347,7 @@ const renderVElementToString = (
  */
 export const renderToString = (
   element: VElement,
-  _options?: RenderOptions
+  _options?: RenderOptions,
 ): Effect.Effect<RenderResult, unknown, never> =>
   Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;
@@ -359,26 +359,24 @@ export const renderToString = (
     const dehydratedState = Hydration.dehydrate(registry);
 
     return { html, dehydratedState };
-  }).pipe(
-    Effect.provide(SSRAtomRegistryLayer)
-  );
+  }).pipe(Effect.provide(SSRAtomRegistryLayer));
 
 /**
  * Render a VElement tree to HTML, requiring AtomRegistry and any other
  * services the component tree needs.
- * 
+ *
  * Use this when your components require additional services (Navigator, RouterHandlers, etc.)
  * that you want to provide yourself.
- * 
+ *
  * @example
  * ```typescript
  * import { renderToStringWith, SSRAtomRegistryLayer } from "fibrae/server";
- * 
+ *
  * const program = Effect.gen(function* () {
  *   const { html, dehydratedState } = yield* renderToStringWith(<App />);
  *   return { html, dehydratedState };
  * });
- * 
+ *
  * // Run with composed layers
  * const result = Effect.runPromise(
  *   program.pipe(
@@ -393,7 +391,7 @@ export const renderToString = (
  */
 export const renderToStringWith = <R>(
   element: VElement,
-  _options?: RenderOptions
+  _options?: RenderOptions,
 ): Effect.Effect<RenderResult, unknown, AtomRegistry.AtomRegistry | R> =>
   Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;

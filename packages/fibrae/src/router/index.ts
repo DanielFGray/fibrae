@@ -1,6 +1,6 @@
 /**
  * Router module exports.
- * 
+ *
  * Provides Effect-first routing with the HttpApi pattern:
  * - Route declarations with schema-validated params
  * - RouterBuilder for handler implementation

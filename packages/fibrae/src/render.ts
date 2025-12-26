@@ -26,14 +26,16 @@ import { h } from "./h.js";
 /**
  * Check if a type is a function component
  */
-const isFunctionComponent = (type: ElementType): type is (props: Record<string, unknown>) => VElement | Effect.Effect<VElement> | Stream.Stream<VElement> =>
-  typeof type === "function";
+const isFunctionComponent = (
+  type: ElementType,
+): type is (
+  props: Record<string, unknown>,
+) => VElement | Effect.Effect<VElement> | Stream.Stream<VElement> => typeof type === "function";
 
 /**
  * Check if a type is a host element (string tag)
  */
-const isHostElement = (type: ElementType): type is Primitive =>
-  typeof type === "string";
+const isHostElement = (type: ElementType): type is Primitive => typeof type === "string";
 
 // =============================================================================
 // Render Implementation
@@ -47,7 +49,7 @@ const isHostElement = (type: ElementType): type is Primitive =>
  * - Text elements
  * - Fragments
  * - Error boundaries
- * 
+ *
  * @param vElement - Virtual element to render
  * @param parent - Parent DOM node to append to
  * @param runtime - Fibrae runtime instance
@@ -57,9 +59,9 @@ export const renderVElementToDOM = (
   vElement: VElement,
   parent: Node,
   runtime: FibraeRuntime,
-  parentScope?: Scope.Scope.Closeable
+  parentScope?: Scope.Scope.Closeable,
 ): Effect.Effect<void, unknown, never> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const type = vElement.type;
 
     if (isFunctionComponent(type)) {
@@ -85,29 +87,35 @@ export const renderVElementToDOM = (
       // Capture current runtime context (includes user services like ThemeService, UserService)
       // FiberRef.currentContext gives us the actual runtime context regardless of static types
       // We add our tracking registry to override AtomRegistry while preserving other services
-      const currentContext = yield* FiberRef.get(FiberRef.currentContext) as Effect.Effect<Context.Context<unknown>, never, never>;
-      const contextWithTracking = Context.add(currentContext, AtomRegistry.AtomRegistry, trackingRegistry);
+      const currentContext = yield* FiberRef.get(FiberRef.currentContext) as Effect.Effect<
+        Context.Context<unknown>,
+        never,
+        never
+      >;
+      const contextWithTracking = Context.add(
+        currentContext,
+        AtomRegistry.AtomRegistry,
+        trackingRegistry,
+      );
 
       // Invoke component - use Effect.try to catch sync render-time crashes
       const output = yield* Effect.try({
         try: () => (type as (props: Record<string, unknown>) => unknown)(vElement.props),
-        catch: (e) => e
-      }).pipe(
-        Effect.tapError(() => Effect.sync(() => parent.removeChild(wrapper)))
-      );
+        catch: (e) => e,
+      }).pipe(Effect.tapError(() => Effect.sync(() => parent.removeChild(wrapper))));
 
       // Normalize to stream and provide context (with tracking registry) to it
       // This ensures user-provided services like ThemeService are available to component Effects
-      const stream = normalizeToStream(output as VElement | Effect.Effect<VElement> | Stream.Stream<VElement>).pipe(
-        Stream.provideContext(contextWithTracking)
-      );
+      const stream = normalizeToStream(
+        output as VElement | Effect.Effect<VElement> | Stream.Stream<VElement>,
+      ).pipe(Stream.provideContext(contextWithTracking));
 
       // Use Stream.peel to properly separate first emission from remaining stream
       // Provide componentScope so the remaining stream stays valid for the component's lifetime
       const peelResult = yield* Effect.either(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const [maybeFirst, remainingStream] = yield* Stream.peel(stream, Sink.head()).pipe(
-            Effect.provideService(Scope.Scope, componentScope)
+            Effect.provideService(Scope.Scope, componentScope),
           );
 
           if (Option.isNone(maybeFirst)) {
@@ -120,108 +128,131 @@ export const renderVElementToDOM = (
 
           // Subscribe to atom changes for reactivity
           if (accessedAtoms.size > 0) {
-            yield* subscribeToAtoms(accessedAtoms, () => {
-              // Queue re-render on atom change
-              runForkWithRuntime(runtime)(
-                Effect.gen(function*() {
-                  // Capture focus state before re-render
-                  const activeElement = document.activeElement as HTMLElement | null;
-                  const hasFocusInWrapper = activeElement && wrapper.contains(activeElement);
-                  const focusData = hasFocusInWrapper && activeElement ? {
-                    tagName: activeElement.tagName,
-                    dataAttributes: Object.fromEntries(
-                      Array.from(activeElement.attributes)
-                        .filter(attr => attr.name.startsWith("data-"))
-                        .map(attr => [attr.name, attr.value])
-                    ),
-                    name: activeElement.getAttribute("name"),
-                    id: activeElement.id,
-                    selectionStart: "selectionStart" in activeElement ? (activeElement as HTMLInputElement).selectionStart : null,
-                    selectionEnd: "selectionEnd" in activeElement ? (activeElement as HTMLInputElement).selectionEnd : null,
-                  } : null;
+            yield* subscribeToAtoms(
+              accessedAtoms,
+              () => {
+                // Queue re-render on atom change
+                runForkWithRuntime(runtime)(
+                  Effect.gen(function* () {
+                    // Capture focus state before re-render
+                    const activeElement = document.activeElement as HTMLElement | null;
+                    const hasFocusInWrapper = activeElement && wrapper.contains(activeElement);
+                    const focusData =
+                      hasFocusInWrapper && activeElement
+                        ? {
+                            tagName: activeElement.tagName,
+                            dataAttributes: Object.fromEntries(
+                              Array.from(activeElement.attributes)
+                                .filter((attr) => attr.name.startsWith("data-"))
+                                .map((attr) => [attr.name, attr.value]),
+                            ),
+                            name: activeElement.getAttribute("name"),
+                            id: activeElement.id,
+                            selectionStart:
+                              "selectionStart" in activeElement
+                                ? (activeElement as HTMLInputElement).selectionStart
+                                : null,
+                            selectionEnd:
+                              "selectionEnd" in activeElement
+                                ? (activeElement as HTMLInputElement).selectionEnd
+                                : null,
+                          }
+                        : null;
 
-                  // Clear old content via scope (triggers finalizers, removes DOM nodes)
-                  const newContentScope = yield* clearContentScope(contentScopeRef);
+                    // Clear old content via scope (triggers finalizers, removes DOM nodes)
+                    const newContentScope = yield* clearContentScope(contentScopeRef);
 
-                  const newAccessedAtoms = new Set<Atom.Atom<unknown>>();
-                  const newTrackingRegistry = makeTrackingRegistry(runtime.registry, newAccessedAtoms);
-                  // Re-use captured context but with new tracking registry
-                  const newContextWithTracking = Context.add(currentContext, AtomRegistry.AtomRegistry, newTrackingRegistry);
+                    const newAccessedAtoms = new Set<Atom.Atom<unknown>>();
+                    const newTrackingRegistry = makeTrackingRegistry(
+                      runtime.registry,
+                      newAccessedAtoms,
+                    );
+                    // Re-use captured context but with new tracking registry
+                    const newContextWithTracking = Context.add(
+                      currentContext,
+                      AtomRegistry.AtomRegistry,
+                      newTrackingRegistry,
+                    );
 
-                  // Invoke component - use Effect.try to catch sync render-time crashes
-                  const newOutput = yield* Effect.try({
-                    try: () => (type as (props: Record<string, unknown>) => unknown)(vElement.props),
-                    catch: (e) => e
-                  });
+                    // Invoke component - use Effect.try to catch sync render-time crashes
+                    const newOutput = yield* Effect.try({
+                      try: () =>
+                        (type as (props: Record<string, unknown>) => unknown)(vElement.props),
+                      catch: (e) => e,
+                    });
 
-                  const newStream = normalizeToStream(newOutput as VElement | Effect.Effect<VElement> | Stream.Stream<VElement>).pipe(
-                    Stream.provideContext(newContextWithTracking)
-                  );
-                  yield* Stream.runForEach(newStream, (reEmitted) =>
-                    renderVElementToDOM(reEmitted, wrapper, runtime, newContentScope).pipe(
-                      Effect.catchAll((e) => Effect.logError("Re-render child error", e))
-                    )
-                  );
+                    const newStream = normalizeToStream(
+                      newOutput as VElement | Effect.Effect<VElement> | Stream.Stream<VElement>,
+                    ).pipe(Stream.provideContext(newContextWithTracking));
+                    yield* Stream.runForEach(newStream, (reEmitted) =>
+                      renderVElementToDOM(reEmitted, wrapper, runtime, newContentScope).pipe(
+                        Effect.catchAll((e) => Effect.logError("Re-render child error", e)),
+                      ),
+                    );
 
-                  // Restore focus after re-render
-                  if (focusData) {
-                    const candidates = wrapper.querySelectorAll(focusData.tagName);
-                    for (const candidate of candidates) {
-                      const el = candidate as HTMLElement;
-                      // Match by id first, then name, then data attributes
-                      const matchById = focusData.id && el.id === focusData.id;
-                      const matchByName = focusData.name && el.getAttribute("name") === focusData.name;
-                      const matchByData = Object.entries(focusData.dataAttributes).length > 0 &&
-                        Object.entries(focusData.dataAttributes).every(
-                          ([attr, value]) => el.getAttribute(attr) === value
-                        );
-
-                      if (matchById || matchByName || matchByData) {
-                        el.focus();
-                        // Restore cursor position for inputs/textareas
-                        if (focusData.selectionStart !== null && "setSelectionRange" in el) {
-                          (el as HTMLInputElement).setSelectionRange(
-                            focusData.selectionStart,
-                            focusData.selectionEnd ?? focusData.selectionStart
+                    // Restore focus after re-render
+                    if (focusData) {
+                      const candidates = wrapper.querySelectorAll(focusData.tagName);
+                      for (const candidate of candidates) {
+                        const el = candidate as HTMLElement;
+                        // Match by id first, then name, then data attributes
+                        const matchById = focusData.id && el.id === focusData.id;
+                        const matchByName =
+                          focusData.name && el.getAttribute("name") === focusData.name;
+                        const matchByData =
+                          Object.entries(focusData.dataAttributes).length > 0 &&
+                          Object.entries(focusData.dataAttributes).every(
+                            ([attr, value]) => el.getAttribute(attr) === value,
                           );
+
+                        if (matchById || matchByName || matchByData) {
+                          el.focus();
+                          // Restore cursor position for inputs/textareas
+                          if (focusData.selectionStart !== null && "setSelectionRange" in el) {
+                            (el as HTMLInputElement).setSelectionRange(
+                              focusData.selectionStart,
+                              focusData.selectionEnd ?? focusData.selectionStart,
+                            );
+                          }
+                          break;
                         }
-                        break;
                       }
                     }
-                  }
-                }).pipe(
-                  // Provide captured context to re-render fiber so services (Navigator, etc.) are available
-                  Effect.provide(currentContext),
-                  Effect.catchAllCause((cause) => Effect.logError("Re-render error", cause))
-                )
-              );
-            }, runtime, componentScope);
+                  }).pipe(
+                    // Provide captured context to re-render fiber so services (Navigator, etc.) are available
+                    Effect.provide(currentContext),
+                    Effect.catchAllCause((cause) => Effect.logError("Re-render error", cause)),
+                  ),
+                );
+              },
+              runtime,
+              componentScope,
+            );
           }
 
           // Fork subscription for remaining emissions
           // Try to report stream errors to error boundary channel if available
           const maybeErrorChannel = Context.getOption(currentContext, ErrorBoundaryChannel);
           const streamErrorHandler = Option.match(maybeErrorChannel, {
-            onNone: () => (cause: unknown) => Effect.logError("Component stream error (no boundary)", cause),
-            onSome: (channel) => (cause: unknown) => channel.reportError(cause)
+            onNone: () => (cause: unknown) =>
+              Effect.logError("Component stream error (no boundary)", cause),
+            onSome: (channel) => (cause: unknown) => channel.reportError(cause),
           });
 
           const subscription = Stream.runForEach(remainingStream, (emitted) =>
-            Effect.gen(function*() {
+            Effect.gen(function* () {
               // Clear old content via scope
               const newContentScope = yield* clearContentScope(contentScopeRef);
               yield* renderVElementToDOM(emitted, wrapper, runtime, newContentScope).pipe(
-                Effect.catchAll((e) => Effect.logError("Stream emission render error", e))
+                Effect.catchAll((e) => Effect.logError("Stream emission render error", e)),
               );
-            })
-          ).pipe(
-            Effect.catchAllCause(streamErrorHandler)
-          );
+            }),
+          ).pipe(Effect.catchAllCause(streamErrorHandler));
 
           yield* Effect.forkIn(subscription, componentScope);
 
           return { rendered: true as const };
-        })
+        }),
       );
 
       if (peelResult._tag === "Left") {
@@ -232,7 +263,6 @@ export const renderVElementToDOM = (
         parent.removeChild(wrapper);
         return yield* Effect.fail(peelResult.left);
       }
-
     } else if (type === "TEXT_ELEMENT") {
       // Text node
       const textNode = document.createTextNode(String(vElement.props.nodeValue ?? ""));
@@ -242,14 +272,12 @@ export const renderVElementToDOM = (
       if (parentScope) {
         yield* registerNodeCleanup(textNode, parentScope);
       }
-
     } else if (type === "FRAGMENT") {
       // Fragment - render children directly into parent (propagate errors)
       const children = vElement.props.children ?? [];
       for (const child of children) {
         yield* renderVElementToDOM(child, parent, runtime, parentScope);
       }
-
     } else if (type === "ERROR_BOUNDARY") {
       // Error boundary - wrap child rendering in error catching
       // Also catches async errors from event handlers and streams via ErrorBoundaryChannel
@@ -272,55 +300,54 @@ export const renderVElementToDOM = (
       // Create error channel for async error reporting
       const errorDeferred = yield* Deferred.make<never, unknown>();
       const errorChannel: Context.Tag.Service<typeof ErrorBoundaryChannel> = {
-        reportError: (error: unknown) =>
-          Deferred.fail(errorDeferred, error).pipe(Effect.ignore)
+        reportError: (error: unknown) => Deferred.fail(errorDeferred, error).pipe(Effect.ignore),
       };
 
       // Flag to track if we've already shown fallback (to prevent double-triggering)
       const hasTriggeredRef = yield* Ref.make(false);
 
       // Helper to render fallback (used by both sync and async error paths)
-      const renderFallback = (error: unknown) => Effect.gen(function*() {
-        const alreadyTriggered = yield* Ref.getAndSet(hasTriggeredRef, true);
-        if (alreadyTriggered) return; // Already showing fallback
+      const renderFallback = (error: unknown) =>
+        Effect.gen(function* () {
+          const alreadyTriggered = yield* Ref.getAndSet(hasTriggeredRef, true);
+          if (alreadyTriggered) return; // Already showing fallback
 
-        // Close content scope (cleans up DOM nodes), create fallback scope
-        const oldContentScope = yield* Ref.get(contentScopeRef);
-        yield* Scope.close(oldContentScope, Exit.void);
-        const fallbackScope = yield* Scope.make();
-        yield* Ref.set(contentScopeRef, fallbackScope);
+          // Close content scope (cleans up DOM nodes), create fallback scope
+          const oldContentScope = yield* Ref.get(contentScopeRef);
+          yield* Scope.close(oldContentScope, Exit.void);
+          const fallbackScope = yield* Scope.make();
+          yield* Ref.set(contentScopeRef, fallbackScope);
 
-        onError?.(error);
-        yield* Effect.logError("ErrorBoundary caught error", error);
-        yield* renderVElementToDOM(fallback, wrapper, runtime, fallbackScope).pipe(
-          Effect.catchAll((e) => Effect.logError("ErrorBoundary fallback render error", e))
-        );
-      });
+          onError?.(error);
+          yield* Effect.logError("ErrorBoundary caught error", error);
+          yield* renderVElementToDOM(fallback, wrapper, runtime, fallbackScope).pipe(
+            Effect.catchAll((e) => Effect.logError("ErrorBoundary fallback render error", e)),
+          );
+        });
 
       // Fork listener for async errors (event handlers, stream failures)
       yield* Effect.fork(
-        Deferred.await(errorDeferred).pipe(
-          Effect.catchAllCause((cause) => renderFallback(cause))
-        )
+        Deferred.await(errorDeferred).pipe(Effect.catchAllCause((cause) => renderFallback(cause))),
       );
 
       // Try to render children with error channel in context, catch sync errors
       const contentScope = yield* Ref.get(contentScopeRef);
       const renderResult = yield* Effect.either(
-        Effect.forEach(children, (child) => renderVElementToDOM(child, wrapper, runtime, contentScope), { discard: true }).pipe(
-          Effect.provideService(ErrorBoundaryChannel, errorChannel)
-        )
+        Effect.forEach(
+          children,
+          (child) => renderVElementToDOM(child, wrapper, runtime, contentScope),
+          { discard: true },
+        ).pipe(Effect.provideService(ErrorBoundaryChannel, errorChannel)),
       );
 
       if (renderResult._tag === "Left") {
         // Sync error during render - render fallback
         yield* renderFallback(renderResult.left);
       }
-
     } else if (type === "SUSPENSE") {
       // Suspense boundary - show fallback while children are loading
       // Uses proper DOM insertion/removal (not CSS visibility hacks)
-      // Children are rendered to a detached container; if they complete within threshold, 
+      // Children are rendered to a detached container; if they complete within threshold,
       // we append directly. If timeout fires first, we show fallback then swap when ready.
       const fallback = vElement.props.fallback as VElement;
       const threshold = (vElement.props.threshold as number) ?? 100;
@@ -341,18 +368,16 @@ export const renderVElementToDOM = (
 
       // Fork: render children into DETACHED container, signal when done
       const childFiber = yield* Effect.fork(
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           yield* renderVElementToDOM(childFragment, childWrapper, runtime, childScope);
           yield* Deferred.succeed(childrenReady, void 0);
-        }).pipe(
-          Effect.catchAll((e) => Deferred.fail(childrenReady, e))
-        )
+        }).pipe(Effect.catchAll((e) => Deferred.fail(childrenReady, e))),
       );
 
       // Race: wait for children vs timeout
       const childrenWon = yield* Effect.race(
         Deferred.await(childrenReady).pipe(Effect.as(true)),
-        Effect.sleep(`${threshold} millis`).pipe(Effect.as(false))
+        Effect.sleep(`${threshold} millis`).pipe(Effect.as(false)),
       );
 
       if (childrenWon) {
@@ -397,7 +422,6 @@ export const renderVElementToDOM = (
           return yield* Effect.fail(childResult.left);
         }
       }
-
     } else if (isHostElement(type)) {
       // Regular host element (div, span, button, etc.)
       const el = document.createElement(type);

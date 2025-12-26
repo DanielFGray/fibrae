@@ -112,7 +112,7 @@ describe("Route module", () => {
       const match = post.match("/posts/123");
       expect(Option.isSome(match)).toBe(true);
       if (Option.isSome(match)) {
-        expect(match.value.id).toBe(123);  // Should be number, not string
+        expect(match.value.id).toBe(123); // Should be number, not string
         expect(typeof match.value.id).toBe("number");
       }
     });

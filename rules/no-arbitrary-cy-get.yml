@@ -19,4 +19,3 @@ constraints:
 
 ignores:
   - cypress/support/commands.ts
-

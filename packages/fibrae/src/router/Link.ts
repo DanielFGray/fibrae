@@ -17,7 +17,7 @@ import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import { Navigator } from "./Navigator.js";
 import type { Route } from "./Route.js";
 import type { Router } from "./Router.js";
-import type { VElement } from "../shared.js";
+import type { VElement, VChild } from "../shared.js";
 // Note: We don't use h() here because props.children is already normalized
 // by the JSX runtime. Using h() would double-process the children.
 
@@ -44,7 +44,7 @@ export interface LinkProps {
   /** Data attributes for testing */
   readonly "data-cy"?: string;
   /** Children to render inside the anchor (already normalized by JSX runtime) */
-  readonly children?: ReadonlyArray<VElement>;
+  readonly children?: VChild;
 }
 
 // =============================================================================
@@ -87,7 +87,7 @@ function buildHref(
   routeName: string,
   params?: Record<string, unknown>,
   search?: Record<string, unknown>,
-  basePath: string = ""
+  basePath: string = "",
 ): string {
   const route = findRouteByName(router, routeName);
   if (Option.isNone(route)) {
@@ -117,7 +117,9 @@ function buildHref(
  * ```
  */
 export function createLink(router: Router) {
-  return function Link(props: LinkProps): Effect.Effect<VElement, never, Navigator | AtomRegistry.AtomRegistry> {
+  return function Link(
+    props: LinkProps,
+  ): Effect.Effect<VElement, never, Navigator | AtomRegistry.AtomRegistry> {
     return Effect.gen(function* () {
       const navigator = yield* Navigator;
       const currentRoute = yield* Atom.get(navigator.currentRoute);
@@ -146,9 +148,7 @@ export function createLink(router: Router) {
 
       // Build class string
       const activeClass = props.activeClass ?? "active";
-      const classes = [props.class, isActive ? activeClass : null]
-        .filter(Boolean)
-        .join(" ");
+      const classes = [props.class, isActive ? activeClass : null].filter(Boolean).join(" ");
 
       // Click handler - prevent default and use Navigator
       const handleClick = (e: MouseEvent) => {
@@ -165,7 +165,14 @@ export function createLink(router: Router) {
         });
       };
 
-      // Return VElement directly - children are already normalized by JSX runtime
+       // Return VElement directly - children are already normalized by JSX runtime
+      // Normalize children to array (VChild can be single value or array)
+      const normalizedChildren = props.children
+        ? Array.isArray(props.children)
+          ? props.children
+          : [props.children]
+        : [];
+      
       return {
         type: "a",
         props: {
@@ -173,7 +180,9 @@ export function createLink(router: Router) {
           class: classes || undefined,
           "data-cy": props["data-cy"],
           onClick: handleClick,
-          children: [...(props.children ?? [])],
+          children: normalizedChildren.filter(
+            (child) => child !== null && child !== undefined && child !== false && child !== true,
+          ) as VElement[],
         },
       };
     });

@@ -3,6 +3,7 @@
 ## Goal
 
 Classic SSR with hydration:
+
 1. **Server:** Render component tree to HTML string (fast first paint)
 2. **Client:** Receive HTML, hydrate (attach event handlers, enable reactivity)
 3. **Result:** Same component code works on both server and client
@@ -16,8 +17,9 @@ Classic SSR with hydration:
 ### DOM Matching: Structure, Not IDs
 
 React walks DOM and virtual tree in parallel:
+
 - `getFirstHydratableChild()` - get first element/text child
-- `getNextHydratableSibling()` - get next sibling  
+- `getNextHydratableSibling()` - get next sibling
 - `canHydrateInstance()` - compare `nodeName.toLowerCase()`
 
 **Key insight:** No `data-*` attributes needed. Tree structure must be identical.
@@ -25,13 +27,21 @@ React walks DOM and virtual tree in parallel:
 ### Suspense Boundaries: Comment Markers
 
 React uses comment nodes to mark boundaries:
+
 ```html
-<!--$-->   resolved content here   <!--/$-->
-<!--$?-->  pending (streaming)     <!--/$-->
-<!--$!-->  showing fallback        <!--/$-->
+<!--$-->
+resolved content here
+<!--/$-->
+<!--$?-->
+pending (streaming)
+<!--/$-->
+<!--$!-->
+showing fallback
+<!--/$-->
 ```
 
 These let hydration:
+
 - Find boundaries in existing DOM
 - Know their state (resolved, pending, fallback)
 - Swap content when streaming completes
@@ -39,6 +49,7 @@ These let hydration:
 ### Streaming SSR
 
 When Suspense boundary isn't ready:
+
 1. Server emits fallback with `<!--$?-->` marker
 2. Server continues rendering rest of page
 3. When async resolves, server streams `<script>` that:
@@ -49,6 +60,7 @@ When Suspense boundary isn't ready:
 ### Hydration Mismatch
 
 When server HTML doesn't match client render:
+
 - React logs warning with diff
 - Falls back to client-side render for that subtree
 - Doesn't crash the whole app
@@ -56,11 +68,12 @@ When server HTML doesn't match client render:
 ### State Serialization
 
 React doesn't handle this - left to libraries:
+
 ```javascript
 // Redux pattern
 window.__PRELOADED_STATE__ = { counter: 5, todos: [...] };
 
-// React Query pattern  
+// React Query pattern
 <script>window.__REACT_QUERY__ = ${dehydrate(queryClient)}</script>
 ```
 
@@ -77,21 +90,23 @@ window.__PRELOADED_STATE__ = { counter: 5, todos: [...] };
 
 ### Component Return Types in SSR
 
-| Return Type | SSR Behavior |
-|-------------|--------------|
-| `VElement` | Render directly |
-| `Effect<VElement>` | Await effect, render result |
-| `Stream<VElement>` | Wait for first emission, render it |
+| Return Type          | SSR Behavior                        |
+| -------------------- | ----------------------------------- |
+| `VElement`           | Render directly                     |
+| `Effect<VElement>`   | Await effect, render result         |
+| `Stream<VElement>`   | Wait for first emission, render it  |
 | `Stream` in Suspense | Wait up to threshold, then fallback |
 
 ### Atom Handling
 
 **Server:**
+
 1. Provide read-only AtomRegistry with initial values
 2. Track which atoms are accessed during render
 3. Serialize accessed atoms to manifest
 
 **Client:**
+
 1. Parse manifest before hydration
 2. Initialize AtomRegistry with SSR values
 3. Hydrate (atoms already have correct values)
@@ -101,7 +116,7 @@ window.__PRELOADED_STATE__ = { counter: 5, todos: [...] };
 <!-- Server output -->
 <div id="root">...SSR content...</div>
 <script id="__FIBRAE_STATE__" type="application/json">
-{"atoms":{"counter:a":0,"counter:b":5,"todos":["item1","item2"]}}
+  { "atoms": { "counter:a": 0, "counter:b": 5, "todos": ["item1", "item2"] } }
 </script>
 ```
 
@@ -122,6 +137,7 @@ Use comment markers like React:
 ```
 
 Client hydration:
+
 - `resolved` → adopt content, attach handlers
 - `fallback` → show fallback, subscribe to stream, swap when ready
 
@@ -130,11 +146,13 @@ Client hydration:
 **Streams restart on client, they don't continue from server.**
 
 Why:
+
 - Simpler (no Bridge HTTP endpoints, no connection management)
 - Matches most use cases (data fetching, not live streams)
 - For truly live data, use WebSockets directly (out of scope)
 
 Example:
+
 ```typescript
 const UserData = () => Stream.fromEffect(fetchUser()).pipe(
   Stream.map(user => <div>{user.name}</div>)
@@ -145,6 +163,7 @@ const UserData = () => Stream.fromEffect(fetchUser()).pipe(
 ```
 
 For expensive fetches, use Atoms to cache:
+
 ```typescript
 const userAtom = Atom.make<User | null>(null);
 
@@ -168,7 +187,7 @@ const UserData = () => Effect.gen(function*() {
 import { renderToString } from "fibrae/server";
 
 // Render to HTML with state manifest
-const { html, stateScript, dehydratedState } = yield* renderToString(h(App));
+const { html, stateScript, dehydratedState } = yield * renderToString(h(App));
 
 // Full page
 const page = `
@@ -207,13 +226,13 @@ import { RenderEnv } from "fibrae";
 
 const MyComponent = () => Effect.gen(function*() {
   const env = yield* RenderEnv;
-  
+
   if (env === "server") {
     // SSR-specific logic
   } else {
     // Client-specific logic (env === "browser")
   }
-  
+
   return <div>...</div>;
 });
 ```

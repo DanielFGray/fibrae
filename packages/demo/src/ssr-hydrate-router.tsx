@@ -1,9 +1,9 @@
 /**
  * SSR Router Hydration Entry Point
- * 
+ *
  * This file is loaded by the browser after SSR.
  * It hydrates the server-rendered content and enables client-side navigation.
- * 
+ *
  * The RouterStateAtom is automatically hydrated from __FIBRAE_STATE__,
  * so we don't need to pass router state separately.
  */
@@ -14,12 +14,7 @@ import * as BrowserPlatform from "@effect/platform-browser";
 import { h, render } from "fibrae";
 import { Hydration } from "@effect-atom/atom";
 import { Router } from "fibrae";
-import {
-  SSRRouter,
-  App,
-  RouterOutlet,
-  createSSRRouterHandlers,
-} from "./ssr-router-app.js";
+import { SSRRouter, App, RouterOutlet, createSSRRouterHandlers } from "./ssr-router-app.js";
 
 // Declare global for TypeScript
 declare global {
@@ -49,19 +44,16 @@ if (!container) {
 
 // Combined layer: RouterHandlers -> browserLayer
 // Note: AtomRegistry is provided by render(), not here
-const routerLayer = Layer.provideMerge(
-  browserLayer,
-  handlersLayer
-);
+const routerLayer = Layer.provideMerge(browserLayer, handlersLayer);
 
 // Run hydration
 Effect.gen(function* () {
   // Create RouterOutlet - it will read from hydrated RouterStateAtom
   const outlet = h(RouterOutlet, {});
-  
+
   // Wrap in App shell
   const app = h(App, {}, [outlet]);
-  
+
   // Render (hydrate) the app with router layer
   // render() automatically provides FibraeRuntime + AtomRegistry
   // The initialState includes RouterStateAtom which RouterOutlet uses
@@ -69,14 +61,14 @@ Effect.gen(function* () {
     layer: routerLayer,
     initialState,
   });
-  
+
   yield* Effect.log("Hydrated SSR router app");
-  
+
   return yield* Effect.never;
 }).pipe(
   Effect.catchAllDefect((e) => {
     console.error("Hydration error:", e);
     return Effect.log(e);
   }),
-  BrowserPlatform.BrowserRuntime.runMain
+  BrowserPlatform.BrowserRuntime.runMain,
 );

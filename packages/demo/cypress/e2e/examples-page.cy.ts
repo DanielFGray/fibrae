@@ -61,7 +61,10 @@ describe("Examples Page", () => {
       cy.getCy("todo-input").type("Complete me{enter}");
       cy.getCy("todo-text").contains("Complete me");
       cy.getCy("todo-checkbox").first().click();
-      cy.getCy("todo-text").first().should("have.css", "text-decoration").and("include", "line-through");
+      cy.getCy("todo-text")
+        .first()
+        .should("have.css", "text-decoration")
+        .and("include", "line-through");
     });
   });
 

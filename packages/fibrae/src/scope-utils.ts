@@ -13,9 +13,9 @@ import * as Ref from "effect/Ref";
  * Returns the new scope for convenience.
  */
 export const clearContentScope = (
-  contentScopeRef: Ref.Ref<Scope.Scope.Closeable>
+  contentScopeRef: Ref.Ref<Scope.Scope.Closeable>,
 ): Effect.Effect<Scope.Scope.Closeable, never, never> =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const oldScope = yield* Ref.get(contentScopeRef);
     yield* Scope.close(oldScope, Exit.void);
     const newScope = yield* Scope.make();
@@ -29,10 +29,13 @@ export const clearContentScope = (
  */
 export const registerNodeCleanup = (
   node: Node,
-  scope: Scope.Scope.Closeable
+  scope: Scope.Scope.Closeable,
 ): Effect.Effect<void, never, never> =>
-  Scope.addFinalizer(scope, Effect.sync(() => {
-    if (node.parentNode) {
-      node.parentNode.removeChild(node);
-    }
-  }));
+  Scope.addFinalizer(
+    scope,
+    Effect.sync(() => {
+      if (node.parentNode) {
+        node.parentNode.removeChild(node);
+      }
+    }),
+  );

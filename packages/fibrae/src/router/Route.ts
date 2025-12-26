@@ -1,6 +1,6 @@
 /**
  * Route declaration module for Fibrae router.
- * 
+ *
  * Mirrors Effect HttpApiEndpoint patterns:
  * - Route.get("name", "/path") for static routes
  * - Route.get("name")`/path/${param}` for dynamic routes with template literals
@@ -15,9 +15,7 @@ import * as Option from "effect/Option";
  * Annotation symbol for storing parameter name in schema metadata.
  * Mirrors HttpApiSchema.AnnotationParam pattern.
  */
-export const AnnotationParam: unique symbol = Symbol.for(
-  "fibrae/Route/AnnotationParam"
-);
+export const AnnotationParam: unique symbol = Symbol.for("fibrae/Route/AnnotationParam");
 
 /**
  * Represents a single route with path and optional search params validation.
@@ -37,34 +35,30 @@ export interface Route<
    * Match a pathname against this route.
    * Returns the decoded path parameters if matched, None otherwise.
    */
-  readonly match: (
-    pathname: string
-  ) => Option.Option<PathParams>;
+  readonly match: (pathname: string) => Option.Option<PathParams>;
 
   /**
    * Build a URL from path parameters.
    * Throws if required params are missing.
    */
-  readonly interpolate: (
-    params: PathParams
-  ) => string;
+  readonly interpolate: (params: PathParams) => string;
 
   /**
    * Set search parameter schema for this route.
    */
   readonly setSearchParams: <NewSearch extends Record<string, unknown>>(
-    schema: Schema.Schema<NewSearch>
+    schema: Schema.Schema<NewSearch>,
   ) => Route<Name, PathParams, NewSearch>;
 }
 
 /**
  * Parse path template to extract param names and build a URL pattern.
- * 
+ *
  * Example: "/posts/:id/comments/:commentId" → { paramNames: ["id", "commentId"], pattern: ... }
  */
 function parsePathTemplate(
   segments: TemplateStringsArray,
-  schemas: ReadonlyArray<Schema.Schema.Any>
+  schemas: ReadonlyArray<Schema.Schema.Any>,
 ): {
   path: string;
   paramNames: string[];
@@ -83,9 +77,10 @@ function parsePathTemplate(
     path += `:${paramName}${segments[i + 1]}`;
   }
 
-  const pathSchema = paramNames.length > 0
-    ? Option.some(Schema.Struct(pathSchemaObj as any))
-    : Option.none<Schema.Schema.Any>();
+  const pathSchema =
+    paramNames.length > 0
+      ? Option.some(Schema.Struct(pathSchemaObj as any))
+      : Option.none<Schema.Schema.Any>();
 
   return { path, paramNames, pathSchema };
 }
@@ -110,7 +105,7 @@ function getParamName(schema: Schema.Schema.Any): string | undefined {
 function matchPath(
   pattern: string,
   pathname: string,
-  pathSchema: Option.Option<any>
+  pathSchema: Option.Option<any>,
 ): Option.Option<Record<string, unknown>> {
   // Convert pattern with :params to regex
   const regexPattern = pattern.replace(/:(\w+)/g, "(?<$1>[^/]+)");
@@ -160,7 +155,7 @@ export interface RouteConstructor {
   <const Name extends string>(name: Name, path: string): Route<Name, {}, {}>;
 
   <const Name extends string>(
-    name: Name
+    name: Name,
   ): <const T extends readonly any[]>(
     segments: TemplateStringsArray,
     ...params: T
@@ -178,7 +173,7 @@ function makeRoute<
   _name: Name,
   path: string,
   pathSchema: Option.Option<Schema.Schema<PathParams>> = Option.none(),
-  searchSchema: Option.Option<Schema.Schema<SearchParams>> = Option.none()
+  searchSchema: Option.Option<Schema.Schema<SearchParams>> = Option.none(),
 ): Route<Name, PathParams, SearchParams> {
   return {
     name: _name,
@@ -224,15 +219,12 @@ export const post = makeGetter();
 /**
  * Route.param("name", schema) creates a path parameter with validation.
  * Use in template literals: Route.get("name")`/posts/${Route.param("id", Schema.NumberFromString)}`
- * 
+ *
  * Stores the parameter name in the schema's annotations for extraction during template literal parsing.
  */
-export function param<T>(
-  name: string,
-  schema: Schema.Schema<T>
-): Schema.Schema<T> {
+export function param<T>(name: string, schema: Schema.Schema<T>): Schema.Schema<T> {
   const annotations: Record<string | symbol, unknown> = {
-    [AnnotationParam]: { name, schema }
+    [AnnotationParam]: { name, schema },
   };
   return schema.annotations(annotations);
 }

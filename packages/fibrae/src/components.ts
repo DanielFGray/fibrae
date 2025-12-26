@@ -17,7 +17,7 @@ export class ErrorBoundaryChannel extends Context.Tag("ErrorBoundaryChannel")<
   {
     readonly reportError: (error: unknown) => Effect.Effect<void, never, never>;
   }
->() { }
+>() {}
 
 // =============================================================================
 // Built-in Components
@@ -26,11 +26,11 @@ export class ErrorBoundaryChannel extends Context.Tag("ErrorBoundaryChannel")<
 /**
  * Suspense component - shows fallback while waiting for children to emit.
  * Returns a special VElement that renderVElementToDOM handles specially.
- * 
+ *
  * Uses a threshold-based strategy:
  * - If children complete rendering within `threshold` ms, skip fallback entirely
  * - If children take longer, show fallback immediately, then swap to children when ready
- * 
+ *
  * @param fallback - VElement to show while waiting (only if children are slow)
  * @param threshold - Milliseconds to wait before showing fallback (default: 100ms)
  * @param children - Child components (may be async Effects or Streams)
@@ -40,7 +40,11 @@ export const Suspense = (props: {
   threshold?: number;
   children?: VElement | VElement[];
 }): VElement => {
-  const childrenArray = Array.isArray(props.children) ? props.children : props.children ? [props.children] : [];
+  const childrenArray = Array.isArray(props.children)
+    ? props.children
+    : props.children
+      ? [props.children]
+      : [];
 
   if (childrenArray.length === 0) {
     throw new Error("Suspense requires at least one child");
@@ -66,7 +70,11 @@ export const ErrorBoundary = (props: {
   onError?: (cause: unknown) => void;
   children?: VElement | VElement[];
 }): VElement => {
-  const childrenArray = Array.isArray(props.children) ? props.children : props.children ? [props.children] : [];
+  const childrenArray = Array.isArray(props.children)
+    ? props.children
+    : props.children
+      ? [props.children]
+      : [];
 
   if (childrenArray.length === 0) {
     throw new Error("ErrorBoundary requires at least one child");

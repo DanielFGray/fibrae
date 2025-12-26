@@ -5,15 +5,15 @@ import { defineConfig } from "eslint/config";
 
 export default defineConfig([
   {
-    ignores: ["**/dist/**", "**/node_modules/**"]
+    ignores: ["**/dist/**", "**/node_modules/**"],
   },
   {
     files: ["**/*.{js,mjs,cjs,ts,mts,cts}"],
     plugins: { js },
     extends: ["js/recommended"],
-    languageOptions: { 
-      globals: { ...globals.browser, ...globals.node }
-    }
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+    },
   },
   ...tseslint.configs.recommendedTypeChecked,
   {
@@ -21,7 +21,7 @@ export default defineConfig([
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
-      }
-    }
-  }
+      },
+    },
+  },
 ]);

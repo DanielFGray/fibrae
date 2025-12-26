@@ -47,12 +47,18 @@ export interface HistoryService {
   /**
    * Navigate to a new location (push new entry).
    */
-  readonly push: (path: string, state?: unknown) => Effect.Effect<void, never, AtomRegistry.AtomRegistry>;
+  readonly push: (
+    path: string,
+    state?: unknown,
+  ) => Effect.Effect<void, never, AtomRegistry.AtomRegistry>;
 
   /**
    * Replace current location (same entry).
    */
-  readonly replace: (path: string, state?: unknown) => Effect.Effect<void, never, AtomRegistry.AtomRegistry>;
+  readonly replace: (
+    path: string,
+    state?: unknown,
+  ) => Effect.Effect<void, never, AtomRegistry.AtomRegistry>;
 
   /**
    * Go back in history.
@@ -133,79 +139,80 @@ function parseLocation(path: string, state?: unknown): HistoryLocation {
  * - Properly cleans up event listeners on scope close
  */
 /* is-tree-shakable-suppress */
-export const BrowserHistoryLive: Layer.Layer<History, never, AtomRegistry.AtomRegistry> = Layer.scoped(
-  History,
-  Effect.gen(function* () {
-    const registry = yield* AtomRegistry.AtomRegistry;
+export const BrowserHistoryLive: Layer.Layer<History, never, AtomRegistry.AtomRegistry> =
+  Layer.scoped(
+    History,
+    Effect.gen(function* () {
+      const registry = yield* AtomRegistry.AtomRegistry;
 
-    // Create location atom with initial browser location
-    const locationAtom = Atom.make(getBrowserLocation());
+      // Create location atom with initial browser location
+      const locationAtom = Atom.make(getBrowserLocation());
 
-    // Subscribe to popstate for browser back/forward
-    const handlePopState = () => {
-      registry.set(locationAtom, getBrowserLocation());
-    };
+      // Subscribe to popstate for browser back/forward
+      const handlePopState = () => {
+        registry.set(locationAtom, getBrowserLocation());
+      };
 
-    window.addEventListener("popstate", handlePopState);
+      window.addEventListener("popstate", handlePopState);
 
-    // Cleanup on scope close
-    yield* Effect.addFinalizer(() =>
-      Effect.sync(() => {
-        window.removeEventListener("popstate", handlePopState);
-      })
-    );
-
-    // Track history index for canGoBack (simplified approach)
-    let historyIndex = 0;
-
-    const service: HistoryService = {
-      location: locationAtom,
-
-      push: (path, state) =>
+      // Cleanup on scope close
+      yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
-          const location = parseLocation(path, state);
-          const href = `${location.pathname}${location.search}${location.hash}`;
-          window.history.pushState(state, "", href);
-          historyIndex++;
-          registry.set(locationAtom, {
-            ...location,
-            state,
-          });
+          window.removeEventListener("popstate", handlePopState);
         }),
+      );
 
-      replace: (path, state) =>
-        Effect.sync(() => {
-          const location = parseLocation(path, state);
-          const href = `${location.pathname}${location.search}${location.hash}`;
-          window.history.replaceState(state, "", href);
-          registry.set(locationAtom, {
-            ...location,
-            state,
-          });
-        }),
+      // Track history index for canGoBack (simplified approach)
+      let historyIndex = 0;
 
-      back: Effect.sync(() => {
-        window.history.back();
-        // Note: popstate handler will update location
-      }),
+      const service: HistoryService = {
+        location: locationAtom,
 
-      forward: Effect.sync(() => {
-        window.history.forward();
-        // Note: popstate handler will update location
-      }),
+        push: (path, state) =>
+          Effect.sync(() => {
+            const location = parseLocation(path, state);
+            const href = `${location.pathname}${location.search}${location.hash}`;
+            window.history.pushState(state, "", href);
+            historyIndex++;
+            registry.set(locationAtom, {
+              ...location,
+              state,
+            });
+          }),
 
-      go: (n) =>
-        Effect.sync(() => {
-          window.history.go(n);
+        replace: (path, state) =>
+          Effect.sync(() => {
+            const location = parseLocation(path, state);
+            const href = `${location.pathname}${location.search}${location.hash}`;
+            window.history.replaceState(state, "", href);
+            registry.set(locationAtom, {
+              ...location,
+              state,
+            });
+          }),
+
+        back: Effect.sync(() => {
+          window.history.back();
           // Note: popstate handler will update location
         }),
 
-      canGoBack: Effect.sync(() => historyIndex > 0),
-    };
+        forward: Effect.sync(() => {
+          window.history.forward();
+          // Note: popstate handler will update location
+        }),
 
-    return service;
-  })
-);
+        go: (n) =>
+          Effect.sync(() => {
+            window.history.go(n);
+            // Note: popstate handler will update location
+          }),
+
+        canGoBack: Effect.sync(() => historyIndex > 0),
+      };
+
+      return service;
+    }),
+  );
 
 // =============================================================================
 // Memory History Implementation
@@ -236,7 +243,7 @@ export interface MemoryHistoryOptions {
  * - Optional initial location/state configuration
  */
 export function MemoryHistoryLive(
-  options: MemoryHistoryOptions = {}
+  options: MemoryHistoryOptions = {},
 ): Layer.Layer<History, never, AtomRegistry.AtomRegistry> {
   return Layer.scoped(
     History,
@@ -305,7 +312,7 @@ export function MemoryHistoryLive(
       };
 
       return service;
-    })
+    }),
   );
 }
 
@@ -317,18 +324,21 @@ export function MemoryHistoryLive(
  * Get current location.
  */
 /* is-tree-shakable-suppress */
-export const getLocation: Effect.Effect<HistoryLocation, never, History | AtomRegistry.AtomRegistry> =
-  Effect.gen(function* () {
-    const history = yield* History;
-    return yield* Atom.get(history.location);
-  });
+export const getLocation: Effect.Effect<
+  HistoryLocation,
+  never,
+  History | AtomRegistry.AtomRegistry
+> = Effect.gen(function* () {
+  const history = yield* History;
+  return yield* Atom.get(history.location);
+});
 
 /**
  * Push a new location.
  */
 export const push = (
   path: string,
-  state?: unknown
+  state?: unknown,
 ): Effect.Effect<void, never, History | AtomRegistry.AtomRegistry> =>
   Effect.gen(function* () {
     const history = yield* History;
@@ -340,7 +350,7 @@ export const push = (
  */
 export const replace = (
   path: string,
-  state?: unknown
+  state?: unknown,
 ): Effect.Effect<void, never, History | AtomRegistry.AtomRegistry> =>
   Effect.gen(function* () {
     const history = yield* History;
@@ -360,19 +370,15 @@ export const back: Effect.Effect<void, never, History> = Effect.gen(function* ()
  * Go forward in history.
  */
 /* is-tree-shakable-suppress */
-export const forward: Effect.Effect<void, never, History> = Effect.gen(
-  function* () {
-    const history = yield* History;
-    yield* history.forward;
-  }
-);
+export const forward: Effect.Effect<void, never, History> = Effect.gen(function* () {
+  const history = yield* History;
+  yield* history.forward;
+});
 
 /**
  * Go n entries in history.
  */
-export const go = (
-  n: number
-): Effect.Effect<void, never, History> =>
+export const go = (n: number): Effect.Effect<void, never, History> =>
   Effect.gen(function* () {
     const history = yield* History;
     yield* history.go(n);

@@ -3,7 +3,7 @@
  *
  * Subscribes to Navigator.currentRoute and renders the matched route's component.
  * When route changes, runs the new route's loader and renders the component.
- * 
+ *
  * For SSR hydration, the RouterStateAtom is pre-populated and the loader is skipped
  * on first render.
  *
@@ -35,7 +35,7 @@ import type { VElement } from "../shared.js";
 
 /**
  * Props for RouterOutlet component.
- * 
+ *
  * @deprecated Props are no longer needed - SSR hydration is handled via RouterStateAtom.
  */
 export interface RouterOutletProps {
@@ -44,7 +44,7 @@ export interface RouterOutletProps {
    * Initial loader data from SSR - skips loader on first render.
    */
   readonly initialLoaderData?: unknown;
-  
+
   /**
    * @deprecated Use RouterStateAtom hydration instead.
    * Initial route name from SSR - used with initialLoaderData.
@@ -70,7 +70,7 @@ export interface RouterOutletProps {
  * so the first render uses that data and skips the loader.
  */
 export function RouterOutlet(
-  _props: RouterOutletProps = {}
+  _props: RouterOutletProps = {},
 ): Stream.Stream<VElement, unknown, Navigator | RouterHandlers | AtomRegistry.AtomRegistry> {
   // Track if this is the first render (for SSR hydration)
   let isFirstRender = true;
@@ -83,7 +83,7 @@ export function RouterOutlet(
 
       // Check if we have hydrated state from SSR
       const hydratedState = registry.get(RouterStateAtom);
-      
+
       // Create a stream from the currentRoute atom (navigation trigger)
       const routeStream = AtomRegistry.toStream(registry, navigator.currentRoute);
 
@@ -145,7 +145,7 @@ export function RouterOutlet(
             // Run the loader
             const loaderCtx = { path: params, searchParams };
             loaderData = yield* handler.value.loader(loaderCtx);
-            
+
             // Build the new router state
             routerState = {
               routeName,
@@ -153,7 +153,7 @@ export function RouterOutlet(
               searchParams,
               loaderData,
             };
-            
+
             // Update RouterStateAtom (for DI access by other components)
             registry.set(RouterStateAtom, Option.some(routerState));
           }
@@ -171,8 +171,8 @@ export function RouterOutlet(
           });
 
           return element;
-        })
+        }),
       );
-    })
+    }),
   );
 }

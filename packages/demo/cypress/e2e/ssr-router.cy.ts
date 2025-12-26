@@ -1,6 +1,6 @@
 /**
  * SSR Router E2E tests
- * 
+ *
  * Tests SSR integration with the router:
  * - Router.serverLayer renders route with loader data
  * - Hydration reuses server loader data (no fetch)
@@ -46,7 +46,7 @@ describe("SSR Router", () => {
       // Content should match server-rendered
       cy.getCy("current-route-name").should("contain", "home");
       cy.getCy("loader-data-message").should("contain", "Hello from server loader");
-      
+
       // Links should be interactive after hydration
       cy.getCy("nav-link-posts").should("exist").click();
       cy.getCy("current-route-name").should("contain", "posts");
@@ -71,10 +71,10 @@ describe("SSR Router", () => {
     it("should run loader on client navigation", () => {
       // Click link to navigate to posts
       cy.getCy("nav-link-posts").click();
-      
+
       // Should show posts route
       cy.getCy("current-route-name").should("contain", "posts");
-      
+
       // Loader should have run on client
       cy.getCy("loader-data-count").should("contain", "3");
     });
@@ -88,7 +88,7 @@ describe("SSR Router", () => {
       // Navigate to posts
       cy.getCy("nav-link-posts").click();
       cy.getCy("current-route-name").should("contain", "posts");
-      
+
       // Go back
       cy.go("back");
       cy.getCy("current-route-name").should("contain", "home");

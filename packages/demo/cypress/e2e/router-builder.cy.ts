@@ -1,6 +1,6 @@
 /**
  * RouterBuilder E2E tests
- * 
+ *
  * Tests the handler implementation pattern:
  * - RouterBuilder.group(router, "groupName", (handlers) => ...)
  * - handlers.handle("routeName", { loader, component })

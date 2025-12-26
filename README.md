@@ -132,33 +132,33 @@ Components return `VElement`, `Effect<VElement>`, or `Stream<VElement>`.
 
 ### State (Atoms)
 
-| API | Description |
-|-----|-------------|
-| `Atom.make(initial)` | Create atom |
-| `Atom.get(atom)` | Read value (yields in Effect) |
-| `Atom.family(fn)` | Parameterized atoms |
-| `registry.set(atom, value)` | Set value |
-| `registry.update(atom, fn)` | Update with function |
+| API                         | Description                   |
+| --------------------------- | ----------------------------- |
+| `Atom.make(initial)`        | Create atom                   |
+| `Atom.get(atom)`            | Read value (yields in Effect) |
+| `Atom.family(fn)`           | Parameterized atoms           |
+| `registry.set(atom, value)` | Set value                     |
+| `registry.update(atom, fn)` | Update with function          |
 
 ### Routing
 
-| API | Description |
-|-----|-------------|
-| `Route.get(name, path)` | Define route |
-| `Route.param(name, schema)` | Path parameter |
-| `.setSearchParams(schema)` | Query parameters |
-| `Router.make(name).add(...)` | Create router |
-| `RouterBuilder.group(router, name, fn)` | Define handlers |
-| `createLink(router)` | Create Link component |
-| `RouterOutlet` | Render matched route |
-| `Navigator` | Programmatic navigation service |
+| API                                     | Description                     |
+| --------------------------------------- | ------------------------------- |
+| `Route.get(name, path)`                 | Define route                    |
+| `Route.param(name, schema)`             | Path parameter                  |
+| `.setSearchParams(schema)`              | Query parameters                |
+| `Router.make(name).add(...)`            | Create router                   |
+| `RouterBuilder.group(router, name, fn)` | Define handlers                 |
+| `createLink(router)`                    | Create Link component           |
+| `RouterOutlet`                          | Render matched route            |
+| `Navigator`                             | Programmatic navigation service |
 
 ### Built-in Components
 
-| Component | Props |
-|-----------|-------|
-| `Suspense` | `fallback`, `threshold` (ms, default 100) |
-| `ErrorBoundary` | `fallback`, `onError` |
+| Component       | Props                                     |
+| --------------- | ----------------------------------------- |
+| `Suspense`      | `fallback`, `threshold` (ms, default 100) |
+| `ErrorBoundary` | `fallback`, `onError`                     |
 
 ### SSR
 

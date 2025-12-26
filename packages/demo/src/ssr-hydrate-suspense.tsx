@@ -16,8 +16,8 @@ const container = document.getElementById("root") as HTMLElement;
 const initialState = window.__FIBRAE_STATE__;
 
 // Run the hydration
-render(<SuspenseApp />, container, { 
-  initialState: initialState as Parameters<typeof render>[2]["initialState"] 
+render(<SuspenseApp />, container, {
+  initialState: initialState as Parameters<typeof render>[2]["initialState"],
 }).pipe(
   Effect.catchAllDefect((e) => Effect.log("Hydration defect:", e)),
   BrowserPlatform.BrowserRuntime.runMain,

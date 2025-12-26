@@ -6,18 +6,9 @@
     "declaration": true,
     "emitDeclarationOnly": false,
     "jsx": "preserve",
-    "types": [
-      "vite/client",
-      "cypress",
-      "fibrae/jsx-runtime",
-      "node"
-    ]
+    "jsxImportSource": "fibrae",
+    "types": ["vite/client", "cypress", "fibrae/jsx-runtime", "node"]
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "dist",
-    "**/*.test.*"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["dist", "**/*.test.*"]
 }

@@ -66,7 +66,7 @@ export interface NavigatorService {
    */
   readonly go: (
     routeName: string,
-    options?: NavigateOptions
+    options?: NavigateOptions,
   ) => Effect.Effect<void, never, AtomRegistry.AtomRegistry>;
 
   /**
@@ -85,7 +85,7 @@ export interface NavigatorService {
    */
   readonly isActive: (
     routeName: string,
-    params?: Record<string, unknown>
+    params?: Record<string, unknown>,
   ) => Effect.Effect<boolean, never, AtomRegistry.AtomRegistry>;
 }
 
@@ -96,10 +96,7 @@ export interface NavigatorService {
 /**
  * Navigator service tag for Effect dependency injection.
  */
-export class Navigator extends Context.Tag("fibrae/Navigator")<
-  Navigator,
-  NavigatorService
->() {}
+export class Navigator extends Context.Tag("fibrae/Navigator")<Navigator, NavigatorService>() {}
 
 // =============================================================================
 // Helpers
@@ -154,7 +151,7 @@ function stripBasePath(pathname: string, basePath: string): string {
 function matchLocation(
   router: Router,
   location: HistoryLocation,
-  basePath: string = ""
+  basePath: string = "",
 ): Option.Option<CurrentRoute> {
   const pathname = stripBasePath(location.pathname, basePath);
   const match = router.matchRoute(pathname);
@@ -207,10 +204,10 @@ export interface NavigatorOptions {
  */
 export function NavigatorLive(
   router: Router,
-  options: NavigatorOptions = {}
+  options: NavigatorOptions = {},
 ): Layer.Layer<Navigator, never, History | AtomRegistry.AtomRegistry> {
   const basePath = options.basePath ?? "";
-  
+
   return Layer.effect(
     Navigator,
     Effect.gen(function* () {
@@ -251,9 +248,7 @@ export function NavigatorLive(
             const routePathname = route.value.interpolate(pathParams);
             // Prepend basePath to route pathname
             const pathname = basePath + routePathname;
-            const search = options.searchParams
-              ? buildSearchString(options.searchParams)
-              : "";
+            const search = options.searchParams ? buildSearchString(options.searchParams) : "";
             const url = `${pathname}${search}`;
 
             // Navigate
@@ -309,7 +304,7 @@ export function NavigatorLive(
       };
 
       return service;
-    })
+    }),
   );
 }
 
@@ -322,7 +317,7 @@ export function NavigatorLive(
  */
 export const go = (
   routeName: string,
-  options?: NavigateOptions
+  options?: NavigateOptions,
 ): Effect.Effect<void, never, Navigator | AtomRegistry.AtomRegistry> =>
   Effect.gen(function* () {
     const nav = yield* Navigator;
@@ -337,19 +332,18 @@ export const back: Effect.Effect<void, never, Navigator | AtomRegistry.AtomRegis
   function* () {
     const nav = yield* Navigator;
     yield* nav.back;
-  }
+  },
 );
 
 /**
  * Go forward in history.
  */
 /* is-tree-shakable-suppress */
-export const forward: Effect.Effect<void, never, Navigator | AtomRegistry.AtomRegistry> = Effect.gen(
-  function* () {
+export const forward: Effect.Effect<void, never, Navigator | AtomRegistry.AtomRegistry> =
+  Effect.gen(function* () {
     const nav = yield* Navigator;
     yield* nav.forward;
-  }
-);
+  });
 
 /**
  * Get current route info.

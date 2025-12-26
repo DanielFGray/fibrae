@@ -6,22 +6,23 @@ import { Atom, AtomRegistry, render } from "fibrae";
 const countAtom = Atom.make(0);
 
 // Counter component - same structure as pre-rendered HTML
-const Counter = () => Effect.gen(function*() {
-  const registry = yield* AtomRegistry.AtomRegistry;
-  const count = registry.get(countAtom);
+const Counter = () =>
+  Effect.gen(function* () {
+    const registry = yield* AtomRegistry.AtomRegistry;
+    const count = registry.get(countAtom);
 
-  return (
-    <div>
-      <p data-cy="hydration-count">{String(count)}</p>
-      <button
-        data-cy="hydration-button"
-        onClick={() => registry.update(countAtom, (c: number) => c + 1)}
-      >
-        Click me
-      </button>
-    </div>
-  );
-});
+    return (
+      <div>
+        <p data-cy="hydration-count">{String(count)}</p>
+        <button
+          data-cy="hydration-button"
+          onClick={() => registry.update(countAtom, (c: number) => c + 1)}
+        >
+          Click me
+        </button>
+      </div>
+    );
+  });
 
 const container = document.getElementById("root") as HTMLElement;
 

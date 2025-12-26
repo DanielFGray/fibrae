@@ -9,16 +9,17 @@ import {
   HttpServerRequest,
   HttpServerResponse,
 } from "@effect/platform";
-import {
-  BunRuntime,
-  BunHttpServer,
-  BunFileSystem,
-  BunPath,
-} from "@effect/platform-bun";
+import { BunRuntime, BunHttpServer, BunFileSystem, BunPath } from "@effect/platform-bun";
 import { h } from "fibrae";
 import { renderToString, renderToStringWith, SSRAtomRegistryLayer } from "fibrae/server";
 import { Router } from "fibrae/router";
-import { CounterApp, TodoApp, SuspenseApp, SlowSuspenseApp, setInitialTodos } from "../src/ssr-app.js";
+import {
+  CounterApp,
+  TodoApp,
+  SuspenseApp,
+  SlowSuspenseApp,
+  setInitialTodos,
+} from "../src/ssr-app.js";
 import { SSRRouter, App, createSSRRouterHandlers } from "../src/ssr-router-app.js";
 
 // =============================================================================
@@ -52,7 +53,11 @@ class SaveTodosRequest extends Schema.Class<SaveTodosRequest>("SaveTodosRequest"
 // HTML Page Builders
 // =============================================================================
 
-const buildPage = (html: string, dehydratedState: unknown[], hydrationScript: string) => `<!DOCTYPE html>
+const buildPage = (
+  html: string,
+  dehydratedState: unknown[],
+  hydrationScript: string,
+) => `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -126,28 +131,26 @@ const ssrRouterHandler = (ssrPathname: string) =>
       search: "",
       basePath: "/ssr/router",
     });
-    
+
     const fullLayer = Layer.provideMerge(
       serverLayer,
-      Layer.merge(ssrRouterHandlersLayer, SSRAtomRegistryLayer)
+      Layer.merge(ssrRouterHandlersLayer, SSRAtomRegistryLayer),
     );
-    
+
     // RouterStateAtom is set by serverLayer and included in dehydratedState
     const { html, dehydratedState } = yield* Effect.gen(function* () {
       const { element } = yield* Router.CurrentRouteElement;
       const app = h(App, {}, [element]);
       return yield* renderToStringWith(app);
     }).pipe(Effect.provide(fullLayer));
-    
+
     // Use unified buildPage - RouterStateAtom is in dehydratedState
-    return HttpServerResponse.html(
-      buildPage(html, dehydratedState, "ssr-hydrate-router.tsx")
-    );
+    return HttpServerResponse.html(buildPage(html, dehydratedState, "ssr-hydrate-router.tsx"));
   }).pipe(
     Effect.catchAll((e) => {
       console.error("SSR Router error:", e);
       return HttpServerResponse.text(`SSR Error: ${e}`, { status: 500 });
-    })
+    }),
   );
 
 // =============================================================================
@@ -169,7 +172,7 @@ const todoResetHandler = Effect.gen(function* () {
   Effect.catchAll((e) => {
     console.error("Reset error:", e);
     return HttpServerResponse.json(new ApiResponse({ success: false, error: String(e) }));
-  })
+  }),
 );
 
 /**
@@ -186,9 +189,9 @@ const todoSaveHandler = Effect.gen(function* () {
     console.error("Save defect:", defect);
     return HttpServerResponse.json(new ApiResponse({ success: false, error: String(defect) }));
   }),
-  Effect.catchAll(() => 
-    HttpServerResponse.json(new ApiResponse({ success: false, error: "Failed to save" }))
-  )
+  Effect.catchAll(() =>
+    HttpServerResponse.json(new ApiResponse({ success: false, error: "Failed to save" })),
+  ),
 );
 
 // =============================================================================
@@ -211,11 +214,10 @@ const router = HttpRouter.empty.pipe(
   // SSR Router scenarios - match all /ssr/router/* paths
   HttpRouter.get("/ssr/router", ssrRouterHandler("/")),
   HttpRouter.get("/ssr/router/posts", ssrRouterHandler("/posts")),
-  HttpRouter.get("/ssr/router/posts/:id", 
-    HttpRouter.params.pipe(
-      Effect.flatMap(({ id }) => ssrRouterHandler(`/posts/${id}`))
-    )
-  )
+  HttpRouter.get(
+    "/ssr/router/posts/:id",
+    HttpRouter.params.pipe(Effect.flatMap(({ id }) => ssrRouterHandler(`/posts/${id}`))),
+  ),
 );
 
 // =============================================================================
@@ -225,13 +227,13 @@ const router = HttpRouter.empty.pipe(
 const app = router.pipe(
   HttpRouter.use(HttpMiddleware.logger),
   HttpServer.serve(),
-  HttpServer.withLogAddress
+  HttpServer.withLogAddress,
 );
 
 const ServerLive = Layer.mergeAll(
   BunHttpServer.layer({ port: SERVER_PORT }),
   BunFileSystem.layer,
-  BunPath.layer
+  BunPath.layer,
 );
 
 BunRuntime.runMain(Layer.launch(Layer.provide(app, ServerLive)), {

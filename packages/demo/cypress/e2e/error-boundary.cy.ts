@@ -11,10 +11,10 @@ describe("Error Boundaries", () => {
   it("shows fallback when event handler Effect fails", () => {
     // Initially the button should be visible (no error yet)
     cy.getCy("fail-event", { timeout: 5000 }).should("exist");
-    
+
     // Click the button that returns a failing Effect
     cy.getCy("fail-event").click();
-    
+
     // ErrorBoundary should catch and show fallback
     cy.getCy("fallback-event", { timeout: 5000 }).should("exist");
     cy.getCy("fallback-event").should("contain", "Event Error");
@@ -25,17 +25,13 @@ describe("Error Boundaries", () => {
     cy.getCy("error-container", { timeout: 5000 }).then(($el) => {
       cy.log("Error container HTML:", $el.html());
     });
-    
+
     // Stream emits once successfully first - should see "Stream OK once" before error
-    cy.getCy("stream-ok", { timeout: 5000 })
-      .should("exist")
-      .and("contain", "Stream OK once");
-    
+    cy.getCy("stream-ok", { timeout: 5000 }).should("exist").and("contain", "Stream OK once");
+
     // After 300ms delay, stream fails - ErrorBoundary should catch
-    cy.getCy("fallback-stream", { timeout: 5000 })
-      .should("exist")
-      .and("contain", "Stream Error");
-    
+    cy.getCy("fallback-stream", { timeout: 5000 }).should("exist").and("contain", "Stream Error");
+
     // The stream-ok should be gone once fallback appears
     cy.getCy("stream-ok").should("not.exist");
   });
@@ -51,12 +47,12 @@ describe("Error Boundaries", () => {
     // First, Suspense should show loading (component takes 200ms > 100ms threshold)
     cy.getCy("suspense-loading", { timeout: 5000 }).should("exist");
     cy.getCy("suspense-loading").should("contain", "Loading slow component");
-    
+
     // After ~200ms, component fails - ErrorBoundary should take over
     // Suspense loading should be GONE, replaced by ErrorBoundary fallback
     cy.getCy("fallback-suspense-error", { timeout: 5000 }).should("exist");
     cy.getCy("fallback-suspense-error").should("contain", "Suspense Error Precedence");
-    
+
     // Critically: Suspense loading should no longer be visible
     cy.getCy("suspense-loading").should("not.exist");
   });

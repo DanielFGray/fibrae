@@ -13,8 +13,7 @@ import type { VElement } from "./shared.js";
  * Helper to run an Effect in tests. Uses runPromise since tests expect
  * thrown errors to fail the test, which is the desired behavior.
  */
-const runTest = <A, E>(effect: Effect.Effect<A, E, never>): Promise<A> =>
-  Effect.runPromise(effect);
+const runTest = <A, E>(effect: Effect.Effect<A, E, never>): Promise<A> => Effect.runPromise(effect);
 
 // =============================================================================
 // Basic HTML Rendering
@@ -98,10 +97,14 @@ describe("renderToString", () => {
 
     test("renders data-key for keyed elements in a list", async () => {
       const items = ["a", "b", "c"];
-      const element = h("ul", {}, items.map(item => h("li", { key: item }, [item])));
+      const element = h(
+        "ul",
+        {},
+        items.map((item) => h("li", { key: item }, [item])),
+      );
       const result = await runTest(renderToString(element));
       expect(result.html).toBe(
-        '<ul><li data-key="a">a</li><li data-key="b">b</li><li data-key="c">c</li></ul>'
+        '<ul><li data-key="a">a</li><li data-key="b">b</li><li data-key="c">c</li></ul>',
       );
     });
 
@@ -116,9 +119,7 @@ describe("renderToString", () => {
     test("escapes text content", async () => {
       const element = h("p", {}, ["<script>alert('xss')</script>"]);
       const result = await runTest(renderToString(element));
-      expect(result.html).toBe(
-        "<p>&lt;script&gt;alert(&#039;xss&#039;)&lt;/script&gt;</p>"
-      );
+      expect(result.html).toBe("<p>&lt;script&gt;alert(&#039;xss&#039;)&lt;/script&gt;</p>");
     });
 
     test("escapes attribute values", async () => {
@@ -192,16 +193,14 @@ describe("components", () => {
   });
 
   test("renders Effect-returning components", async () => {
-    const AsyncComponent = () =>
-      Effect.succeed(h("p", {}, ["Loaded"]));
+    const AsyncComponent = () => Effect.succeed(h("p", {}, ["Loaded"]));
     const element = h(AsyncComponent, {}, []);
     const result = await runTest(renderToString(element));
     expect(result.html).toBe("<p>Loaded</p>");
   });
 
   test("renders Stream-returning components (first emission)", async () => {
-    const StreamComponent = () =>
-      Stream.make(h("p", {}, ["First"]), h("p", {}, ["Second"]));
+    const StreamComponent = () => Stream.make(h("p", {}, ["First"]), h("p", {}, ["Second"]));
     const element = h(StreamComponent, {}, []);
     const result = await runTest(renderToString(element));
     expect(result.html).toBe("<p>First</p>");
@@ -221,11 +220,9 @@ describe("components", () => {
 
 describe("ErrorBoundary", () => {
   test("renders children when no error", async () => {
-    const element = h(
-      "ERROR_BOUNDARY" as any,
-      { fallback: h("p", {}, ["Error!"]) },
-      [h("div", {}, ["Content"])]
-    );
+    const element = h("ERROR_BOUNDARY" as any, { fallback: h("p", {}, ["Error!"]) }, [
+      h("div", {}, ["Content"]),
+    ]);
     const result = await runTest(renderToString(element));
     expect(result.html).toBe("<div>Content</div>");
   });
@@ -234,11 +231,9 @@ describe("ErrorBoundary", () => {
     const Throwing = () => {
       throw new Error("Test error");
     };
-    const element = h(
-      "ERROR_BOUNDARY" as any,
-      { fallback: h("p", {}, ["Error caught!"]) },
-      [h(Throwing, {}, [])]
-    );
+    const element = h("ERROR_BOUNDARY" as any, { fallback: h("p", {}, ["Error caught!"]) }, [
+      h(Throwing, {}, []),
+    ]);
     const result = await runTest(renderToString(element));
     expect(result.html).toBe("<p>Error caught!</p>");
   });
@@ -256,7 +251,7 @@ describe("ErrorBoundary", () => {
           capturedError = cause;
         },
       },
-      [h(Throwing, {}, [])]
+      [h(Throwing, {}, [])],
     );
     await runTest(renderToString(element));
     expect(capturedError).toBeDefined();
@@ -269,11 +264,9 @@ describe("ErrorBoundary", () => {
 
 describe("Suspense", () => {
   test("renders children (not fallback) on server", async () => {
-    const element = h(
-      "SUSPENSE" as any,
-      { fallback: h("p", {}, ["Loading..."]) },
-      [h("div", {}, ["Content"])]
-    );
+    const element = h("SUSPENSE" as any, { fallback: h("p", {}, ["Loading..."]) }, [
+      h("div", {}, ["Content"]),
+    ]);
     const result = await runTest(renderToString(element));
     expect(result.html).toBe("<div>Content</div>");
   });
@@ -296,7 +289,7 @@ describe("state serialization", () => {
       Atom.serializable({
         key: "test-count",
         schema: Schema.Number,
-      })
+      }),
     );
 
     const Counter = () =>

@@ -40,21 +40,25 @@ Create a real E2E test for SSR → hydration flow using Effect HTTP server. Vite
 This is Phase 1 of a larger framework architecture:
 
 ### Phase 1: SSR E2E Test (Current)
+
 - Effect HTTP server serves SSR HTML
 - Vite proxies to Effect server
 - Validates core SSR/hydration APIs
 
 ### Phase 2: Vite Plugin (`vite-plugin-fibrae`)
+
 - Development experience: HMR, fast refresh
 - SSR middleware for dev mode
 - Build configuration for client + server bundles
 
 ### Phase 3: Router Integration
+
 - File-based routing or explicit routes
 - Route-level code splitting
 - Data loading (loader functions)
 
 ### Phase 4: Production HTTP Server Package
+
 - `@fibrae/server` or similar
 - Built on Effect HTTP platform
 - Serves static assets + SSR routes
@@ -66,15 +70,15 @@ This is Phase 1 of a larger framework architecture:
 
 ### Files to Create/Modify
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `packages/demo/server/ssr-server.ts` | Create | Effect HTTP server with SSR route |
-| `packages/demo/src/ssr-app.tsx` | Create | Shared component (server + client) |
-| `packages/demo/src/ssr-hydrate.tsx` | Create | Client hydration entry point |
-| `packages/demo/vite.config.ts` | Modify | Add proxy for `/ssr` → `:3001` |
-| `packages/demo/package.json` | Modify | Add `dev:ssr` script |
-| `packages/demo/cypress/e2e/ssr-hydration.cy.ts` | Create | E2E test |
-| `packages/fibrae/src/core.ts` | Modify | Add `initialState` option to `render()` |
+| File                                            | Action | Purpose                                 |
+| ----------------------------------------------- | ------ | --------------------------------------- |
+| `packages/demo/server/ssr-server.ts`            | Create | Effect HTTP server with SSR route       |
+| `packages/demo/src/ssr-app.tsx`                 | Create | Shared component (server + client)      |
+| `packages/demo/src/ssr-hydrate.tsx`             | Create | Client hydration entry point            |
+| `packages/demo/vite.config.ts`                  | Modify | Add proxy for `/ssr` → `:3001`          |
+| `packages/demo/package.json`                    | Modify | Add `dev:ssr` script                    |
+| `packages/demo/cypress/e2e/ssr-hydration.cy.ts` | Create | E2E test                                |
+| `packages/fibrae/src/core.ts`                   | Modify | Add `initialState` option to `render()` |
 
 ---
 
@@ -85,6 +89,7 @@ This is Phase 1 of a larger framework architecture:
 **File:** `packages/fibrae/src/core.ts`
 
 Modify `render()` to accept `options.initialState`:
+
 - If `initialState` is provided and container has children → hydration mode
 - Call `Hydration.hydrate(registry, initialState)` before hydrating DOM
 - This rehydrates atom values from SSR state
@@ -98,11 +103,12 @@ export interface RenderOptions {
 export function render(
   element: VElement,
   container: HTMLElement,
-  options?: RenderOptions
+  options?: RenderOptions,
 ): Effect.Effect<never, never, never>;
 ```
 
 **TDD approach:**
+
 1. Write test first: E2E test that passes initialState and verifies atoms have correct values
 2. Implement the feature
 3. Verify test passes
@@ -170,7 +176,7 @@ import { App } from "../src/ssr-app.js";
 // SSR route handler
 const ssrHandler = Effect.gen(function* () {
   const { html, dehydratedState } = yield* renderToString(h(App));
-  
+
   const page = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -189,20 +195,19 @@ const ssrHandler = Effect.gen(function* () {
 });
 
 // Router
-const router = HttpRouter.empty.pipe(
-  HttpRouter.get("/ssr", ssrHandler)
-);
+const router = HttpRouter.empty.pipe(HttpRouter.get("/ssr", ssrHandler));
 
 // Server
 const server = HttpServer.serve(router).pipe(
   HttpServer.withLogAddress,
-  Layer.provide(BunHttpServer.layer({ port: 3001 }))
+  Layer.provide(BunHttpServer.layer({ port: 3001 })),
 );
 
 BunRuntime.runMain(Layer.launch(server));
 ```
 
 **Key points:**
+
 - Serves on port 3001
 - GET `/ssr` returns full HTML page
 - Embeds `window.__FIBRAE_STATE__` with serialized atom state
@@ -228,21 +233,23 @@ declare global {
 }
 
 const container = document.getElementById("root") as HTMLElement;
-const initialState = window.__FIBRAE_STATE__ as ReadonlyArray<unknown> | undefined;
+const initialState = window.__FIBRAE_STATE__ as
+  | ReadonlyArray<unknown>
+  | undefined;
 
 Effect.gen(function* () {
   yield* Effect.fork(render(<App />, container, { initialState }));
-  
+
   // Give hydration a moment to complete
   yield* Effect.sleep("10 millis");
-  
+
   // Mark hydration complete for testing
   container.setAttribute("data-hydrated", "true");
-  
+
   return yield* Effect.never;
 }).pipe(
   Effect.catchAllDefect((e) => Effect.log(e)),
-  BrowserPlatform.BrowserRuntime.runMain
+  BrowserPlatform.BrowserRuntime.runMain,
 );
 ```
 
@@ -260,7 +267,7 @@ Add to the config:
 export default defineConfig({
   server: {
     proxy: {
-      '/ssr': 'http://localhost:3001',
+      "/ssr": "http://localhost:3001",
     },
   },
   // ... existing config
@@ -322,7 +329,7 @@ describe("SSR Hydration", () => {
   it("preserves server-rendered state during hydration", () => {
     // The count should be 0 (server-rendered value)
     cy.get("[data-cy='ssr-count']").should("contain", "0");
-    
+
     // After hydration, the atom should still have value 0
     cy.get("#root[data-hydrated='true']", { timeout: 5000 });
     cy.get("[data-cy='ssr-count']").should("contain", "0");

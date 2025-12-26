@@ -36,7 +36,7 @@ export interface RouterState {
 
 /**
  * Schema for RouterState - used for serialization.
- * 
+ *
  * Note: loaderData uses Schema.Unknown since the actual type
  * is inferred from the loader Effect return type.
  */
@@ -53,21 +53,19 @@ export const RouterStateSchema = Schema.Struct({
 
 /**
  * The router state atom - a serializable atom containing the full route state.
- * 
+ *
  * When None, no route is matched.
  * When Some, contains the matched route info and loader data.
- * 
+ *
  * This atom is automatically:
  * - Dehydrated during SSR (included in __FIBRAE_STATE__)
  * - Hydrated on client (restored from __FIBRAE_STATE__)
  */
-export const RouterStateAtom = Atom.make<Option.Option<RouterState>>(
-  Option.none()
-).pipe(
+export const RouterStateAtom = Atom.make<Option.Option<RouterState>>(Option.none()).pipe(
   Atom.serializable({
     key: "@fibrae/router/state",
     schema: Schema.Option(RouterStateSchema),
-  })
+  }),
 );
 
 // =============================================================================
@@ -76,7 +74,7 @@ export const RouterStateAtom = Atom.make<Option.Option<RouterState>>(
 
 /**
  * Service tag for accessing router state via Effect DI.
- * 
+ *
  * Usage in components:
  * ```typescript
  * const Component = () => Effect.gen(function* () {
@@ -95,12 +93,14 @@ export class RouterStateService extends Context.Tag("@fibrae/router/RouterStateS
      * Get the current router state.
      */
     readonly get: Effect.Effect<Option.Option<RouterState>, never, AtomRegistry.AtomRegistry>;
-    
+
     /**
      * Set the router state (used internally by Navigator).
      */
-    readonly set: (state: Option.Option<RouterState>) => Effect.Effect<void, never, AtomRegistry.AtomRegistry>;
-    
+    readonly set: (
+      state: Option.Option<RouterState>,
+    ) => Effect.Effect<void, never, AtomRegistry.AtomRegistry>;
+
     /**
      * The underlying atom (for reactive subscriptions).
      */

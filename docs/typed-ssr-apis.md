@@ -1,8 +1,9 @@
 Title: Typed SSR/Hydration APIs — What They Do and Where To Find Them
 Overview
+
 - Goal: Summarize @typed’s SSR and hydration primitives to inform Fibrae’s SSR design.
 - Key ideas: environment-driven rendering, streaming HTML, hydration markers, scheduling abstraction, and template/cache layering.
-Core Services
+  Core Services
 - RenderTemplate
   - What: Context service to render a tagged template into streamable render events (environment-pluggable).
   - Why: Decouples the act of rendering from DOM/HTML specifics; easy to switch between DOM, server, and static.
@@ -14,11 +15,8 @@ Core Services
     - templateCache: WeakMap per TemplateStringsArray
   - Why: Central hub that shapes behavior per environment and avoids repeated parsing.
   - Where: packages/typed/packages/template/src/RenderContext.ts:21
-  - Layers:
-    - dom(window): packages/typed/packages/template/src/RenderContext.ts:92
-    - server: packages/typed/packages/template/src/RenderContext.ts:110
-    - static: packages/typed/packages/template/src/RenderContext.ts:120
-Server/Static HTML Rendering
+  - Layers: - dom(window): packages/typed/packages/template/src/RenderContext.ts:92 - server: packages/typed/packages/template/src/RenderContext.ts:110 - static: packages/typed/packages/template/src/RenderContext.ts:120
+    Server/Static HTML Rendering
 - serverLayer and staticLayer
   - What: Compose RenderTemplate with server/static RenderContext and sync RenderQueue.
   - Why: One-liners to provide all server/static services for SSR or static HTML.
@@ -34,7 +32,7 @@ Server/Static HTML Rendering
     - Skips directives/events (not rendered to HTML)
   - Why: Core HTML emission logic for SSR, grounded in template parsing + part-based rendering.
   - Where: packages/typed/packages/template/src/Html.ts:80
-Hydration
+    Hydration
 - hydrate and hydrateToLayer
   - What: Client-side attachment that walks server-emitted markers to attach event handlers/effects without re-rendering nodes.
   - Why: Efficient, marker-guided hydration; supports nested templates and “many” lists.
@@ -47,7 +45,7 @@ Hydration
   - What: Locator and setup for hydrating each part/path; handles nested and sparse parts and lists.
   - Why: Robust mapping between server markers and client nodes.
   - Where: packages/typed/packages/template/src/internal/v2/render.ts:681 (setupHydrateParts and friends)
-Browser Rendering
+    Browser Rendering
 - renderLayer (browser)
   - What: Provides RenderTemplate bound to DOM via Document + RenderContext.dom(window).
   - Why: Single entry to set up browser runtime for rendering Fx into the root.
@@ -56,14 +54,12 @@ Browser Rendering
   - What: Attach render stream to a RootElement using the RenderContext’s render cache and DOM implementation.
   - Why: Entry points for interactive client rendering.
   - Where: packages/typed/packages/template/src/Render.ts:61 (render), packages/typed/packages/template/src/Render.ts:78 (renderToLayer)
-Scheduling
+    Scheduling
 - RenderQueue
   - What: Abstraction for scheduling render work; sync vs raf.
   - Why: Keeps scheduling environment-specific (e.g., sync on server/tests, raf on browser).
-  - Where:
-    - Tag/exports: packages/typed/packages/template/src/index.ts:58
-    - Used in layers: packages/typed/packages/template/src/Html.ts:42, packages/typed/packages/template/src/Html.ts:55
-Key Behaviors To Mirror
+  - Where: - Tag/exports: packages/typed/packages/template/src/index.ts:58 - Used in layers: packages/typed/packages/template/src/Html.ts:42, packages/typed/packages/template/src/Html.ts:55
+    Key Behaviors To Mirror
 - Environment-driven semantics
   - Server/static: one-shot emission for reactive sources; no long-lived subscriptions.
   - Dom: full reactivity with ongoing subscriptions.
@@ -77,7 +73,7 @@ Key Behaviors To Mirror
 - Template + root caches
   - Cache parsed templates and root attachments for performance and correctness across re-renders.
   - Where: packages/typed/packages/template/src/RenderContext.ts:30, packages/typed/packages/template/src/RenderContext.ts:35
-How This Informs Fibrae
+    How This Informs Fibrae
 - Introduce a FibraeRenderTemplate service and FibraeRenderContext with environment + caches.
 - Provide server/static layers that expose renderToHtml/renderToString.
 - Add hydrate(root, app) that locates server markers and attaches handlers without node recreation.

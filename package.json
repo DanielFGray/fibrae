@@ -1,8 +1,7 @@
 {
   "name": "fibrae",
-  "private": true,
   "version": "0.0.0",
-  "type": "module",
+  "private": true,
   "workspaces": {
     "packages": [
       "packages/*"
@@ -18,6 +17,7 @@
       "typescript": "^5.9.3"
     }
   },
+  "type": "module",
   "scripts": {
     "dev": "mprocs 'bun dev:demo' 'bun run test' 'bun build:watch'",
     "dev:demo": "bun --filter demo dev:server",

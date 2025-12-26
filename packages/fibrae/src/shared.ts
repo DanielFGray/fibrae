@@ -10,15 +10,42 @@ import { Atom as BaseAtom } from "@effect-atom/atom";
 /**
  * Primitive element types: HTML tags, text nodes, fragments, error boundary, or suspense
  */
-export type Primitive = keyof HTMLElementTagNameMap | "TEXT_ELEMENT" | "FRAGMENT" | "ERROR_BOUNDARY" | "SUSPENSE";
+export type Primitive =
+  | keyof HTMLElementTagNameMap
+  | "TEXT_ELEMENT"
+  | "FRAGMENT"
+  | "ERROR_BOUNDARY"
+  | "SUSPENSE";
+
+/**
+ * What can appear as children in JSX (recursive type)
+ * Includes primitives, VElements, and arrays thereof
+ */
+export type VChild =
+  | VElement
+  | string
+  | number
+  | bigint
+  | boolean
+  | null
+  | undefined
+  | VChild[];
+
+/**
+ * What components can return - VElement or wrapped in Effect/Stream
+ */
+export type VNode =
+  | VElement
+  | Effect.Effect<VElement, any, any>
+  | Stream.Stream<VElement, any, any>;
 
 /**
  * Element type can be a primitive or a component function
- * Components can return VElement, Effect, or Stream
+ * Components can return VNode (VElement, Effect<VElement>, or Stream<VElement>)
  */
 export type ElementType<Props = {}> =
   | Primitive
-  | ((props: Props) => VElement | Stream.Stream<VElement, any, any> | Effect.Effect<VElement, any, any>);
+  | ((props: Props) => VNode);
 
 /**
  * Virtual element representation - the core unit of the virtual DOM
@@ -38,7 +65,7 @@ export type FiberRef = { current: Fiber };
 
 /**
  * Suspense boundary configuration
- * 
+ *
  * Supports optimistic rendering: try children first, show fallback if they take
  * too long. Suspended fibers are "parked" to continue processing in background.
  */
@@ -107,20 +134,15 @@ export const isProperty = (key: string) =>
 /**
  * Check if an element type is a primitive (string) or component (function)
  */
-export const isPrimitive = (type: ElementType): type is Primitive =>
-  typeof type === "string";
+export const isPrimitive = (type: ElementType): type is Primitive => typeof type === "string";
 
 /**
  * Check if element type is a component function
  */
-export const isComponent = (type: ElementType) =>
-  typeof type === "function";
+export const isComponent = (type: ElementType) => typeof type === "function";
 
-export const isStream = (value: unknown): value is Stream.Stream<any, any, any> => (
-  typeof value === "object" &&
-  value !== null &&
-  Stream.StreamTypeId in value
-);
+export const isStream = (value: unknown): value is Stream.Stream<any, any, any> =>
+  typeof value === "object" && value !== null && Stream.StreamTypeId in value;
 
 // =============================================================================
 // Hydration Errors
@@ -128,12 +150,12 @@ export const isStream = (value: unknown): value is Stream.Stream<any, any, any> 
 
 /**
  * Error thrown when DOM structure doesn't match VElement tree during hydration.
- * 
+ *
  * This is a tagged error that can be caught via Effect.catchTag("HydrationMismatch", ...).
- * 
+ *
  * Structural mismatches (tag name, child count) indicate a bug where server and client
  * rendered different component trees.
- * 
+ *
  * @example
  * ```typescript
  * yield* render(<App />, container, { initialState }).pipe(

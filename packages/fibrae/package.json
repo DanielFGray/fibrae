@@ -2,38 +2,38 @@
   "name": "fibrae",
   "version": "0.1.0",
   "description": "Effect-first JSX renderer with automatic reactivity",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/DanielFGray/fibrae"
   },
-  "license": "MIT",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./jsx-runtime": {
-      "import": "./dist/jsx-runtime/index.js",
-      "types": "./dist/jsx-runtime/index.d.ts"
+      "types": "./dist/jsx-runtime/index.d.ts",
+      "import": "./dist/jsx-runtime/index.js"
     },
     "./jsx-dev-runtime": {
-      "import": "./dist/jsx-runtime/index.js",
-      "types": "./dist/jsx-runtime/index.d.ts"
+      "types": "./dist/jsx-runtime/index.d.ts",
+      "import": "./dist/jsx-runtime/index.js"
     },
     "./server": {
-      "import": "./dist/server.js",
-      "types": "./dist/server.d.ts"
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
     },
     "./shared": {
-      "import": "./dist/shared.js",
-      "types": "./dist/shared.d.ts"
+      "types": "./dist/shared.d.ts",
+      "import": "./dist/shared.js"
     }
   },
   "scripts": {
@@ -43,18 +43,18 @@
     "types:watch": "tsc -p . --noEmit --watch",
     "types:check": "tsc -p . --noEmit"
   },
-  "optionalDependencies": {
-    "@effect/platform-browser": "catalog:",
-    "@effect/platform-bun": "catalog:",
-    "@effect/platform-node": "catalog:"
+  "devDependencies": {
+    "@effect/language-service": "catalog:",
+    "typescript": "catalog:"
   },
   "peerDependencies": {
     "@effect-atom/atom": "catalog:",
     "effect": "catalog:"
   },
-  "devDependencies": {
-    "@effect/language-service": "catalog:",
-    "typescript": "catalog:"
+  "optionalDependencies": {
+    "@effect/platform-browser": "catalog:",
+    "@effect/platform-bun": "catalog:",
+    "@effect/platform-node": "catalog:"
   },
   "overrides": {
     "effect": "catalog:"

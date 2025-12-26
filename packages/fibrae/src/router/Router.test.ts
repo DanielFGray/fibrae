@@ -44,9 +44,7 @@ describe("Router module", () => {
     test("router.add is chainable", () => {
       const appGroup = Router.group("app").add(Route.get("home", "/"));
       const apiGroup = Router.group("api").add(Route.get("users", "/api/users"));
-      const router = Router.make("root")
-        .add(appGroup)
-        .add(apiGroup);
+      const router = Router.make("root").add(appGroup).add(apiGroup);
       expect(router.groups.length).toBe(2);
     });
   });
@@ -78,10 +76,7 @@ describe("Router module", () => {
       const home = Route.get("home", "/");
       const about = Route.get("about", "/about");
       const posts = Route.get("posts", "/posts");
-      const group = Router.group("app")
-        .add(home)
-        .add(about)
-        .add(posts);
+      const group = Router.group("app").add(home).add(about).add(posts);
       const router = Router.make("root").add(group);
 
       const match = router.matchRoute("/about");
@@ -108,9 +103,7 @@ describe("Router module", () => {
       const appGroup = Router.group("app").add(home);
       const users = Route.get("users", "/api/users");
       const apiGroup = Router.group("api").add(users);
-      const router = Router.make("root")
-        .add(appGroup)
-        .add(apiGroup);
+      const router = Router.make("root").add(appGroup).add(apiGroup);
 
       const match1 = router.matchRoute("/");
       expect(Option.isSome(match1)).toBe(true);

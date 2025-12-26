@@ -13,7 +13,6 @@ fix: |
     Effect.gen($GENERATOR);
 
 ---
-
 id: prefer-arrow-effect-gen
 language: TypeScript
 message: Use arrow functions for Effect.gen patterns instead of function declarations

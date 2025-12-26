@@ -4,7 +4,7 @@ message: Use cy.getCy(...) helper instead of cy.get('[data-cy="..."]')
 severity: error
 rule:
   pattern: cy.get($SELECTOR)
-  regex: 'data-cy='
+  regex: "data-cy="
 transform:
   NAME:
     replace:

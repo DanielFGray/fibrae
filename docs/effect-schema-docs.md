@@ -172,26 +172,26 @@
 ## Type Extraction
 
 ```typescript
-import * as S from "effect/Schema"
+import * as S from "effect/Schema";
 
 // Long form using Schema namespace
-type User = S.Schema.Type<typeof UserSchema>       // extract validated/output type
-type UserInput = S.Schema.Encoded<typeof UserSchema> // extract input/encoded type
-type UserDeps = S.Schema.Context<typeof UserSchema>  // extract required services
+type User = S.Schema.Type<typeof UserSchema>; // extract validated/output type
+type UserInput = S.Schema.Encoded<typeof UserSchema>; // extract input/encoded type
+type UserDeps = S.Schema.Context<typeof UserSchema>; // extract required services
 
 // Shorthand using schema instance properties
-type User = typeof UserSchema.Type
-type UserInput = typeof UserSchema.Encoded
-type UserDeps = typeof UserSchema.Context
+type User = typeof UserSchema.Type;
+type UserInput = typeof UserSchema.Encoded;
+type UserDeps = typeof UserSchema.Context;
 ```
 
 ## Parsing Options
 
 ```typescript
 S.decodeUnknown(schema, {
-  errors: "first" | "all",           // error reporting
-  onExcessProperty: "ignore" | "error" | "preserve"
-})(input)
+  errors: "first" | "all", // error reporting
+  onExcessProperty: "ignore" | "error" | "preserve",
+})(input);
 ```
 
 ## Common Anti-Patterns

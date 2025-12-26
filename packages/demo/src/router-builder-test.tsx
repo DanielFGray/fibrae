@@ -1,6 +1,6 @@
 /**
  * RouterBuilder test page.
- * 
+ *
  * Demonstrates:
  * - RouterBuilder.group for handler implementation
  * - Loaders receiving path/search params
@@ -38,9 +38,7 @@ const AppRouter = Router.make("AppRouter").add(AppRoutes);
 // =============================================================================
 
 // Home component
-function HomePage(props: {
-  loaderData: { message: string };
-}): VElement {
+function HomePage(props: { loaderData: { message: string } }): VElement {
   return (
     <div>
       <h2>Home Page</h2>
@@ -86,44 +84,36 @@ function PostPage(props: {
 // =============================================================================
 
 // Create handler layer
-const AppRoutesLive = RouterBuilder.group(
-  AppRouter,
-  "app",
-  (handlers) =>
-    Effect.succeed(
-      handlers
-        .handle("home", {
-          loader: () => Effect.succeed({ message: "Welcome Home" }),
-          component: (props) => <HomePage loaderData={props.loaderData} />,
-        })
-        .handle("posts", {
-          loader: ({ searchParams }) =>
-            Effect.succeed({
-              posts: [
-                { id: 1, title: "First Post" },
-                { id: 2, title: "Second Post" },
-                { id: 3, title: "Third Post" },
-              ],
-            }),
-          component: (props) => (
-            <PostsPage
-              loaderData={props.loaderData}
-              searchParams={props.searchParams}
-            />
-          ),
-        })
-        .handle("post", {
-          loader: ({ path }) =>
-            Effect.succeed({
-              id: path.id,
-              title: `Post ${path.id}`,
-              content: `Content for post ${path.id}`,
-            }),
-          component: (props) => (
-            <PostPage loaderData={props.loaderData} path={props.path} />
-          ),
-        })
-    )
+const AppRoutesLive = RouterBuilder.group(AppRouter, "app", (handlers) =>
+  Effect.succeed(
+    handlers
+      .handle("home", {
+        loader: () => Effect.succeed({ message: "Welcome Home" }),
+        component: (props) => <HomePage loaderData={props.loaderData} />,
+      })
+      .handle("posts", {
+        loader: ({ searchParams }) =>
+          Effect.succeed({
+            posts: [
+              { id: 1, title: "First Post" },
+              { id: 2, title: "Second Post" },
+              { id: 3, title: "Third Post" },
+            ],
+          }),
+        component: (props) => (
+          <PostsPage loaderData={props.loaderData} searchParams={props.searchParams} />
+        ),
+      })
+      .handle("post", {
+        loader: ({ path }) =>
+          Effect.succeed({
+            id: path.id,
+            title: `Post ${path.id}`,
+            content: `Content for post ${path.id}`,
+          }),
+        component: (props) => <PostPage loaderData={props.loaderData} path={props.path} />,
+      }),
+  ),
 );
 
 // =============================================================================
@@ -131,11 +121,7 @@ const AppRoutesLive = RouterBuilder.group(
 // =============================================================================
 
 Effect.gen(function* () {
-  const root = pipe(
-    document.getElementById("root"),
-    Option.fromNullable,
-    Option.getOrThrow
-  );
+  const root = pipe(document.getElementById("root"), Option.fromNullable, Option.getOrThrow);
 
   // Get the RouterHandlers service
   const routerHandlers = yield* RouterBuilder.RouterHandlers;
@@ -154,7 +140,7 @@ Effect.gen(function* () {
       <section id="home-test">
         <h2>Home Route Test</h2>
         {homeElement}
-      </section>
+      </section>,
     );
   }
 
@@ -169,7 +155,7 @@ Effect.gen(function* () {
       <section id="posts-test">
         <h2>Posts Route Test</h2>
         {postsElement}
-      </section>
+      </section>,
     );
   }
 
@@ -184,7 +170,7 @@ Effect.gen(function* () {
       <section id="post-test">
         <h2>Post Detail Test</h2>
         {postElement}
-      </section>
+      </section>,
     );
   }
 
@@ -201,5 +187,5 @@ Effect.gen(function* () {
 }).pipe(
   Effect.provide(AppRoutesLive),
   Effect.catchAllDefect((e) => Effect.log(e)),
-  BrowserPlatform.BrowserRuntime.runMain
+  BrowserPlatform.BrowserRuntime.runMain,
 );

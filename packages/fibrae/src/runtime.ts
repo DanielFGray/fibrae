@@ -38,21 +38,23 @@ export const makeFiberState = (): FiberState => ({
 // =============================================================================
 
 export const CustomAtomRegistryLayer = AtomRegistry.layerOptions({
-  scheduleTask: (f: () => void) => f()
+  scheduleTask: (f: () => void) => f(),
 });
 
 export class FibraeRuntime extends Effect.Service<FibraeRuntime>()("FibraeRuntime", {
   accessors: true,
   dependencies: [CustomAtomRegistryLayer],
-  scoped: Effect.gen(function*() {
+  scoped: Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;
     const rootScope = yield* Scope.make();
     const runFork = yield* FiberSet.makeRuntime<AtomRegistry.AtomRegistry>();
-    
+
     // Store the full context in a Ref so it can be updated after all layers are built
     // Initially empty - will be set by render() after user layers are applied
-    const fullContextRef = yield* Ref.make<Context.Context<unknown>>(Context.empty() as Context.Context<unknown>);
-    
+    const fullContextRef = yield* Ref.make<Context.Context<unknown>>(
+      Context.empty() as Context.Context<unknown>,
+    );
+
     // Each render tree gets its own fiber state
     const fiberState = yield* Ref.make(makeFiberState());
 
@@ -60,10 +62,20 @@ export class FibraeRuntime extends Effect.Service<FibraeRuntime>()("FibraeRuntim
       get: <A>(atom: Atom.Atom<A>): A => registry.get(atom),
       set: <R, W>(atom: Atom.Writable<R, W>, value: W): void => registry.set(atom, value),
       update: <R, W>(atom: Atom.Writable<R, W>, f: (_: R) => W): void => registry.update(atom, f),
-      modify: <R, W, A>(atom: Atom.Writable<R, W>, f: (_: R) => [returnValue: A, nextValue: W]): A => registry.modify(atom, f),
+      modify: <R, W, A>(
+        atom: Atom.Writable<R, W>,
+        f: (_: R) => [returnValue: A, nextValue: W],
+      ): A => registry.modify(atom, f),
     };
 
-    return { registry, rootScope, runFork, AtomOps, fiberState, fullContextRef };
+    return {
+      registry,
+      rootScope,
+      runFork,
+      AtomOps,
+      fiberState,
+      fullContextRef,
+    };
   }),
 }) {
   static Live = FibraeRuntime.Default;
@@ -78,17 +90,20 @@ export class FibraeRuntime extends Effect.Service<FibraeRuntime>()("FibraeRuntim
 
 /**
  * Fork an effect with the full application context.
- * 
+ *
  * The fullContextRef contains ALL services (FibraeRuntime, AtomRegistry, Navigator, etc.)
  * captured at render() time after all layers are built.
- * 
+ *
  * IMPORTANT: fullContextRef must be set by render() before this is called.
  */
-export const runForkWithRuntime = (runtime: FibraeRuntime) => 
+export const runForkWithRuntime =
+  (runtime: FibraeRuntime) =>
   <A, E>(effect: Effect.Effect<A, E, unknown>) => {
     const withContext = Effect.gen(function* () {
       const fullContext = yield* Ref.get(runtime.fullContextRef);
       return yield* Effect.provide(effect, fullContext as Context.Context<never>);
     });
-    return runtime.runFork(withContext as Effect.Effect<unknown, unknown, AtomRegistry.AtomRegistry>);
+    return runtime.runFork(
+      withContext as Effect.Effect<unknown, unknown, AtomRegistry.AtomRegistry>,
+    );
   };
