@@ -21,6 +21,7 @@ import { Registry as AtomRegistry } from "@effect-atom/atom";
 import { History, MemoryHistoryLive } from "./History.js";
 import { Navigator, NavigatorLive } from "./Navigator.js";
 import { RouterHandlers } from "./RouterBuilder.js";
+import { RouterStateAtom } from "./RouterState.js";
 import type { VElement } from "../shared.js";
 
 /**
@@ -132,7 +133,10 @@ export interface ServerLayerOptions {
 export interface BrowserLayerOptions {
   /** The router instance */
   readonly router: Router;
-  /** Dehydrated router state from SSR */
+  /** 
+   * @deprecated Use atom hydration instead. RouterStateAtom is automatically
+   * hydrated from __DIDACT_STATE__ and used by RouterOutlet.
+   */
   readonly initialState?: DehydratedRouterState;
   /** Base path prefix for the app (e.g., "/ssr/router") */
   readonly basePath?: string;
@@ -251,6 +255,7 @@ export function serverLayer(
     CurrentRouteElement,
     Effect.gen(function* () {
       const routerHandlers = yield* RouterHandlers;
+      const registry = yield* AtomRegistry.AtomRegistry;
       
       // Match route using stripped pathname
       const match = router.matchRoute(matchPathname);
@@ -283,6 +288,9 @@ export function serverLayer(
         loaderData,
       };
       
+      // Set RouterStateAtom so it gets included in dehydrated state
+      registry.set(RouterStateAtom, Option.some(state));
+      
       return { element, state };
     })
   );
@@ -299,25 +307,30 @@ export function serverLayer(
  * 
  * This layer:
  * 1. Sets up browser history with popstate listener
- * 2. If initialState provided, skips initial loader (uses SSR data)
- * 3. Provides Navigator for subsequent navigation
+ * 2. Checks RouterStateAtom for hydrated SSR state
+ * 3. If hydrated, uses that for initial render (skips loader)
+ * 4. Provides Navigator for subsequent navigation
+ * 
+ * SSR hydration works automatically via atom hydration - no need to 
+ * pass initialState manually. The RouterStateAtom is hydrated from
+ * __DIDACT_STATE__ before this layer is created.
  * 
  * Usage in client:
  * ```typescript
+ * // Hydrate atoms first (includes RouterStateAtom)
+ * hydrate(container, app, window.__DIDACT_STATE__);
+ * 
+ * // Browser layer reads from hydrated RouterStateAtom
  * const browserLayer = Router.browserLayer({
  *   router: AppRouter,
- *   initialState: window.__DIDACT_ROUTER__,
  *   basePath: "/ssr/router"
  * });
- * 
- * // Render will use initialState for first render,
- * // then Navigator for subsequent navigation
  * ```
  */
 export function browserLayer(
   options: BrowserLayerOptions
 ): Layer.Layer<History | Navigator | CurrentRouteElement, unknown, AtomRegistry.AtomRegistry | RouterHandlers> {
-  const { router, initialState, basePath = "" } = options;
+  const { router, basePath = "" } = options;
   
   // Import BrowserHistoryLive dynamically to avoid server-side issues
   // For now, we'll use a scoped effect to create it
@@ -406,28 +419,33 @@ export function browserLayer(
   
   const navigatorLayer = NavigatorLive(router, { basePath });
   
-  // If initialState provided, create element from it without running loader
-  // Otherwise, we need to match and run loader
+  // Create route element layer - checks RouterStateAtom for hydrated state
+  // If hydrated, uses that; otherwise matches and runs loader
   const routeElementLayer = Layer.effect(
     CurrentRouteElement,
     Effect.gen(function* () {
       const routerHandlers = yield* RouterHandlers;
+      const registry = yield* AtomRegistry.AtomRegistry;
       
-      if (initialState) {
-        // Hydration mode: reuse SSR data
-        const handler = routerHandlers.getHandler(initialState.routeName);
+      // Check if RouterStateAtom was hydrated from SSR
+      const hydratedState = registry.get(RouterStateAtom);
+      
+      if (Option.isSome(hydratedState)) {
+        // Hydration mode: reuse SSR data from RouterStateAtom
+        const state = hydratedState.value;
+        const handler = routerHandlers.getHandler(state.routeName);
         if (Option.isNone(handler)) {
-          return yield* Effect.fail(new Error(`No handler found for route: ${initialState.routeName}`));
+          return yield* Effect.fail(new Error(`No handler found for route: ${state.routeName}`));
         }
         
         // Render component with SSR loader data (skip loader)
         const element = handler.value.component({
-          loaderData: initialState.loaderData,
-          path: initialState.params,
-          searchParams: initialState.searchParams,
+          loaderData: state.loaderData,
+          path: state.params,
+          searchParams: state.searchParams,
         });
         
-        return { element, state: initialState };
+        return { element, state };
       }
       
       // Non-hydration mode: match and run loader
@@ -463,6 +481,9 @@ export function browserLayer(
         searchParams,
         loaderData,
       };
+      
+      // Set RouterStateAtom for DI access
+      registry.set(RouterStateAtom, Option.some(state));
       
       return { element, state };
     })

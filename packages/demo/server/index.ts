@@ -66,26 +66,6 @@ const buildPage = (html: string, dehydratedState: unknown[], hydrationScript: st
 </body>
 </html>`;
 
-const buildRouterPage = (
-  html: string, 
-  atomState: unknown[], 
-  routerState: unknown,
-  hydrationScript: string
-) => `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Didact SSR Router</title>
-</head>
-<body>
-<div id="root">${html}</div>
-<script>window.__DIDACT_STATE__ = ${JSON.stringify(atomState)};
-window.__DIDACT_ROUTER__ = ${JSON.stringify(routerState)};</script>
-<script type="module" src="${VITE_DEV_URL}/src/${hydrationScript}"></script>
-</body>
-</html>`;
-
 // =============================================================================
 // File System Operations
 // =============================================================================
@@ -152,15 +132,16 @@ const ssrRouterHandler = (ssrPathname: string) =>
       Layer.merge(ssrRouterHandlersLayer, SSRAtomRegistryLayer)
     );
     
-    const { html, atomState, state } = yield* Effect.gen(function* () {
-      const { element, state } = yield* Router.CurrentRouteElement;
+    // RouterStateAtom is set by serverLayer and included in dehydratedState
+    const { html, dehydratedState } = yield* Effect.gen(function* () {
+      const { element } = yield* Router.CurrentRouteElement;
       const app = h(App, {}, [element]);
-      const { html, dehydratedState: atomState } = yield* renderToStringWith(app);
-      return { html, atomState, state };
+      return yield* renderToStringWith(app);
     }).pipe(Effect.provide(fullLayer));
     
+    // Use unified buildPage - RouterStateAtom is in dehydratedState
     return HttpServerResponse.html(
-      buildRouterPage(html, atomState, state, "ssr-hydrate-router.tsx")
+      buildPage(html, dehydratedState, "ssr-hydrate-router.tsx")
     );
   }).pipe(
     Effect.catchAll((e) => {

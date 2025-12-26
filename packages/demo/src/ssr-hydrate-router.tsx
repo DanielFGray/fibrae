@@ -3,6 +3,9 @@
  * 
  * This file is loaded by the browser after SSR.
  * It hydrates the server-rendered content and enables client-side navigation.
+ * 
+ * The RouterStateAtom is automatically hydrated from __DIDACT_STATE__,
+ * so we don't need to pass router state separately.
  */
 
 import * as Effect from "effect/Effect";
@@ -10,7 +13,7 @@ import * as Layer from "effect/Layer";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { h, render } from "@didact/core";
 import { Hydration } from "@effect-atom/atom";
-import { Router, type DehydratedRouterState } from "@didact/core/router";
+import { Router } from "@didact/core/router";
 import {
   SSRRouter,
   App,
@@ -21,23 +24,20 @@ import {
 // Declare global for TypeScript
 declare global {
   interface Window {
-    __DIDACT_ROUTER__?: DehydratedRouterState;
     __DIDACT_STATE__?: ReadonlyArray<Hydration.DehydratedAtom>;
   }
 }
 
-// Get initial state from SSR
-const initialRouterState = window.__DIDACT_ROUTER__;
-const initialAtomState = window.__DIDACT_STATE__;
+// Get initial atom state from SSR (includes router state via RouterStateAtom)
+const initialState = window.__DIDACT_STATE__;
 
 // Create handler layer (client-side loaders)
 const handlersLayer = createSSRRouterHandlers(false);
 
-// Create browser layer with initial state (skips initial loader)
+// Create browser layer - reads from hydrated RouterStateAtom
 // basePath matches the server mount point (/ssr/router)
 const browserLayer = Router.browserLayer({
   router: SSRRouter,
-  initialState: initialRouterState,
   basePath: "/ssr/router",
 });
 
@@ -56,24 +56,21 @@ const routerLayer = Layer.provideMerge(
 
 // Run hydration
 Effect.gen(function* () {
-  // Create RouterOutlet with initial SSR data to skip first loader
-  const outlet = h(RouterOutlet, {
-    initialLoaderData: initialRouterState?.loaderData,
-    initialRouteName: initialRouterState?.routeName,
-  });
+  // Create RouterOutlet - it will read from hydrated RouterStateAtom
+  const outlet = h(RouterOutlet, {});
   
   // Wrap in App shell
   const app = h(App, {}, [outlet]);
   
   // Render (hydrate) the app with router layer
   // render() automatically provides DidactRuntime + AtomRegistry
-  // We pass routerLayer which needs AtomRegistry (provided by render)
+  // The initialState includes RouterStateAtom which RouterOutlet uses
   yield* render(app, container, {
     layer: routerLayer,
-    initialState: initialAtomState,
+    initialState,
   });
   
-  yield* Effect.log(`Hydrated with initial route: ${initialRouterState?.routeName}`);
+  yield* Effect.log("Hydrated SSR router app");
   
   return yield* Effect.never;
 }).pipe(

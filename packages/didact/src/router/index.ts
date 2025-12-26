@@ -23,6 +23,9 @@ export * as History from "./History.js";
 // Navigator service
 export * as Navigator from "./Navigator.js";
 
+// Router state (unified serializable state)
+export * as RouterState from "./RouterState.js";
+
 // Re-export types
 export type {
   LoaderContext,
@@ -58,3 +61,14 @@ export type {
   SSRRouteResult,
 } from "./Router.js";
 export { CurrentRouteElement } from "./Router.js";
+
+// Re-export RouterState utilities for convenience
+// (RouterState type is accessible via RouterState.RouterState namespace)
+export {
+  RouterStateAtom,
+  RouterStateService,
+  RouterStateSchema,
+  getRouterState,
+  getLoaderData,
+  getRouteParams,
+} from "./RouterState.js";
