@@ -1,5 +1,5 @@
-import { h as H, render } from "lumon";
-import { Route } from "lumon";
+import { h as H, render } from "fibrae";
+import { Route } from "fibrae";
 import * as Schema from "effect/Schema";
 
 export function RouterRouteDemo() {

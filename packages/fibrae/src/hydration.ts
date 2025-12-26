@@ -10,7 +10,7 @@ import * as FiberRef from "effect/FiberRef";
 
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import { type VElement, type ElementType, type Primitive, HydrationMismatch } from "./shared.js";
-import { LumonRuntime, runForkWithRuntime } from "./runtime.js";
+import { FibraeRuntime, runForkWithRuntime } from "./runtime.js";
 import { attachEventListeners } from "./dom.js";
 import { normalizeToStream, makeTrackingRegistry, subscribeToAtoms } from "./tracking.js";
 import { clearContentScope, registerNodeCleanup } from "./scope-utils.js";
@@ -62,7 +62,7 @@ const buildPath = (ancestors: Array<{ tag: string; index: number }>): string => 
  * 
  * @param vElement - Virtual element to hydrate
  * @param domNode - Existing DOM node to hydrate against
- * @param runtime - Lumon runtime instance
+ * @param runtime - Fibrae runtime instance
  * @param parentScope - Optional scope for registering cleanup
  * @param path - Ancestor path for error messages
  * @returns Option containing the next sibling node after what was consumed
@@ -70,7 +70,7 @@ const buildPath = (ancestors: Array<{ tag: string; index: number }>): string => 
 export const hydrateVElementToDOM = (
   vElement: VElement,
   domNode: Node,
-  runtime: LumonRuntime,
+  runtime: FibraeRuntime,
   parentScope?: Scope.Scope.Closeable,
   path: Array<{ tag: string; index: number }> = []
 ): Effect.Effect<Option.Option<Node>, HydrationMismatch, never> =>
@@ -216,10 +216,10 @@ export const hydrateVElementToDOM = (
         }));
       }
       // DOM text content wins - we don't update it
-      // Skip past any text boundary marker (<!--lumon:$-->) after text nodes
+      // Skip past any text boundary marker (<!--fibrae:$-->) after text nodes
       let nextSibling = domNode.nextSibling;
       if (nextSibling?.nodeType === Node.COMMENT_NODE &&
-        (nextSibling as Comment).data === "lumon:$") {
+        (nextSibling as Comment).data === "fibrae:$") {
         nextSibling = nextSibling.nextSibling;
       }
       return Option.fromNullable(nextSibling);
@@ -294,14 +294,14 @@ export const hydrateVElementToDOM = (
 
     } else if (type === "SUSPENSE") {
       // Suspense during hydration: domNode should be the opening comment marker
-      // Phase 4: Handle <!--lumon:sus:resolved--> ... <!--/lumon:sus-->
-      // Phase 5: Will handle <!--lumon:sus:fallback--> case
+      // Phase 4: Handle <!--fibrae:sus:resolved--> ... <!--/fibrae:sus-->
+      // Phase 5: Will handle <!--fibrae:sus:fallback--> case
 
       const children = vElement.props.children as VElement[];
 
       // Check if we're at an opening marker
       if (domNode.nodeType === Node.COMMENT_NODE &&
-        (domNode as Comment).data.includes("lumon:sus:resolved")) {
+        (domNode as Comment).data.includes("fibrae:sus:resolved")) {
 
         // Use Effect.iterate to hydrate children, walking from first content node
         // until we hit the closing marker
@@ -315,7 +315,7 @@ export const hydrateVElementToDOM = (
                 onSome: (node) => {
                   // Stop if we hit closing marker
                   if (node.nodeType === Node.COMMENT_NODE &&
-                    (node as Comment).data.includes("/lumon:sus")) {
+                    (node as Comment).data.includes("/fibrae:sus")) {
                     return false;
                   }
                   return true;
@@ -343,7 +343,7 @@ export const hydrateVElementToDOM = (
           onNone: () => Option.none<Node>(),
           onSome: (maybeClosingMarker) => {
             if (maybeClosingMarker.nodeType === Node.COMMENT_NODE &&
-              (maybeClosingMarker as Comment).data.includes("/lumon:sus")) {
+              (maybeClosingMarker as Comment).data.includes("/fibrae:sus")) {
               return Option.fromNullable(maybeClosingMarker.nextSibling);
             }
             return Option.some(maybeClosingMarker);
@@ -351,7 +351,7 @@ export const hydrateVElementToDOM = (
         });
 
       } else if (domNode.nodeType === Node.COMMENT_NODE &&
-        (domNode as Comment).data.includes("lumon:sus:fallback")) {
+        (domNode as Comment).data.includes("fibrae:sus:fallback")) {
         // Phase 5: SSR rendered fallback - we need to switch to render mode
         // The actual content was never rendered on server, so we need to:
         // 1. Find all nodes in the fallback boundary
@@ -380,7 +380,7 @@ export const hydrateVElementToDOM = (
             body: (state) => Effect.sync(() => {
               const current = Option.getOrThrow(state.cursor);
               const isClosingMarker = current.nodeType === Node.COMMENT_NODE &&
-                (current as Comment).data.includes("/lumon:sus");
+                (current as Comment).data.includes("/fibrae:sus");
               return {
                 nodes: [...state.nodes, current],
                 cursor: Option.fromNullable(current.nextSibling),
@@ -432,7 +432,7 @@ export const hydrateVElementToDOM = (
       } else {
         // No Suspense markers found - this means SSR output doesn't match expected format
         return yield* Effect.fail(new HydrationMismatch({
-          expected: "Suspense comment marker (<!--lumon:sus:resolved--> or <!--lumon:sus:fallback-->)",
+          expected: "Suspense comment marker (<!--fibrae:sus:resolved--> or <!--fibrae:sus:fallback-->)",
           actual: domNode.nodeType === Node.COMMENT_NODE
             ? `comment: ${(domNode as Comment).data}`
             : domNode.nodeName,

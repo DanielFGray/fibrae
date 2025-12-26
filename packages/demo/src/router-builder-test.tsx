@@ -14,9 +14,9 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
-import { render } from "lumon";
-import { Route, Router, RouterBuilder } from "lumon";
-import type { VElement } from "lumon";
+import { render } from "fibrae";
+import { Route, Router, RouterBuilder } from "fibrae";
+import type { VElement } from "fibrae";
 
 // =============================================================================
 // Route Definitions

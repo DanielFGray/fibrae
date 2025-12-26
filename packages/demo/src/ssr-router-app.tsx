@@ -7,8 +7,8 @@
  */
 
 import * as Schema from "effect/Schema";
-import type { VElement } from "lumon";
-import { Route, Router, RouterBuilder, createLink, RouterOutlet } from "lumon";
+import type { VElement } from "fibrae";
+import { Route, Router, RouterBuilder, createLink, RouterOutlet } from "fibrae";
 
 // =============================================================================
 // Route Definitions

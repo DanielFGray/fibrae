@@ -8,7 +8,7 @@ import * as Logger from "effect/Logger";
 import * as LogLevel from "effect/LogLevel";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
-import { render, Atom, AtomRegistry, Suspense, ErrorBoundary, type VNode } from "lumon";
+import { render, Atom, AtomRegistry, Suspense, ErrorBoundary, type VNode } from "fibrae";
 
 // Module-scope atoms/families
 const counterAtom = Atom.family((label: string) => Atom.make(0));

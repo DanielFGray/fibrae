@@ -1,5 +1,5 @@
-/** @jsxImportSource lumon */
-import { h } from "lumon";
+/** @jsxImportSource fibrae */
+import { h } from "fibrae";
 
 /**
  * SSR-compatible versions of demo components.
@@ -44,7 +44,7 @@ export const TodoList = () => {
 export const StaticHeader = () => (
   <div style="max-width: 800px; margin: 2rem auto; font-family: system-ui;">
     <h1 data-cy="app-title" style="text-align: center;">
-      🚀 Lumon Effect Demo (SSR)
+      🚀 Fibrae Effect Demo (SSR)
     </h1>
     <p data-cy="app-subtitle" style="text-align: center; color: #666;">
       Server-rendered Effect-first reactive JSX

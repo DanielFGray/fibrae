@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 import { BunRuntime } from "@effect/platform-bun";
-import { h } from "lumon";
-import { renderToString } from "lumon/server";
+import { h } from "fibrae";
+import { renderToString } from "fibrae/server";
 import { App } from "./components-ssr.js";
 
 const program = Effect.gen(function* () {
@@ -13,7 +13,7 @@ const program = Effect.gen(function* () {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Lumon SSR Demo</title>
+  <title>Fibrae SSR Demo</title>
 </head>
 <body>
   <div id="root">${body}</div>

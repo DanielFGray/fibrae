@@ -135,7 +135,7 @@ export interface BrowserLayerOptions {
   readonly router: Router;
   /** 
    * @deprecated Use atom hydration instead. RouterStateAtom is automatically
-   * hydrated from __LUMON_STATE__ and used by RouterOutlet.
+   * hydrated from __FIBRAE_STATE__ and used by RouterOutlet.
    */
   readonly initialState?: DehydratedRouterState;
   /** Base path prefix for the app (e.g., "/ssr/router") */
@@ -171,7 +171,7 @@ export interface SSRRouteResult {
  * Service tag for the current route's rendered element.
  * Used by SSR to provide the matched route's component.
  */
-export class CurrentRouteElement extends Context.Tag("lumon/CurrentRouteElement")<
+export class CurrentRouteElement extends Context.Tag("fibrae/CurrentRouteElement")<
   CurrentRouteElement,
   { readonly element: VElement; readonly state: DehydratedRouterState }
 >() {}
@@ -314,12 +314,12 @@ export function serverLayer(
  * 
  * SSR hydration works automatically via atom hydration - no need to 
  * pass initialState manually. The RouterStateAtom is hydrated from
- * __LUMON_STATE__ before this layer is created.
+ * __FIBRAE_STATE__ before this layer is created.
  * 
  * Usage in client:
  * ```typescript
  * // Hydrate atoms first (includes RouterStateAtom)
- * hydrate(container, app, window.__LUMON_STATE__);
+ * hydrate(container, app, window.__FIBRAE_STATE__);
  * 
  * // Browser layer reads from hydrated RouterStateAtom
  * const browserLayer = Router.browserLayer({

@@ -9,7 +9,7 @@
     "types": [
       "vite/client",
       "cypress",
-      "lumon/jsx-runtime",
+      "fibrae/jsx-runtime",
       "node"
     ]
   },

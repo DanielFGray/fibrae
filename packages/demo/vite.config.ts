@@ -17,7 +17,7 @@ export default defineConfig({
     jsxDev: false,
     jsxFactory: 'jsx',
     jsxFragment: 'Fragment',
-    jsxInject: `import { jsx, Fragment } from 'lumon/jsx-runtime'`,
+    jsxInject: `import { jsx, Fragment } from 'fibrae/jsx-runtime'`,
   },
   optimizeDeps: {
     exclude: [

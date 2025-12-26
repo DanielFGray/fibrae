@@ -7,7 +7,7 @@ import * as Option from "effect/Option";
 import * as Logger from "effect/Logger";
 import * as LogLevel from "effect/LogLevel";
 import { pipe } from "effect/Function";
-import { render, ErrorBoundary } from "lumon";
+import { render, ErrorBoundary } from "fibrae";
 
 // Stream that fails immediately before emitting anything
 const StreamFailerImmediate = () => {

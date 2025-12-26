@@ -1,4 +1,4 @@
-# lumon
+# fibrae
 
 Effect-first JSX renderer with automatic reactivity and type-safe routing.
 
@@ -12,12 +12,12 @@ Effect-first JSX renderer with automatic reactivity and type-safe routing.
 ## Installation
 
 ```bash
-npm install lumon @effect-atom/atom effect
+npm install fibrae @effect-atom/atom effect
 ```
 
 ```json
 // tsconfig.json
-{ "compilerOptions": { "jsx": "react-jsx", "jsxImportSource": "lumon" } }
+{ "compilerOptions": { "jsx": "react-jsx", "jsxImportSource": "fibrae" } }
 ```
 
 ## Complete Example
@@ -32,7 +32,7 @@ import {
   render, Atom, AtomRegistry, Route, Router, RouterBuilder,
   createLink, RouterOutlet, Navigator, Suspense, ErrorBoundary,
   BrowserHistoryLive, NavigatorLive
-} from "lumon";
+} from "fibrae";
 
 // --- State ---
 const countAtom = Atom.make(0);
@@ -164,9 +164,9 @@ Components return `VElement`, `Effect<VElement>`, or `Stream<VElement>`.
 
 ```tsx
 // Server
-import { Router } from "lumon/server";
+import { Router } from "fibrae/server";
 const { html, dehydratedState } = yield* Router.renderToString(<App />, { layer });
 
 // Client
-render(<App />, root, { layer, initialState: window.__LUMON_STATE__ });
+render(<App />, root, { layer, initialState: window.__FIBRAE_STATE__ });
 ```

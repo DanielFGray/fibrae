@@ -96,7 +96,7 @@ export interface NavigatorService {
 /**
  * Navigator service tag for Effect dependency injection.
  */
-export class Navigator extends Context.Tag("lumon/Navigator")<
+export class Navigator extends Context.Tag("fibrae/Navigator")<
   Navigator,
   NavigatorService
 >() {}

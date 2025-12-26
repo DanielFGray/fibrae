@@ -1,5 +1,5 @@
 /**
- * Server-side rendering for Lumon
+ * Server-side rendering for Fibrae
  * 
  * Renders VElement trees to HTML strings for SSR.
  * Integrates with @effect-atom/atom's Hydration module for state serialization.
@@ -265,11 +265,11 @@ const renderVElementToString = (
       
       if (result.type === "resolved") {
         // Children completed before timeout - render with resolved marker
-        return `<!--lumon:sus:resolved-->${result.html}<!--/lumon:sus-->`;
+        return `<!--fibrae:sus:resolved-->${result.html}<!--/fibrae:sus-->`;
       } else {
         // Timeout fired first - render fallback with fallback marker
         const fallbackHtml = yield* renderVElementToString(fallback);
-        return `<!--lumon:sus:fallback-->${fallbackHtml}<!--/lumon:sus-->`;
+        return `<!--fibrae:sus:fallback-->${fallbackHtml}<!--/fibrae:sus-->`;
       }
 
     } else if (isHostElement(type)) {
@@ -293,7 +293,7 @@ const renderVElementToString = (
         const isText = child.type === "TEXT_ELEMENT";
         // Insert marker between adjacent text nodes to preserve boundaries
         if (prevWasText && isText) {
-          childrenHtml += "<!--lumon:$-->";
+          childrenHtml += "<!--fibrae:$-->";
         }
         childrenHtml += yield* renderVElementToString(child);
         prevWasText = isText;
@@ -325,7 +325,7 @@ const renderVElementToString = (
  * 
  * @example
  * ```typescript
- * import { renderToString } from "lumon/server";
+ * import { renderToString } from "fibrae/server";
  * 
  * const program = Effect.gen(function* () {
  *   const { html, dehydratedState } = yield* renderToString(<App />);
@@ -372,7 +372,7 @@ export const renderToString = (
  * 
  * @example
  * ```typescript
- * import { renderToStringWith, SSRAtomRegistryLayer } from "lumon/server";
+ * import { renderToStringWith, SSRAtomRegistryLayer } from "fibrae/server";
  * 
  * const program = Effect.gen(function* () {
  *   const { html, dehydratedState } = yield* renderToStringWith(<App />);

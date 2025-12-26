@@ -1,5 +1,5 @@
 /**
- * Lumon Demo App with Router
+ * Fibrae Demo App with Router
  *
  * A real app showcasing:
  * - Link component with active states
@@ -14,7 +14,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
-import { render, Atom, AtomRegistry } from "lumon";
+import { render, Atom, AtomRegistry } from "fibrae";
 import {
   Route,
   Router,
@@ -24,7 +24,7 @@ import {
   NavigatorTag,
   NavigatorLive,
   createLink,
-} from "lumon";
+} from "fibrae";
 
 // =============================================================================
 // Route Definitions
@@ -60,7 +60,7 @@ const todoCompletedAtom = Atom.family((id: number) => Atom.make(false));
 
 // Mock posts data
 const posts = [
-  { id: 1, title: "Getting Started with Lumon", excerpt: "Learn the basics of Effect-first rendering" },
+  { id: 1, title: "Getting Started with Fibrae", excerpt: "Learn the basics of Effect-first rendering" },
   { id: 2, title: "Understanding Atoms", excerpt: "Reactive state management with fine-grained updates" },
   { id: 3, title: "Building with Streams", excerpt: "Progressive rendering and async data" },
 ];
@@ -72,7 +72,7 @@ const posts = [
 const HomePage = () => (
   <div class="page">
     <h1 data-cy="page-title">Home</h1>
-    <p>Welcome to the Lumon demo app!</p>
+    <p>Welcome to the Fibrae demo app!</p>
     <p>This demonstrates Effect-first JSX rendering with:</p>
     <ul>
       <li>Reactive state with Atoms</li>

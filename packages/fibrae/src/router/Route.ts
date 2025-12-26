@@ -1,5 +1,5 @@
 /**
- * Route declaration module for Lumon router.
+ * Route declaration module for Fibrae router.
  * 
  * Mirrors Effect HttpApiEndpoint patterns:
  * - Route.get("name", "/path") for static routes
@@ -16,7 +16,7 @@ import * as Option from "effect/Option";
  * Mirrors HttpApiSchema.AnnotationParam pattern.
  */
 export const AnnotationParam: unique symbol = Symbol.for(
-  "lumon/Route/AnnotationParam"
+  "fibrae/Route/AnnotationParam"
 );
 
 /**

@@ -1,4 +1,4 @@
-# Configure JSX for Lumon runtime
-# This tells Bun to use lumon/jsx-runtime for JSX transformation
+# Configure JSX for Fibrae runtime
+# This tells Bun to use fibrae/jsx-runtime for JSX transformation
 jsx = "react-jsx"
-jsxImportSource = "lumon"
+jsxImportSource = "fibrae"

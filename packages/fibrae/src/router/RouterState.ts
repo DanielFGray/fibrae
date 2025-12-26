@@ -58,14 +58,14 @@ export const RouterStateSchema = Schema.Struct({
  * When Some, contains the matched route info and loader data.
  * 
  * This atom is automatically:
- * - Dehydrated during SSR (included in __LUMON_STATE__)
- * - Hydrated on client (restored from __LUMON_STATE__)
+ * - Dehydrated during SSR (included in __FIBRAE_STATE__)
+ * - Hydrated on client (restored from __FIBRAE_STATE__)
  */
 export const RouterStateAtom = Atom.make<Option.Option<RouterState>>(
   Option.none()
 ).pipe(
   Atom.serializable({
-    key: "@lumon/router/state",
+    key: "@fibrae/router/state",
     schema: Schema.Option(RouterStateSchema),
   })
 );
@@ -88,7 +88,7 @@ export const RouterStateAtom = Atom.make<Option.Option<RouterState>>(
  * });
  * ```
  */
-export class RouterStateService extends Context.Tag("@lumon/router/RouterStateService")<
+export class RouterStateService extends Context.Tag("@fibrae/router/RouterStateService")<
   RouterStateService,
   {
     /**

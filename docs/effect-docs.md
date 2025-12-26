@@ -1,4 +1,4 @@
-# Effect Idioms & APIs for lumon
+# Effect Idioms & APIs for fibrae
 
 **Core principle**: Effect has built-in APIs for common patterns. Use them instead of manual implementations.
 

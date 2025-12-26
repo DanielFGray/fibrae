@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { LumonRuntime, runForkWithRuntime } from "./runtime.js";
+import { FibraeRuntime, runForkWithRuntime } from "./runtime.js";
 
 // =============================================================================
 // DOM Property Handling
@@ -56,7 +56,7 @@ export const setDomProperty = (el: HTMLElement, name: string, value: unknown): v
 export const attachEventListeners = (
   el: HTMLElement,
   props: Record<string, unknown>,
-  runtime: LumonRuntime
+  runtime: FibraeRuntime
 ): void => {
   for (const [key, handler] of Object.entries(props)) {
     if (isEvent(key) && typeof handler === "function") {

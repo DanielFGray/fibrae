@@ -41,7 +41,7 @@ export const CustomAtomRegistryLayer = AtomRegistry.layerOptions({
   scheduleTask: (f: () => void) => f()
 });
 
-export class LumonRuntime extends Effect.Service<LumonRuntime>()("LumonRuntime", {
+export class FibraeRuntime extends Effect.Service<FibraeRuntime>()("FibraeRuntime", {
   accessors: true,
   dependencies: [CustomAtomRegistryLayer],
   scoped: Effect.gen(function*() {
@@ -66,25 +66,25 @@ export class LumonRuntime extends Effect.Service<LumonRuntime>()("LumonRuntime",
     return { registry, rootScope, runFork, AtomOps, fiberState, fullContextRef };
   }),
 }) {
-  static Live = LumonRuntime.Default;
+  static Live = FibraeRuntime.Default;
 
   /**
-   * Layer that provides both LumonRuntime AND AtomRegistry.
+   * Layer that provides both FibraeRuntime AND AtomRegistry.
    * Use this when composing with user layers that need AtomRegistry access.
-   * (LumonRuntime.Default consumes AtomRegistry internally but doesn't re-export it)
+   * (FibraeRuntime.Default consumes AtomRegistry internally but doesn't re-export it)
    */
-  static LiveWithRegistry = Layer.merge(LumonRuntime.Default, CustomAtomRegistryLayer);
+  static LiveWithRegistry = Layer.merge(FibraeRuntime.Default, CustomAtomRegistryLayer);
 }
 
 /**
  * Fork an effect with the full application context.
  * 
- * The fullContextRef contains ALL services (LumonRuntime, AtomRegistry, Navigator, etc.)
+ * The fullContextRef contains ALL services (FibraeRuntime, AtomRegistry, Navigator, etc.)
  * captured at render() time after all layers are built.
  * 
  * IMPORTANT: fullContextRef must be set by render() before this is called.
  */
-export const runForkWithRuntime = (runtime: LumonRuntime) => 
+export const runForkWithRuntime = (runtime: FibraeRuntime) => 
   <A, E>(effect: Effect.Effect<A, E, unknown>) => {
     const withContext = Effect.gen(function* () {
       const fullContext = yield* Ref.get(runtime.fullContextRef);

@@ -12,7 +12,7 @@ import * as FiberRef from "effect/FiberRef";
 
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import { type VElement, type ElementType, type Primitive } from "./shared.js";
-import { LumonRuntime, runForkWithRuntime } from "./runtime.js";
+import { FibraeRuntime, runForkWithRuntime } from "./runtime.js";
 import { setDomProperty, attachEventListeners, isProperty } from "./dom.js";
 import { normalizeToStream, makeTrackingRegistry, subscribeToAtoms } from "./tracking.js";
 import { clearContentScope, registerNodeCleanup } from "./scope-utils.js";
@@ -50,13 +50,13 @@ const isHostElement = (type: ElementType): type is Primitive =>
  * 
  * @param vElement - Virtual element to render
  * @param parent - Parent DOM node to append to
- * @param runtime - Lumon runtime instance
+ * @param runtime - Fibrae runtime instance
  * @param parentScope - Optional scope for registering cleanup (used for proper DOM node removal)
  */
 export const renderVElementToDOM = (
   vElement: VElement,
   parent: Node,
-  runtime: LumonRuntime,
+  runtime: FibraeRuntime,
   parentScope?: Scope.Scope.Closeable
 ): Effect.Effect<void, unknown, never> =>
   Effect.gen(function*() {

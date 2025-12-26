@@ -1,5 +1,5 @@
 
-# Agent Guidelines for lumon
+# Agent Guidelines for fibrae
 
 ## Project Goal
 Building an Effect-first JSX renderer where components are Effect programs with automatic reactivity. Not React - uses Effect.ts primitives directly.
@@ -8,31 +8,31 @@ Building an Effect-first JSX renderer where components are Effect programs with 
 [Effect](https://effect.website/) is a TypeScript library for building typed, composable, testable programs. Think structured concurrency + dependency injection + resource management.
 
 **Additional API documentation:**
-  - `./docs/effect-docs.md` - Effect.ts APIs relevant to lumon (FiberSet, Queue, Scope, etc.)
+  - `./docs/effect-docs.md` - Effect.ts APIs relevant to fibrae (FiberSet, Queue, Scope, etc.)
   - `./docs/effect-atom-core.md` - Complete Atom/AtomRegistry/AtomRuntime API reference
 
 **Key concepts:**
   - Use `Atom` for reactive state
   - Only changed components re-render (fine-grained updates)
   - Event handlers can return Effects (auto-executed)
-  - Components should never need `Effect.runPromise` or to `Effect.runFork`, handled automatically by `LumonRuntime`
+  - Components should never need `Effect.runPromise` or to `Effect.runFork`, handled automatically by `FibraeRuntime`
   - Use Effect's wealth of APIs
 
 ## Files:
-  - `./packages/lumon/src/index.ts` - main source code
-  - `./packages/lumon/src/non-effect.ts` - legacy react-style renderer for reference (DO NOT TOUCH)
-  - `./packages/demo/src/demo-effect.ts` - example usage of lumon renderer, used for testing
+  - `./packages/fibrae/src/index.ts` - main source code
+  - `./packages/fibrae/src/non-effect.ts` - legacy react-style renderer for reference (DO NOT TOUCH)
+  - `./packages/demo/src/demo-effect.ts` - example usage of fibrae renderer, used for testing
 
 ## Commands
   - Build: `bun run build` (tsc)
-  - Lint: `bun eslint packages/lumon/src/` (check for lint errors)
+  - Lint: `bun eslint packages/fibrae/src/` (check for lint errors)
   - E2E Tests: `cd packages/demo && bun cypress:run` (headless Cypress E2E tests)
     - Single test: `cd packages/demo && bun cypress:run --spec "cypress/e2e/<test-name>.cy.ts"`
   - **IMPORTANT:** Do NOT pipe test output through `head`, `tail`, or other filters. Let tests run to completion and show full output.
 
 **After making changes, always verify:**
 1. `bun run build` - TypeScript compiles without errors
-2. `bun eslint packages/lumon/src/` - No new lint errors introduced
+2. `bun eslint packages/fibrae/src/` - No new lint errors introduced
 3. `cd packages/demo && bun cypress:run` - All tests pass
 
 Assume the vite dev server is already running. Do not try to run it with `bun dev`.

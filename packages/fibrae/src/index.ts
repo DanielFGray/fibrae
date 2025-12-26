@@ -6,7 +6,7 @@
 export { render } from "./core.js";
 
 // Runtime
-export { LumonRuntime, CustomAtomRegistryLayer } from "./runtime.js";
+export { FibraeRuntime, CustomAtomRegistryLayer } from "./runtime.js";
 
 // Built-in components
 export { Suspense, ErrorBoundary } from "./components.js";

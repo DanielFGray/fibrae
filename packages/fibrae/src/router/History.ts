@@ -82,7 +82,7 @@ export interface HistoryService {
 /**
  * History service tag for Effect dependency injection.
  */
-export class History extends Context.Tag("lumon/History")<History, HistoryService>() {}
+export class History extends Context.Tag("fibrae/History")<History, HistoryService>() {}
 
 // =============================================================================
 // Browser History Implementation

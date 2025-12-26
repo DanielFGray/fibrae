@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as BrowserPlatform from "@effect/platform-browser";
-import { Atom, AtomRegistry, render } from "lumon";
+import { Atom, AtomRegistry, render } from "fibrae";
 
 // Define the counter atom
 const countAtom = Atom.make(0);

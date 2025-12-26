@@ -2,7 +2,7 @@ import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
 import type { VElement, ElementType } from "../shared.js";
 
-// A simple Fragment support for Lumon
+// A simple Fragment support for Fibrae
 export const Fragment = "FRAGMENT" as const;
 export type FragmentType = typeof Fragment;
 
