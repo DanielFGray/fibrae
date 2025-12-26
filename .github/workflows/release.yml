@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/lumon/src/**'
+      - 'packages/lumon/package.json'
+      - 'bun.lock'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build lumon package
+        run: bun run build
+
+      - name: Get version from package.json
+        id: package-version
+        run: echo "version=$(jq -r '.version' packages/lumon/package.json)" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.package-version.outputs.version }}
+          name: lumon v${{ steps.package-version.outputs.version }}
+          body: |
+            ## lumon - Effect-first JSX Renderer
+
+            An Effect-first JSX renderer where components are Effect programs with automatic reactivity.
+
+            ### Installation via npm
+            ```bash
+            npm install lumon
+            ```
+
+            ### Features
+            - Effect.ts primitives for reactive state management
+            - Fine-grained reactivity with Atom
+            - Event handlers can return Effects (auto-executed)
+            - SSR support with streaming
+
+            Built from commit ${{ github.sha }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node for npm publishing
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish to npm
+        run: cd packages/lumon && npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
