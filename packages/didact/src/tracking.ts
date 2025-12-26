@@ -12,11 +12,12 @@ import { DidactRuntime } from "./runtime.js";
 
 /**
  * Normalize component output to a Stream.
- * Components can return VElement, Effect<VElement>, or Stream<VElement>.
+ * Components can return VElement, Effect<VElement, E>, or Stream<VElement, E>.
+ * Error type is preserved through the conversion.
  */
-export const normalizeToStream = (
-  value: VElement | Effect.Effect<VElement, unknown, never> | Stream.Stream<VElement, unknown, never>
-): Stream.Stream<VElement, unknown, never> => {
+export const normalizeToStream = <E>(
+  value: VElement | Effect.Effect<VElement, E, never> | Stream.Stream<VElement, E, never>
+): Stream.Stream<VElement, E, never> => {
   if (isStream(value)) return value;
   if (Effect.isEffect(value)) return Stream.fromEffect(value);
   return Stream.succeed(value);

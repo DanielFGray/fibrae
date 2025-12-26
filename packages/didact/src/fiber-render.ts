@@ -19,6 +19,7 @@ import * as Option from "effect/Option";
 import * as Deferred from "effect/Deferred";
 import * as Context from "effect/Context";
 import * as FiberRef from "effect/FiberRef";
+import * as Cause from "effect/Cause";
 
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import {
@@ -35,6 +36,61 @@ import { DidactRuntime, type FiberState, runForkWithRuntime } from "./runtime.js
 import { setDomProperty, attachEventListeners } from "./dom.js";
 import { normalizeToStream, makeTrackingRegistry } from "./tracking.js";
 import { h } from "./h.js";
+
+// =============================================================================
+// Stream Subscription Helper
+// =============================================================================
+
+/**
+ * Subscribe to a component's output stream, handling first value and subsequent emissions.
+ * 
+ * Returns a deferred that will be completed with the first emitted value.
+ * Subsequent emissions update latestStreamValue and queue re-renders.
+ * Errors are forwarded to handleFiberError.
+ * 
+ * @param stream - The component's output stream
+ * @param fiberRef - Mutable reference to the current fiber (for re-renders after reconciliation)
+ * @param scope - Scope to fork the subscription into
+ * 
+ * @typeParam E - Error type for the deferred (use `never` for die mode, stream error type for fail mode)
+ */
+const subscribeComponentStream = <E>(
+  stream: Stream.Stream<VElement, E>,
+  fiberRef: FiberRefType,
+  scope: Scope.Scope
+): Effect.Effect<Deferred.Deferred<VElement, E>, never, DidactRuntime> =>
+  Effect.gen(function* () {
+    const firstValueDeferred = yield* Deferred.make<VElement, E>();
+
+    const subscription = Stream.runForEach(stream, (vElement) =>
+      Effect.gen(function* () {
+        const done = yield* Deferred.isDone(firstValueDeferred);
+        const currentFiber = fiberRef.current;
+        if (!done) {
+          yield* Deferred.succeed(firstValueDeferred, vElement);
+        } else {
+          // Subsequent emissions - queue re-render
+          currentFiber.latestStreamValue = Option.some(vElement);
+          yield* queueFiberForRerender(currentFiber);
+        }
+      })
+    ).pipe(
+      Effect.catchAllCause((cause: Cause.Cause<E>) =>
+        Effect.gen(function* () {
+          const done = yield* Deferred.isDone(firstValueDeferred);
+          if (!done) {
+            yield* Deferred.failCause(firstValueDeferred, cause);
+          }
+          const currentFiber = fiberRef.current;
+          yield* handleFiberError(currentFiber, cause);
+        })
+      )
+    );
+
+    yield* Effect.forkIn(subscription, scope);
+
+    return firstValueDeferred;
+  });
 
 // =============================================================================
 // Fiber Creation Helpers
@@ -67,6 +123,43 @@ const createFiber = (
   isParked: false,
   isUnparking: false,
 });
+
+/**
+ * Check if a fiber's type matches a specific element type string.
+ */
+const fiberTypeIs = (fiber: Fiber, expected: string): boolean =>
+  fiber.type.pipe(
+    Option.map((t) => t === expected),
+    Option.getOrElse(() => false)
+  );
+
+/**
+ * Check if a fiber's type is a function (i.e., a function component).
+ */
+const fiberTypeIsFunction = (fiber: Fiber): boolean =>
+  fiber.type.pipe(
+    Option.map((t) => typeof t === "function"),
+    Option.getOrElse(() => false)
+  );
+
+/**
+ * Check if a fiber is a virtual element (no DOM node created).
+ * Returns true for root fiber (no type) or FRAGMENT type.
+ */
+const fiberIsVirtualElement = (fiber: Fiber): boolean =>
+  fiber.type.pipe(
+    Option.map((t) => t === "FRAGMENT"),
+    Option.getOrElse(() => true) // Root fiber has no type
+  );
+
+/**
+ * Get a fiber's required componentScope or die with a message.
+ */
+const getComponentScopeOrDie = (fiber: Fiber, msg: string) =>
+  Option.match(fiber.componentScope, {
+    onNone: () => Effect.die(msg),
+    onSome: (s) => Effect.succeed(s),
+  });
 
 // =============================================================================
 // Queue Fiber for Re-render (batched updates)
@@ -153,18 +246,70 @@ const processBatch = () =>
   });
 
 // =============================================================================
-// Error Boundary Support
+// Fiber Tree Walking Helpers
 // =============================================================================
 
-const findNearestErrorBoundary = (fiber: Fiber): Option.Option<Fiber> => {
+/**
+ * Walk up the fiber tree from the starting fiber, returning the first ancestor
+ * (including the starting fiber) that matches the predicate.
+ */
+const findAncestor = (
+  fiber: Fiber,
+  predicate: (f: Fiber) => boolean
+): Option.Option<Fiber> => {
   let current: Option.Option<Fiber> = Option.some(fiber);
   while (Option.isSome(current)) {
-    const f = current.value;
-    if (Option.isSome(f.errorBoundary)) return Option.some(f);
-    current = f.parent;
+    if (predicate(current.value)) return current;
+    current = current.value.parent;
   }
   return Option.none();
 };
+
+/**
+ * Walk up the fiber tree from the starting fiber's parent, returning the first
+ * ancestor that matches the predicate (excludes the starting fiber itself).
+ */
+const findAncestorExcludingSelf = (
+  fiber: Fiber,
+  predicate: (f: Fiber) => boolean
+): Option.Option<Fiber> => {
+  let current: Option.Option<Fiber> = fiber.parent;
+  while (Option.isSome(current)) {
+    if (predicate(current.value)) return current;
+    current = current.value.parent;
+  }
+  return Option.none();
+};
+
+/**
+ * Link an array of fibers as siblings under a parent fiber.
+ * Sets parent.child to the first fiber and chains the rest via sibling pointers.
+ */
+const linkFibersAsSiblings = (fibers: Fiber[], parent: Fiber): void => {
+  if (fibers.length === 0) {
+    parent.child = Option.none();
+    return;
+  }
+  parent.child = Option.some(fibers[0]);
+  for (let i = 1; i < fibers.length; i++) {
+    fibers[i - 1].sibling = Option.some(fibers[i]);
+  }
+};
+
+/**
+ * Find the nearest ancestor with a DOM node (walks up from parent).
+ */
+const findDomParent = (fiber: Fiber): Option.Option<Node> => {
+  const ancestor = findAncestorExcludingSelf(fiber, (f) => Option.isSome(f.dom));
+  return Option.flatMap(ancestor, (f) => f.dom);
+};
+
+// =============================================================================
+// Error Boundary Support
+// =============================================================================
+
+const findNearestErrorBoundary = (fiber: Fiber): Option.Option<Fiber> =>
+  findAncestor(fiber, (f) => Option.isSome(f.errorBoundary));
 
 const handleFiberError = (fiber: Fiber, cause: unknown): Effect.Effect<Option.Option<Fiber>, never, DidactRuntime> =>
   Effect.gen(function* () {
@@ -182,7 +327,7 @@ const handleFiberError = (fiber: Fiber, cause: unknown): Effect.Effect<Option.Op
       }));
       cfg.onError?.(cause);
       cfg.hasError = true;
-      boundary.errorBoundary = Option.some(cfg as ErrorBoundaryConfig);
+      boundary.errorBoundary = Option.some(cfg);
       
       // Check if we're in initial render (no currentRoot yet)
       if (Option.isNone(state.currentRoot)) {
@@ -209,15 +354,8 @@ const handleFiberError = (fiber: Fiber, cause: unknown): Effect.Effect<Option.Op
 /**
  * Find the nearest Suspense boundary by walking up the fiber tree.
  */
-const findNearestSuspenseBoundary = (fiber: Fiber): Option.Option<Fiber> => {
-  let current: Option.Option<Fiber> = fiber.parent;
-  while (Option.isSome(current)) {
-    const f = current.value;
-    if (Option.isSome(f.suspense)) return Option.some(f);
-    current = f.parent;
-  }
-  return Option.none();
-};
+const findNearestSuspenseBoundary = (fiber: Fiber): Option.Option<Fiber> =>
+  findAncestorExcludingSelf(fiber, (f) => Option.isSome(f.suspense));
 
 /**
  * Get the threshold from the nearest Suspense boundary.
@@ -225,13 +363,11 @@ const findNearestSuspenseBoundary = (fiber: Fiber): Option.Option<Fiber> => {
  */
 const getSuspenseThreshold = (fiber: Fiber): number => {
   const boundary = findNearestSuspenseBoundary(fiber);
-  return Option.match(boundary, {
-    onNone: () => 0,
-    onSome: (b) => Option.match(b.suspense, {
-      onNone: () => 0,
-      onSome: (cfg) => cfg.threshold,
-    }),
-  });
+  return boundary.pipe(
+    Option.flatMap((b) => b.suspense),
+    Option.map((cfg) => cfg.threshold),
+    Option.getOrElse(() => 0)
+  );
 };
 
 /**
@@ -240,15 +376,12 @@ const getSuspenseThreshold = (fiber: Fiber): number => {
  */
 const handleFiberSuspension = (fiber: Fiber): Effect.Effect<void, never, DidactRuntime> =>
   Effect.gen(function* () {
-    yield* Effect.log("[Suspense] handleFiberSuspension called");
     const boundaryOpt = findNearestSuspenseBoundary(fiber);
     if (Option.isNone(boundaryOpt)) {
-      yield* Effect.log("[Suspense] No boundary found");
       // No Suspense boundary - just continue waiting
       return;
     }
     
-    yield* Effect.log("[Suspense] Found boundary, setting showingFallback=true");
     const boundary = boundaryOpt.value;
     const config = Option.getOrThrow(boundary.suspense);
     
@@ -269,7 +402,6 @@ const handleFiberSuspension = (fiber: Fiber): Effect.Effect<void, never, DidactR
     config.parkedComplete = Option.some(parkedComplete);
     
     // Trigger re-render of boundary with fallback
-    yield* Effect.log("[Suspense] Queuing boundary for re-render");
     yield* queueFiberForRerender(boundary);
   });
 
@@ -279,7 +411,6 @@ const handleFiberSuspension = (fiber: Fiber): Effect.Effect<void, never, DidactR
  */
 const signalFiberReady = (fiber: Fiber): Effect.Effect<void, never, DidactRuntime> =>
   Effect.gen(function* () {
-    yield* Effect.log("[Suspense] signalFiberReady called");
     const boundaryOpt = findNearestSuspenseBoundary(fiber);
     if (Option.isNone(boundaryOpt)) return;
     
@@ -290,12 +421,11 @@ const signalFiberReady = (fiber: Fiber): Effect.Effect<void, never, DidactRuntim
     fiber.isParked = false;
     
     // Signal that parked fiber is ready
-    yield* Option.match(config.parkedComplete, {
-      onNone: () => Effect.void,
-      onSome: (deferred) => Deferred.succeed(deferred, undefined),
-    });
+    yield* config.parkedComplete.pipe(
+      Option.map((deferred) => Deferred.succeed(deferred, undefined)),
+      Option.getOrElse(() => Effect.void)
+    );
     
-    yield* Effect.log("[Suspense] Queuing boundary for re-render (ready)");
     // Trigger re-render to swap fallback → children
     yield* queueFiberForRerender(boundary);
   });
@@ -320,10 +450,10 @@ const updateFunctionComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.E
 
     // Check if we can reuse cached stream value from alternate
     const hasAlternate = Option.isSome(fiber.alternate);
-    const hasCachedValue = Option.match(fiber.alternate, {
-      onNone: () => false,
-      onSome: (alt) => Option.isSome(alt.latestStreamValue) && alt.isMultiEmissionStream,
-    });
+    const hasCachedValue = fiber.alternate.pipe(
+      Option.map((alt) => Option.isSome(alt.latestStreamValue) && alt.isMultiEmissionStream),
+      Option.getOrElse(() => false)
+    );
 
     if (hasAlternate && hasCachedValue) {
       // Reuse cached value from alternate (stream component that emitted multiple values)
@@ -350,7 +480,6 @@ const updateFunctionComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.E
     // Check if this fiber is being restored from parked (suspended) state
     // If so, skip re-execution and use the cached latestStreamValue
     if (fiber.isUnparking && Option.isSome(fiber.latestStreamValue)) {
-      yield* Effect.log("[Suspense] Fiber unparking - using cached value, skipping re-execution");
       fiber.isUnparking = false; // Clear flag
       const vElement = Option.getOrThrow(fiber.latestStreamValue);
       yield* reconcileChildren(fiber, [vElement]);
@@ -358,8 +487,6 @@ const updateFunctionComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.E
     }
 
     // Set up atom tracking
-    fiber.props._atomCallIndex = 0;
-
     const accessedAtoms = new Set<Atom.Atom<any>>();
     const trackingRegistry = makeTrackingRegistry(runtime.registry, accessedAtoms);
 
@@ -381,7 +508,7 @@ const updateFunctionComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.E
     // and it's a special element type, just reconcile directly without stream machinery.
     // This handles wrapper components like Suspense and ErrorBoundary efficiently.
     if (!Effect.isEffect(output) && !isStream(output)) {
-      const vElement = output as VElement;
+      const vElement = output;
       if (typeof vElement === "object" && vElement !== null && "type" in vElement) {
         const elementType = vElement.type;
         if (elementType === "SUSPENSE" || elementType === "ERROR_BOUNDARY" || elementType === "FRAGMENT") {
@@ -396,7 +523,7 @@ const updateFunctionComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.E
     fiber.isMultiEmissionStream = isStream(output);
 
     // Normalize to stream and provide context
-    const stream = normalizeToStream(output as VElement | Effect.Effect<VElement> | Stream.Stream<VElement>).pipe(
+    const stream = normalizeToStream(output).pipe(
       Stream.provideContext(contextWithTracking)
     );
 
@@ -404,51 +531,19 @@ const updateFunctionComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.E
     yield* resubscribeFiber(fiber);
     fiber.accessedAtoms = Option.some(accessedAtoms);
 
-    const scope = yield* Option.match(fiber.componentScope, {
-      onNone: () => Effect.die("Expected componentScope to be created by resubscribeFiber"),
-      onSome: (s) => Effect.succeed(s),
-    });
-
-    // Set up fiber ref for stream subscriptions
-    const fiberRef: FiberRefType = Option.match(fiber.fiberRef, {
-      onNone: () => ({ current: fiber }),
-      onSome: (ref) => ref,
-    });
-    fiber.fiberRef = Option.some(fiberRef);
-
-    // First value deferred - errors become defects via Deferred.die
-    const firstValueDeferred = yield* Deferred.make<VElement, never>();
-
-    // Fork stream subscription
-    const subscription = Stream.runForEach(stream, (vElement) =>
-      Effect.gen(function* () {
-        yield* Effect.log("[Stream] Stream emitted value");
-        const done = yield* Deferred.isDone(firstValueDeferred);
-        const currentFiber = fiberRef.current;
-        if (!done) {
-          yield* Effect.log("[Stream] Setting first value deferred");
-          yield* Deferred.succeed(firstValueDeferred, vElement);
-        } else {
-          // Subsequent emissions - queue re-render
-          yield* Effect.log("[Stream] Subsequent emission, queuing re-render");
-          currentFiber.latestStreamValue = Option.some(vElement);
-          yield* queueFiberForRerender(currentFiber);
-        }
-      })
-    ).pipe(
-      Effect.catchAllCause((cause) =>
-        Effect.gen(function* () {
-          const done = yield* Deferred.isDone(firstValueDeferred);
-          if (!done) {
-            yield* Deferred.die(firstValueDeferred, cause);
-          }
-          const currentFiber = fiberRef.current;
-          yield* handleFiberError(currentFiber, cause);
-        })
-      )
+    const scope = yield* getComponentScopeOrDie(
+      fiber,
+      "Expected componentScope to be created by resubscribeFiber"
     );
 
-    yield* Effect.forkIn(subscription, scope);
+    // Set up fiber ref for stream subscriptions
+    const fiberRef: FiberRefType = fiber.fiberRef.pipe(
+      Option.getOrElse(() => ({ current: fiber }))
+    );
+    fiber.fiberRef = Option.some(fiberRef);
+
+    // Subscribe to component stream - errors become defects via "die" mode
+    const firstValueDeferred = yield* subscribeComponentStream(stream, fiberRef, scope);
 
     // Get threshold from nearest Suspense boundary
     const threshold = getSuspenseThreshold(fiber);
@@ -470,12 +565,9 @@ const updateFunctionComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.E
         
         // Fork background work: wait for value, then signal ready
         // This allows the render loop to continue and show fallback
-        yield* Effect.log("[Suspense] Forking background wait for first value");
         yield* Effect.forkIn(
           Effect.gen(function* () {
-            yield* Effect.log("[Suspense] Background: waiting for first value");
             const value = yield* Deferred.await(firstValueDeferred);
-            yield* Effect.log("[Suspense] Background: got first value, signaling ready");
             const currentFiber = fiberRef.current;
             currentFiber.latestStreamValue = Option.some(value);
             yield* signalFiberReady(currentFiber);
@@ -511,10 +603,7 @@ const performUnitOfWork = (
   runtime: DidactRuntime
 ): Effect.Effect<Option.Option<Fiber>, never, DidactRuntime> =>
   Effect.gen(function* () {
-    const isFunctionComponent = Option.match(fiber.type, {
-      onNone: () => false,
-      onSome: (type) => typeof type === "function",
-    });
+    const isFunctionComponent = fiberTypeIsFunction(fiber);
 
     const eff = isFunctionComponent
       ? updateFunctionComponent(fiber, runtime)
@@ -561,10 +650,10 @@ const resubscribeFiber = (fiber: Fiber) =>
 
 const subscribeFiberAtoms = (fiber: Fiber, accessedAtoms: Set<Atom.Atom<any>>, runtime: DidactRuntime) =>
   Effect.gen(function* () {
-    const scope = yield* Option.match(fiber.componentScope, {
-      onNone: () => Effect.die("subscribeFiberAtoms requires an existing componentScope"),
-      onSome: (s) => Effect.succeed(s),
-    });
+    const scope = yield* getComponentScopeOrDie(
+      fiber,
+      "subscribeFiberAtoms requires an existing componentScope"
+    );
 
     yield* Effect.forEach(
       accessedAtoms,
@@ -591,10 +680,7 @@ const updateHostComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.Effec
     }
 
     // Handle ERROR_BOUNDARY specially
-    const isErrorBoundary = Option.match(fiber.type, {
-      onNone: () => false,
-      onSome: (type) => type === "ERROR_BOUNDARY",
-    });
+    const isErrorBoundary = fiberTypeIs(fiber, "ERROR_BOUNDARY");
 
     if (isErrorBoundary) {
       // Initialize errorBoundary config if not already set
@@ -622,19 +708,15 @@ const updateHostComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.Effec
     }
 
     // Handle SUSPENSE specially
-    const isSuspense = Option.match(fiber.type, {
-      onNone: () => false,
-      onSome: (type) => type === "SUSPENSE",
-    });
+    const isSuspense = fiberTypeIs(fiber, "SUSPENSE");
 
     if (isSuspense) {
       const fallback = fiber.props.fallback as VElement;
       const threshold = (fiber.props.threshold as number) ?? 100;
-      const children = fiber.props.children as VElement[] | undefined;
+      const children = fiber.props.children;
 
       // Initialize suspense config if not already set
       if (Option.isNone(fiber.suspense)) {
-        yield* Effect.log("[Suspense] SUSPENSE initializing config");
         fiber.suspense = Option.some({
           fallback,
           threshold,
@@ -647,16 +729,14 @@ const updateHostComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.Effec
       const config = Option.getOrThrow(fiber.suspense);
 
       // Check if parked fiber has completed (signaled via signalFiberReady)
-      const parkedDone = yield* Option.match(config.parkedComplete, {
-        onNone: () => Effect.succeed(false),
-        onSome: (d) => Deferred.isDone(d),
-      });
+      const parkedDone = yield* config.parkedComplete.pipe(
+        Option.map((d) => Deferred.isDone(d)),
+        Option.getOrElse(() => Effect.succeed(false))
+      );
       
-      yield* Effect.log(`[Suspense] SUSPENSE update: parkedDone=${parkedDone}, showingFallback=${config.showingFallback}`);
       
       if (parkedDone && config.showingFallback) {
         // Parked fiber is ready - switch back to showing its content
-        yield* Effect.log("[Suspense] SUSPENSE switching from fallback to parked fiber content");
         config.showingFallback = false;
         
         // Mark the fallback child from alternate (previous render) for deletion
@@ -668,7 +748,6 @@ const updateHostComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.Effec
               onNone: () => Effect.void,
               onSome: (fallbackChild) =>
                 Effect.gen(function* () {
-                  yield* Effect.log("[Suspense] Marking fallback child for deletion");
                   fallbackChild.effectTag = Option.some("DELETION" as const);
                   yield* Ref.update(runtime.fiberState, (s: FiberState) => ({
                     ...s,
@@ -704,21 +783,16 @@ const updateHostComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.Effec
 
       if (config.showingFallback) {
         // Show fallback while children are suspended
-        yield* Effect.log("[Suspense] SUSPENSE reconciling with fallback");
         yield* reconcileChildren(fiber, [fallback]);
       } else {
         // Show children normally (they'll race against threshold in updateFunctionComponent)
-        yield* Effect.log("[Suspense] SUSPENSE reconciling with children");
         yield* reconcileChildren(fiber, children || []);
       }
       return;
     }
 
     // Virtual element types don't create DOM - just reconcile children
-    const isVirtualElement = Option.match(fiber.type, {
-      onNone: () => true, // Root fiber has no type
-      onSome: (type) => type === "FRAGMENT",
-    });
+    const isVirtualElement = fiberIsVirtualElement(fiber);
 
     if (!isVirtualElement && Option.isNone(fiber.dom)) {
       fiber.dom = Option.some(yield* createDom(fiber, runtime));
@@ -779,13 +853,16 @@ const updateDom = (
 
     if (element instanceof Text) {
       if (nextProps.nodeValue !== prevProps.nodeValue) {
-        element.nodeValue = String(nextProps.nodeValue ?? "");
+        const value = nextProps.nodeValue;
+        element.nodeValue = typeof value === "string" || typeof value === "number" 
+          ? String(value) 
+          : "";
       }
       return;
     }
 
     const stateSnapshot = yield* Ref.get(stateRef);
-    const el = element as HTMLElement;
+    const el = element;
     const stored = stateSnapshot.listenerStore.get(el) ?? {};
 
     // Remove old event listeners
@@ -825,7 +902,7 @@ const updateDom = (
           if (Effect.isEffect(result)) {
             // Use runForkWithRuntime to get the full application context
             // This provides Navigator, DidactRuntime, AtomRegistry, etc.
-            const effectWithErrorHandling = (result as Effect.Effect<unknown, unknown, unknown>).pipe(
+            const effectWithErrorHandling = result.pipe(
               Effect.catchAllCause((cause) =>
                 ownerFiber ? handleFiberError(ownerFiber, cause) : Effect.void
               )
@@ -934,15 +1011,9 @@ const reconcileChildren = (wipFiber: Fiber, elements: VElement[]) =>
 
             if (typeMatches) {
               // UPDATE - reuse DOM, update props
-              const newProps = { ...element.props };
-              // Preserve atom cache if present
-              if ((matched.props as any)._atomCache) {
-                (newProps as any)._atomCache = (matched.props as any)._atomCache;
-              }
-
               const fiber = createFiber(
                 matched.type,
-                newProps,
+                element.props,
                 Option.some(wipFiber),
                 matchedOldOpt,
                 Option.some("UPDATE" as const)
@@ -975,27 +1046,21 @@ const reconcileChildren = (wipFiber: Fiber, elements: VElement[]) =>
 
     // Mark leftover old fibers for deletion
     const leftovers = [...oldByKey.values(), ...oldUnkeyed];
-    for (const leftover of leftovers) {
-      leftover.effectTag = Option.some("DELETION" as const);
-      yield* Ref.update(stateRef, (s: FiberState) => ({
-        ...s,
-        deletions: [...s.deletions, leftover],
-      }));
-    }
+    yield* Effect.forEach(
+      leftovers,
+      (leftover) =>
+        Effect.gen(function* () {
+          leftover.effectTag = Option.some("DELETION" as const);
+          yield* Ref.update(stateRef, (s: FiberState) => ({
+            ...s,
+            deletions: [...s.deletions, leftover],
+          }));
+        }),
+      { discard: true }
+    );
 
     // Link new fibers as child/sibling chain
-    console.log(`[reconcileChildren] linking ${newFibers.length} fibers for ${Option.match(wipFiber.type, {onNone: () => "[no-type]", onSome: (t) => typeof t === "function" ? t.name || String(t) : String(t)})}`);
-    for (let i = 0; i < newFibers.length; i++) {
-      if (i === 0) {
-        wipFiber.child = Option.some(newFibers[i]);
-      } else {
-        newFibers[i - 1].sibling = Option.some(newFibers[i]);
-      }
-    }
-
-    if (newFibers.length === 0) {
-      wipFiber.child = Option.none();
-    }
+    linkFibersAsSiblings(newFibers, wipFiber);
   });
 
 // =============================================================================
@@ -1005,18 +1070,14 @@ const reconcileChildren = (wipFiber: Fiber, elements: VElement[]) =>
 const deleteFiber = (fiber: Fiber): Effect.Effect<void, never, never> =>
   Effect.gen(function* () {
     // Close component scope (unless fiber is parked - its scope must stay alive)
-    if (!fiber.isParked) {
-      yield* Option.match(fiber.componentScope, {
-        onNone: () => Effect.void,
-        onSome: (scope) => Scope.close(scope as Scope.Scope.Closeable, Exit.void),
-      });
+    if (!fiber.isParked && Option.isSome(fiber.componentScope)) {
+      yield* Scope.close(fiber.componentScope.value as Scope.Scope.Closeable, Exit.void);
     }
 
     // Recursively delete children
-    yield* Option.match(fiber.child, {
-      onNone: () => Effect.void,
-      onSome: (child) => deleteFiber(child),
-    });
+    if (Option.isSome(fiber.child)) {
+      yield* deleteFiber(fiber.child.value);
+    }
   });
 
 const commitDeletion = (fiber: Fiber, domParent: Node): Effect.Effect<void, never, never> =>
@@ -1044,34 +1105,27 @@ const commitRoot = (runtime: DidactRuntime) =>
     const currentState = yield* Ref.get(stateRef);
 
     // Process deletions first
-    for (const fiber of currentState.deletions) {
-      // Find DOM parent by walking up
-      let domParentFiber = fiber.parent;
-      while (Option.isSome(domParentFiber) && Option.isNone(domParentFiber.value.dom)) {
-        domParentFiber = domParentFiber.value.parent;
-      }
-
-      yield* Option.match(domParentFiber, {
-        onNone: () => Effect.void,
-        onSome: (parentFiber) =>
-          Option.match(parentFiber.dom, {
-            onNone: () => Effect.void,
-            onSome: (dom) => commitDeletion(fiber, dom),
-          }),
-      });
-
-      yield* deleteFiber(fiber);
-    }
+    yield* Effect.forEach(
+      currentState.deletions,
+      (fiber) =>
+        Effect.gen(function* () {
+          const domParent = findDomParent(fiber);
+          if (Option.isSome(domParent)) {
+            yield* commitDeletion(fiber, domParent.value);
+          }
+          yield* deleteFiber(fiber);
+        }),
+      { discard: true }
+    );
 
     // Commit work starting from wipRoot.child
-    yield* Option.match(currentState.wipRoot, {
-      onNone: () => Effect.void,
-      onSome: (wipRoot) =>
-        Option.match(wipRoot.child, {
-          onNone: () => Effect.void,
-          onSome: (child) => commitWork(child, runtime),
-        }),
-    });
+    const firstChild = currentState.wipRoot.pipe(
+      Option.flatMap((root) => root.child),
+      Option.getOrUndefined
+    );
+    if (firstChild) {
+      yield* commitWork(firstChild, runtime);
+    }
 
     // Swap wipRoot to currentRoot
     yield* Ref.update(stateRef, (s) => ({
@@ -1084,93 +1138,70 @@ const commitRoot = (runtime: DidactRuntime) =>
 
 const commitWork = (fiber: Fiber, runtime: DidactRuntime): Effect.Effect<void, never, DidactRuntime> =>
   Effect.gen(function* () {
-    const typeDesc = Option.match(fiber.type, {
-      onNone: () => "[root]",
-      onSome: (t) => typeof t === "function" ? t.name || "[fn]" : String(t),
-    });
-    const hasDom = Option.isSome(fiber.dom);
-    const hasChild = Option.isSome(fiber.child);
-    const hasSibling = Option.isSome(fiber.sibling);
-    console.log(`[commitWork] fiber=${typeDesc}, dom=${hasDom}, child=${hasChild}, sibling=${hasSibling}, tag=${Option.getOrElse(fiber.effectTag, () => "none")}`);
-    
     // KEY INSIGHT: If fiber has no DOM (function component), just process children
     if (Option.isNone(fiber.dom)) {
-      console.log(`[commitWork] ${typeDesc} has no DOM, processing children`);
-      yield* Option.match(fiber.child, {
-        onNone: () => Effect.void,
-        onSome: (child) => commitWork(child, runtime) as Effect.Effect<void, never, DidactRuntime>,
-      });
-      yield* Option.match(fiber.sibling, {
-        onNone: () => Effect.void,
-        onSome: (sibling) => commitWork(sibling, runtime) as Effect.Effect<void, never, DidactRuntime>,
-      });
+      if (Option.isSome(fiber.child)) {
+        yield* commitWork(fiber.child.value, runtime);
+      }
+      if (Option.isSome(fiber.sibling)) {
+        yield* commitWork(fiber.sibling.value, runtime);
+      }
       return;
     }
 
     // Find DOM parent by walking up to nearest fiber with dom
-    let domParentFiber = fiber.parent;
-    while (Option.isSome(domParentFiber) && Option.isNone(domParentFiber.value.dom)) {
-      domParentFiber = domParentFiber.value.parent;
+    const domParentOpt = findDomParent(fiber);
+    if (Option.isNone(domParentOpt)) {
+      // No DOM parent found - continue with children/siblings
+      if (Option.isSome(fiber.child)) {
+        yield* commitWork(fiber.child.value, runtime);
+      }
+      if (Option.isSome(fiber.sibling)) {
+        yield* commitWork(fiber.sibling.value, runtime);
+      }
+      return;
+    }
+    const domParent = domParentOpt.value;
+
+    // Process effect tag
+    const tag = fiber.effectTag.pipe(Option.getOrUndefined);
+    if (tag === "PLACEMENT") {
+      // Append DOM node
+      if (Option.isSome(fiber.dom)) {
+        domParent.appendChild(fiber.dom.value);
+      }
+
+      // Signal first child committed (for Suspense)
+      const deferred = fiber.parent.pipe(
+        Option.flatMap((p) => p.childFirstCommitDeferred),
+        Option.getOrUndefined
+      );
+      if (deferred) {
+        const done = yield* Deferred.isDone(deferred);
+        if (!done) {
+          yield* Deferred.succeed(deferred, undefined);
+        }
+      }
+    } else if (tag === "UPDATE") {
+      const prevProps = fiber.alternate.pipe(
+        Option.map((alt) => alt.props),
+        Option.getOrElse(() => ({}))
+      );
+      if (Option.isSome(fiber.dom)) {
+        yield* updateDom(fiber.dom.value, prevProps, fiber.props, fiber, runtime);
+      }
+    } else if (tag === "DELETION") {
+      yield* commitDeletion(fiber, domParent);
+      return;
     }
 
-    yield* Option.match(domParentFiber, {
-      onNone: () => Effect.void,
-      onSome: (parentFiber) =>
-        Option.match(parentFiber.dom, {
-          onNone: () => Effect.void,
-          onSome: (domParent) =>
-            Option.match(fiber.effectTag, {
-              onNone: () => Effect.void,
-              onSome: (tag) =>
-                Effect.gen(function* () {
-                  if (tag === "PLACEMENT") {
-                    yield* Option.match(fiber.dom, {
-                      onNone: () => Effect.void,
-                      onSome: (dom) => Effect.sync(() => domParent.appendChild(dom)),
-                    });
-
-                    // Signal first child committed (for Suspense)
-                    yield* Option.match(fiber.parent, {
-                      onNone: () => Effect.void,
-                      onSome: (parent) =>
-                        Option.match(parent.childFirstCommitDeferred, {
-                          onNone: () => Effect.void,
-                          onSome: (deferred) =>
-                            Effect.gen(function* () {
-                              const done = yield* Deferred.isDone(deferred);
-                              if (!done) {
-                                yield* Deferred.succeed(deferred, undefined);
-                              }
-                            }),
-                        }),
-                    });
-                  } else if (tag === "UPDATE") {
-                    const prevProps = Option.match(fiber.alternate, {
-                      onNone: () => ({}),
-                      onSome: (alt) => alt.props,
-                    });
-                    yield* Option.match(fiber.dom, {
-                      onNone: () => Effect.void,
-                      onSome: (dom) => updateDom(dom, prevProps, fiber.props, fiber, runtime),
-                    });
-                  } else if (tag === "DELETION") {
-                    yield* commitDeletion(fiber, domParent);
-                    return;
-                  }
-                }),
-            }),
-        }),
-    });
-
     // Continue with children and siblings
-    yield* Option.match(fiber.child, {
-      onNone: () => Effect.void,
-      onSome: (child) => commitWork(child, runtime) as Effect.Effect<void, never, DidactRuntime>,
-    });
-    yield* Option.match(fiber.sibling, {
-      onNone: () => Effect.void,
-      onSome: (sibling) => commitWork(sibling, runtime) as Effect.Effect<void, never, DidactRuntime>,
-    });
+    if (Option.isSome(fiber.child)) {
+      yield* commitWork(fiber.child.value, runtime);
+    }
+    if (Option.isSome(fiber.sibling)) {
+      yield* commitWork(fiber.sibling.value, runtime);
+    }
   });
 
 // =============================================================================
@@ -1181,33 +1212,24 @@ const workLoop = (runtime: DidactRuntime) =>
   Effect.gen(function* () {
     const stateRef = runtime.fiberState;
 
-    // Process all units of work
-    let state = yield* Ref.get(stateRef);
-    let workCount = 0;
-    while (Option.isSome(state.nextUnitOfWork)) {
-      const fiber = state.nextUnitOfWork.value;
-      const typeDesc = Option.match(fiber.type, {
-        onNone: () => "[root]",
-        onSome: (t) => typeof t === "function" ? t.name || "[fn]" : String(t),
-      });
-      console.log(`[workLoop] unit ${workCount}: ${typeDesc}`);
-      workCount++;
-      
-      const nextUnitOfWork = yield* performUnitOfWork(state.nextUnitOfWork.value, runtime);
-      yield* Ref.update(stateRef, (s) => ({
-        ...s,
-        nextUnitOfWork: nextUnitOfWork,
-      }));
-      state = yield* Ref.get(stateRef);
-    }
-    console.log(`[workLoop] completed ${workCount} units of work`);
+    // Process all units of work using Effect.iterate for interruptibility
+    yield* Effect.iterate(yield* Ref.get(stateRef), {
+      while: (state) => Option.isSome(state.nextUnitOfWork),
+      body: (state) =>
+        Effect.gen(function* () {
+          const nextUnitOfWork = yield* performUnitOfWork(
+            Option.getOrThrow(state.nextUnitOfWork),
+            runtime
+          );
+          yield* Ref.update(stateRef, (s) => ({ ...s, nextUnitOfWork }));
+          return yield* Ref.get(stateRef);
+        }),
+    });
 
     // If we have a wipRoot but no more work, commit
     const finalState = yield* Ref.get(stateRef);
     if (Option.isNone(finalState.nextUnitOfWork) && Option.isSome(finalState.wipRoot)) {
-      console.log(`[workLoop] starting commitRoot`);
       yield* commitRoot(runtime);
-      console.log(`[workLoop] commitRoot finished`);
     }
   });
 
@@ -1322,13 +1344,7 @@ const hydrateChildren = (
     }
 
     // Link fibers
-    for (let i = 0; i < fibers.length; i++) {
-      if (i === 0) {
-        parentFiber.child = Option.some(fibers[i]);
-      } else {
-        fibers[i - 1].sibling = Option.some(fibers[i]);
-      }
-    }
+    linkFibersAsSiblings(fibers, parentFiber);
   });
 
 const hydrateElement = (
@@ -1349,7 +1365,7 @@ const hydrateElement = (
 
     if (typeof vElement.type === "function") {
       // Function component - invoke to get children
-      yield* hydrateFunctionComponent(fiber, vElement, domNodes, domIndex, runtime) as Effect.Effect<void, unknown, DidactRuntime>;
+      yield* hydrateFunctionComponent(fiber, vElement, domNodes, domIndex, runtime);
     } else if (vElement.type === "TEXT_ELEMENT") {
       // Text node
       const domNode = domNodes[domIndex];
@@ -1409,7 +1425,7 @@ const hydrateFunctionComponent = (
     fiber.isMultiEmissionStream = isStream(output);
 
     // Get first value from stream
-    const stream = normalizeToStream(output as VElement | Effect.Effect<VElement> | Stream.Stream<VElement>).pipe(
+    const stream = normalizeToStream(output).pipe(
       Stream.provideContext(contextWithTracking)
     );
 
@@ -1417,43 +1433,14 @@ const hydrateFunctionComponent = (
     yield* resubscribeFiber(fiber);
     fiber.accessedAtoms = Option.some(accessedAtoms);
 
-    const scope = yield* Option.match(fiber.componentScope, {
-      onNone: () => Effect.die("Expected componentScope"),
-      onSome: (s) => Effect.succeed(s),
-    });
+    const scope = yield* getComponentScopeOrDie(fiber, "Expected componentScope");
 
     // Set up fiber ref
     const fiberRef: FiberRefType = { current: fiber };
     fiber.fiberRef = Option.some(fiberRef);
 
-    // First value deferred - use unknown error type so we can fail with any cause
-    const firstValueDeferred = yield* Deferred.make<VElement, unknown>();
-
-    // Fork stream subscription
-    const subscription = Stream.runForEach(stream, (childVElement) =>
-      Effect.gen(function* () {
-        const done = yield* Deferred.isDone(firstValueDeferred);
-        const currentFiber = fiberRef.current;
-        if (!done) {
-          yield* Deferred.succeed(firstValueDeferred, childVElement);
-        } else {
-          currentFiber.latestStreamValue = Option.some(childVElement);
-          yield* queueFiberForRerender(currentFiber);
-        }
-      })
-    ).pipe(
-      Effect.catchAllCause((cause) =>
-        Effect.gen(function* () {
-          const done = yield* Deferred.isDone(firstValueDeferred);
-          if (!done) {
-            yield* Deferred.fail(firstValueDeferred, cause);
-          }
-          yield* handleFiberError(fiberRef.current, cause);
-        })
-      )
-    );
-
-    yield* Effect.forkIn(subscription, scope);
+    // Subscribe to component stream - errors typed via "fail" mode
+    const firstValueDeferred = yield* subscribeComponentStream(stream, fiberRef, scope);
 
     // Wait for first value
     const childVElement = yield* Deferred.await(firstValueDeferred);
