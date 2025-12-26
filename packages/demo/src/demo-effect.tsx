@@ -274,29 +274,24 @@ const PostDetailPage = ({ id }: { id: number }) => {
 const AppRoutesLive = RouterBuilder.group(
   appRouter,
   "main",
-  (handlers) => Effect.succeed(
+  (handlers) =>
     handlers
       .handle("home", {
-        loader: () => Effect.succeed(null),
         component: () => <HomePage />,
       })
       .handle("counter", {
-        loader: () => Effect.succeed(null),
         component: () => <CounterPage />,
       })
       .handle("todos", {
-        loader: () => Effect.succeed(null),
         component: () => <TodosPage />,
       })
       .handle("posts", {
-        loader: () => Effect.succeed(null),
         component: ({ searchParams }) => <PostsPage searchParams={searchParams} />,
       })
       .handle("post", {
-        loader: ({ path }) => Effect.succeed(path.id as number),
+        loader: ({ path }) => path.id as number,
         component: ({ loaderData }) => <PostDetailPage id={loaderData} />,
       })
-  )
 );
 
 // =============================================================================

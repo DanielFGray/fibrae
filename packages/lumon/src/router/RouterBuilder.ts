@@ -41,8 +41,17 @@ export interface ComponentProps<
 }
 
 /**
+ * Loader return type - can be a plain value or an Effect.
+ * Plain values are automatically wrapped in Effect.succeed.
+ */
+export type LoaderResult<T, E = never, R = never> = T | Effect.Effect<T, E, R>;
+
+/**
  * Handler configuration for a route.
  * Loader fetches data, component renders with that data.
+ * 
+ * - loader is optional - defaults to returning null
+ * - loader can return a plain value or an Effect (plain values auto-wrapped)
  */
 export interface HandlerConfig<
   LoaderData = unknown,
@@ -51,9 +60,9 @@ export interface HandlerConfig<
   R = never,
   E = never,
 > {
-  readonly loader: (
+  readonly loader?: (
     ctx: LoaderContext<PathParams, SearchParams>
-  ) => Effect.Effect<LoaderData, E, R>;
+  ) => LoaderResult<LoaderData, E, R>;
 
   readonly component: (
     props: ComponentProps<LoaderData, PathParams, SearchParams>
@@ -146,10 +155,19 @@ function makeGroupHandlers<GroupName extends string>(
       }
       const route = maybeRoute.value;
 
+      // Normalize loader: default to returning null, wrap plain values in Effect
+      const normalizedLoader = (ctx: LoaderContext): Effect.Effect<unknown> => {
+        if (!config.loader) {
+          return Effect.succeed(null);
+        }
+        const result = config.loader(ctx as LoaderContext<PathParams, SearchParams>);
+        return (Effect.isEffect(result) ? result : Effect.succeed(result)) as Effect.Effect<unknown>;
+      };
+
       const handler: RouteHandler = {
         routeName,
         route,
-        loader: config.loader as (ctx: LoaderContext) => Effect.Effect<unknown>,
+        loader: normalizedLoader,
         component: config.component as (props: ComponentProps) => VElement,
       };
 
@@ -179,23 +197,46 @@ function findGroup<GroupName extends string>(
 /**
  * Create a Layer that provides handlers for a route group.
  * 
+ * The build callback can return either:
+ * - GroupHandlers directly (simple case)
+ * - Effect<GroupHandlers> (when you need Effect context in handlers)
+ * 
  * Usage:
  * ```typescript
+ * // Simple - no Effect wrapper needed
+ * const AppRoutesLive = RouterBuilder.group(
+ *   AppRouter,
+ *   "app",
+ *   (handlers) => handlers
+ *     .handle("home", { component: () => <HomePage /> })
+ *     .handle("posts", { loader: () => fetchPosts(), component: ... })
+ * )
+ * 
+ * // With Effect context (when handlers need services)
  * const AppRoutesLive = RouterBuilder.group(
  *   AppRouter,
  *   "app",
  *   (handlers) => Effect.gen(function* () {
- *     return handlers
- *       .handle("home", { loader: () => Effect.succeed(...), component: ... })
- *       .handle("posts", { loader: () => Effect.succeed(...), component: ... })
+ *     const config = yield* Config;
+ *     return handlers.handle("home", { ... });
  *   })
  * )
  * ```
  */
+export function group<GroupName extends string>(
+  router: Router,
+  groupName: GroupName,
+  build: (handlers: GroupHandlers<GroupName>) => GroupHandlers<GroupName>
+): Layer.Layer<RouterHandlers, never, never>;
 export function group<GroupName extends string, R>(
   router: Router,
   groupName: GroupName,
   build: (handlers: GroupHandlers<GroupName>) => Effect.Effect<GroupHandlers<GroupName>, never, R>
+): Layer.Layer<RouterHandlers, never, R>;
+export function group<GroupName extends string, R>(
+  router: Router,
+  groupName: GroupName,
+  build: (handlers: GroupHandlers<GroupName>) => GroupHandlers<GroupName> | Effect.Effect<GroupHandlers<GroupName>, never, R>
 ): Layer.Layer<RouterHandlers, never, R> {
   const routeGroup = findGroup(router, groupName);
   const initialHandlers = makeGroupHandlers(groupName, routeGroup);
@@ -203,7 +244,8 @@ export function group<GroupName extends string, R>(
   return Layer.effect(
     RouterHandlers,
     Effect.gen(function* () {
-      const builtHandlers = yield* build(initialHandlers);
+      const result = build(initialHandlers);
+      const builtHandlers = Effect.isEffect(result) ? yield* result : result;
 
       const handlersMap = new Map<string, RouteHandler>(
         builtHandlers.handlers.map((h) => [h.routeName, h])

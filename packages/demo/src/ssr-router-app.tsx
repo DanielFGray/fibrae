@@ -6,7 +6,6 @@
  * - Client: imports this, uses browserLayer to hydrate
  */
 
-import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { VElement } from "lumon";
 import { Route, Router, RouterBuilder, createLink, RouterOutlet } from "lumon";
@@ -125,41 +124,36 @@ export function createSSRRouterHandlers(isServer: boolean) {
     SSRRouter,
     "ssr",
     (handlers) =>
-      Effect.succeed(
-        handlers
-          .handle("home", {
-            loader: () =>
-              Effect.succeed({
-                message: `Hello from ${source} loader`,
-                source,
-              }),
-            component: (props) => <HomePage loaderData={props.loaderData} />,
-          })
-          .handle("posts", {
-            loader: () =>
-              Effect.succeed({
-                posts: [
-                  { id: 1, title: "First Post" },
-                  { id: 2, title: "Second Post" },
-                  { id: 3, title: "Third Post" },
-                ],
-                source,
-              }),
-            component: (props) => <PostsPage loaderData={props.loaderData} />,
-          })
-          .handle("post", {
-            loader: ({ path }) =>
-              Effect.succeed({
-                id: path.id as number,
-                title: `Post ${path.id}`,
-                content: `Content for post ${path.id}`,
-                source,
-              }),
-            component: (props) => (
-              <PostPage loaderData={props.loaderData} path={props.path as { id: number }} />
-            ),
-          })
-      )
+      handlers
+        .handle("home", {
+          loader: () => ({
+            message: `Hello from ${source} loader`,
+            source,
+          }),
+          component: (props) => <HomePage loaderData={props.loaderData} />,
+        })
+        .handle("posts", {
+          loader: () => ({
+            posts: [
+              { id: 1, title: "First Post" },
+              { id: 2, title: "Second Post" },
+              { id: 3, title: "Third Post" },
+            ],
+            source,
+          }),
+          component: (props) => <PostsPage loaderData={props.loaderData} />,
+        })
+        .handle("post", {
+          loader: ({ path }) => ({
+            id: path.id as number,
+            title: `Post ${path.id}`,
+            content: `Content for post ${path.id}`,
+            source,
+          }),
+          component: (props) => (
+            <PostPage loaderData={props.loaderData} path={props.path as { id: number }} />
+          ),
+        })
   );
 }
 
