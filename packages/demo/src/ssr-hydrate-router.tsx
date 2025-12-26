@@ -4,16 +4,16 @@
  * This file is loaded by the browser after SSR.
  * It hydrates the server-rendered content and enables client-side navigation.
  * 
- * The RouterStateAtom is automatically hydrated from __DIDACT_STATE__,
+ * The RouterStateAtom is automatically hydrated from __LUMON_STATE__,
  * so we don't need to pass router state separately.
  */
 
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as BrowserPlatform from "@effect/platform-browser";
-import { h, render } from "@didact/core";
+import { h, render } from "lumon";
 import { Hydration } from "@effect-atom/atom";
-import { Router } from "@didact/core/router";
+import { Router } from "lumon";
 import {
   SSRRouter,
   App,
@@ -24,12 +24,12 @@ import {
 // Declare global for TypeScript
 declare global {
   interface Window {
-    __DIDACT_STATE__?: ReadonlyArray<Hydration.DehydratedAtom>;
+    __LUMON_STATE__?: ReadonlyArray<Hydration.DehydratedAtom>;
   }
 }
 
 // Get initial atom state from SSR (includes router state via RouterStateAtom)
-const initialState = window.__DIDACT_STATE__;
+const initialState = window.__LUMON_STATE__;
 
 // Create handler layer (client-side loaders)
 const handlersLayer = createSSRRouterHandlers(false);
@@ -63,7 +63,7 @@ Effect.gen(function* () {
   const app = h(App, {}, [outlet]);
   
   // Render (hydrate) the app with router layer
-  // render() automatically provides DidactRuntime + AtomRegistry
+  // render() automatically provides LumonRuntime + AtomRegistry
   // The initialState includes RouterStateAtom which RouterOutlet uses
   yield* render(app, container, {
     layer: routerLayer,

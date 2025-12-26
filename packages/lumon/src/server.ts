@@ -1,5 +1,5 @@
 /**
- * Server-side rendering for Didact
+ * Server-side rendering for Lumon
  * 
  * Renders VElement trees to HTML strings for SSR.
  * Integrates with @effect-atom/atom's Hydration module for state serialization.
@@ -265,11 +265,11 @@ const renderVElementToString = (
       
       if (result.type === "resolved") {
         // Children completed before timeout - render with resolved marker
-        return `<!--didact:sus:resolved-->${result.html}<!--/didact:sus-->`;
+        return `<!--lumon:sus:resolved-->${result.html}<!--/lumon:sus-->`;
       } else {
         // Timeout fired first - render fallback with fallback marker
         const fallbackHtml = yield* renderVElementToString(fallback);
-        return `<!--didact:sus:fallback-->${fallbackHtml}<!--/didact:sus-->`;
+        return `<!--lumon:sus:fallback-->${fallbackHtml}<!--/lumon:sus-->`;
       }
 
     } else if (isHostElement(type)) {
@@ -293,7 +293,7 @@ const renderVElementToString = (
         const isText = child.type === "TEXT_ELEMENT";
         // Insert marker between adjacent text nodes to preserve boundaries
         if (prevWasText && isText) {
-          childrenHtml += "<!--didact:$-->";
+          childrenHtml += "<!--lumon:$-->";
         }
         childrenHtml += yield* renderVElementToString(child);
         prevWasText = isText;
@@ -325,7 +325,7 @@ const renderVElementToString = (
  * 
  * @example
  * ```typescript
- * import { renderToString } from "@didact/core/server";
+ * import { renderToString } from "lumon/server";
  * 
  * const program = Effect.gen(function* () {
  *   const { html, dehydratedState } = yield* renderToString(<App />);
@@ -372,7 +372,7 @@ export const renderToString = (
  * 
  * @example
  * ```typescript
- * import { renderToStringWith, SSRAtomRegistryLayer } from "@didact/core/server";
+ * import { renderToStringWith, SSRAtomRegistryLayer } from "lumon/server";
  * 
  * const program = Effect.gen(function* () {
  *   const { html, dehydratedState } = yield* renderToStringWith(<App />);

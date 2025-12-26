@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { Atom, AtomRegistry, Suspense } from "@didact/core";
+import { Atom, AtomRegistry, Suspense } from "lumon";
 
 // =============================================================================
 // Counter App

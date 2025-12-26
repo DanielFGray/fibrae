@@ -3,7 +3,7 @@ import * as Stream from "effect/Stream";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import { pipe } from "effect/Function";
-import { h, Atom, AtomRegistry, Suspense, type VNode } from "@didact/core";
+import { h, Atom, AtomRegistry, Suspense, type VNode } from "lumon";
 
 // Effect pattern: define atoms at module level using Atom.family for parameterized state
 const counterAtom = Atom.family((label: string) => Atom.make(0));
@@ -213,7 +213,7 @@ const Subtitle = ({ children }: { children: VNode | string }) => (
 export const StaticHeader = () => (
   <div style="max-width: 800px; margin: 2rem auto; font-family: system-ui;">
     <h1 data-cy="app-title" style="text-align: center;">
-      🚀 Didact Effect Demo
+      🚀 Lumon Effect Demo
     </h1>
     <Subtitle>Effect-first reactive JSX with @effect/platform-browser integration</Subtitle>
     <p style="text-align: center;">

@@ -96,7 +96,7 @@ export interface NavigatorService {
 /**
  * Navigator service tag for Effect dependency injection.
  */
-export class Navigator extends Context.Tag("@didact/router/Navigator")<
+export class Navigator extends Context.Tag("lumon/Navigator")<
   Navigator,
   NavigatorService
 >() {}
@@ -232,7 +232,7 @@ export function NavigatorLive(
       };
 
       // Note: The actual subscription to location changes should be handled
-      // by the component rendering - currentRoute will be updated when go/back/forward are called
+      // by by component rendering - currentRoute will be updated when go/back/forward are called
 
       const service: NavigatorService = {
         basePath,
@@ -249,7 +249,7 @@ export function NavigatorLive(
             // Build URL from route and params
             const pathParams = options.path ?? ({} as Record<string, unknown>);
             const routePathname = route.value.interpolate(pathParams);
-            // Prepend basePath to the route pathname
+            // Prepend basePath to route pathname
             const pathname = basePath + routePathname;
             const search = options.searchParams
               ? buildSearchString(options.searchParams)
@@ -332,6 +332,7 @@ export const go = (
 /**
  * Go back in history.
  */
+/* is-tree-shakable-suppress */
 export const back: Effect.Effect<void, never, Navigator | AtomRegistry.AtomRegistry> = Effect.gen(
   function* () {
     const nav = yield* Navigator;
@@ -342,6 +343,7 @@ export const back: Effect.Effect<void, never, Navigator | AtomRegistry.AtomRegis
 /**
  * Go forward in history.
  */
+/* is-tree-shakable-suppress */
 export const forward: Effect.Effect<void, never, Navigator | AtomRegistry.AtomRegistry> = Effect.gen(
   function* () {
     const nav = yield* Navigator;
@@ -350,20 +352,9 @@ export const forward: Effect.Effect<void, never, Navigator | AtomRegistry.AtomRe
 );
 
 /**
- * Check if a route is currently active.
+ * Get current route info.
  */
-export const isActive = (
-  routeName: string,
-  params?: Record<string, unknown>
-): Effect.Effect<boolean, never, Navigator | AtomRegistry.AtomRegistry> =>
-  Effect.gen(function* () {
-    const nav = yield* Navigator;
-    return yield* nav.isActive(routeName, params);
-  });
-
-/**
- * Get the current route info.
- */
+/* is-tree-shakable-suppress */
 export const getCurrentRoute: Effect.Effect<
   Option.Option<CurrentRoute>,
   never,

@@ -103,7 +103,7 @@ export interface GroupHandlers<GroupName extends string = string> {
  * Tag for the RouterHandlers service.
  * Provides access to all registered handlers.
  */
-export class RouterHandlers extends Context.Tag("@didact/router/RouterHandlers")<
+export class RouterHandlers extends Context.Tag("lumon/RouterHandlers")<
   RouterHandlers,
   {
     readonly handlers: ReadonlyMap<string, RouteHandler>;

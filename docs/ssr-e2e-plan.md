@@ -44,7 +44,7 @@ This is Phase 1 of a larger framework architecture:
 - Vite proxies to Effect server
 - Validates core SSR/hydration APIs
 
-### Phase 2: Vite Plugin (`vite-plugin-didact`)
+### Phase 2: Vite Plugin (`vite-plugin-lumon`)
 - Development experience: HMR, fast refresh
 - SSR middleware for dev mode
 - Build configuration for client + server bundles
@@ -55,7 +55,7 @@ This is Phase 1 of a larger framework architecture:
 - Data loading (loader functions)
 
 ### Phase 4: Production HTTP Server Package
-- `@didact/server` or similar
+- `@lumon/server` or similar
 - Built on Effect HTTP platform
 - Serves static assets + SSR routes
 - Streaming SSR support
@@ -74,7 +74,7 @@ This is Phase 1 of a larger framework architecture:
 | `packages/demo/vite.config.ts` | Modify | Add proxy for `/ssr` → `:3001` |
 | `packages/demo/package.json` | Modify | Add `dev:ssr` script |
 | `packages/demo/cypress/e2e/ssr-hydration.cy.ts` | Create | E2E test |
-| `packages/didact/src/core.ts` | Modify | Add `initialState` option to `render()` |
+| `packages/lumon/src/core.ts` | Modify | Add `initialState` option to `render()` |
 
 ---
 
@@ -82,7 +82,7 @@ This is Phase 1 of a larger framework architecture:
 
 ### 1. Add `initialState` option to `render()` (prerequisite)
 
-**File:** `packages/didact/src/core.ts`
+**File:** `packages/lumon/src/core.ts`
 
 Modify `render()` to accept `options.initialState`:
 - If `initialState` is provided and container has children → hydration mode
@@ -116,7 +116,7 @@ export function render(
 Counter component that works on both server and client:
 
 ```tsx
-/** @jsxImportSource @didact/core */
+/** @jsxImportSource lumon */
 import * as Effect from "effect/Effect";
 import { Atom, AtomRegistry } from "@effect-atom/atom";
 
@@ -163,8 +163,8 @@ import * as Effect from "effect/Effect";
 import { HttpServer, HttpServerResponse, HttpRouter } from "@effect/platform";
 import { BunRuntime, BunHttpServer } from "@effect/platform-bun";
 import { Layer } from "effect";
-import { h } from "@didact/core";
-import { renderToString } from "@didact/core/server";
+import { h } from "lumon";
+import { renderToString } from "lumon/server";
 import { App } from "../src/ssr-app.js";
 
 // SSR route handler
@@ -176,11 +176,11 @@ const ssrHandler = Effect.gen(function* () {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Didact SSR</title>
+  <title>Lumon SSR</title>
 </head>
 <body>
   <div id="root">${html}</div>
-  <script>window.__DIDACT_STATE__ = ${JSON.stringify(dehydratedState)};</script>
+  <script>window.__LUMON_STATE__ = ${JSON.stringify(dehydratedState)};</script>
   <script type="module" src="/src/ssr-hydrate.tsx"></script>
 </body>
 </html>`;
@@ -205,7 +205,7 @@ BunRuntime.runMain(Layer.launch(server));
 **Key points:**
 - Serves on port 3001
 - GET `/ssr` returns full HTML page
-- Embeds `window.__DIDACT_STATE__` with serialized atom state
+- Embeds `window.__LUMON_STATE__` with serialized atom state
 - References hydration script from Vite: `/src/ssr-hydrate.tsx`
 
 ---
@@ -215,20 +215,20 @@ BunRuntime.runMain(Layer.launch(server));
 **File:** `packages/demo/src/ssr-hydrate.tsx`
 
 ```tsx
-/** @jsxImportSource @didact/core */
+/** @jsxImportSource lumon */
 import * as Effect from "effect/Effect";
 import * as BrowserPlatform from "@effect/platform-browser";
-import { render } from "@didact/core";
+import { render } from "lumon";
 import { App } from "./ssr-app.js";
 
 declare global {
   interface Window {
-    __DIDACT_STATE__?: unknown;
+    __LUMON_STATE__?: unknown;
   }
 }
 
 const container = document.getElementById("root") as HTMLElement;
-const initialState = window.__DIDACT_STATE__ as ReadonlyArray<unknown> | undefined;
+const initialState = window.__LUMON_STATE__ as ReadonlyArray<unknown> | undefined;
 
 Effect.gen(function* () {
   yield* Effect.fork(render(<App />, container, { initialState }));
@@ -348,7 +348,7 @@ describe("SSR Hydration", () => {
 
 ## Execution Order
 
-1. **First**: Implement `initialState` option in `render()` (task didact-ts-8q0)
+1. **First**: Implement `initialState` option in `render()` (task lumon-8q0)
 2. **Second**: Create `ssr-app.tsx` (shared component)
 3. **Third**: Create `ssr-server.ts` (Effect HTTP server)
 4. **Fourth**: Create `ssr-hydrate.tsx` (client entry)

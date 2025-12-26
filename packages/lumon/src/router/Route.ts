@@ -1,5 +1,5 @@
 /**
- * Route declaration module for Didact router.
+ * Route declaration module for Lumon router.
  * 
  * Mirrors Effect HttpApiEndpoint patterns:
  * - Route.get("name", "/path") for static routes
@@ -16,7 +16,7 @@ import * as Option from "effect/Option";
  * Mirrors HttpApiSchema.AnnotationParam pattern.
  */
 export const AnnotationParam: unique symbol = Symbol.for(
-  "@didact/router/Route/AnnotationParam"
+  "lumon/Route/AnnotationParam"
 );
 
 /**

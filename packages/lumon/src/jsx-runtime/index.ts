@@ -2,7 +2,7 @@ import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
 import type { VElement, ElementType } from "../shared.js";
 
-// A simple Fragment support for Didact
+// A simple Fragment support for Lumon
 export const Fragment = "FRAGMENT" as const;
 export type FragmentType = typeof Fragment;
 

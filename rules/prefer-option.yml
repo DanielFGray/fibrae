@@ -32,4 +32,4 @@ rule:
     - pattern: "($$$BEFORE, $ARG?: $TYPE, $$$AFTER) => $BODY"
 
 ignores:
-  - src/didact.ts
+  - src/lumon.ts

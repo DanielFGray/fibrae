@@ -14,9 +14,9 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
-import { render } from "@didact/core";
-import { Route, Router, RouterBuilder } from "@didact/core/router";
-import type { VElement } from "@didact/core";
+import { render } from "lumon";
+import { Route, Router, RouterBuilder } from "lumon";
+import type { VElement } from "lumon";
 
 // =============================================================================
 // Route Definitions

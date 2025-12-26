@@ -1,5 +1,5 @@
 {
-  "name": "@didact/core",
+  "name": "lumon",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -28,10 +28,6 @@
     "./shared": {
       "import": "./dist/shared.js",
       "types": "./dist/shared.d.ts"
-    },
-    "./router": {
-      "import": "./dist/router/index.js",
-      "types": "./dist/router/index.d.ts"
     }
   },
   "scripts": {

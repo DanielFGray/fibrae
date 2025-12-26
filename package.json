@@ -1,5 +1,5 @@
 {
-  "name": "didact",
+  "name": "lumon",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -25,13 +25,13 @@
     "cypress:run": "cd packages/demo && bun cypress:run",
     "cypress:open": "cd packages/demo && bun cypress:open",
     "build": "run-s build:core",
-    "build:watch": "bun --filter '@didact/core' build:watch",
-    "build:core": "bun --filter '@didact/core' build",
+    "build:watch": "bun --filter lumon build:watch",
+    "build:core": "bun --filter lumon build",
     "types:check": "bun --workspaces types:check",
-    "types:watch:core": "cd packages/didact; run-s types:watch",
+    "types:watch:core": "cd packages/lumon; run-s types:watch",
     "types:watch:demo": "cd packages/demo; run-s types:watch",
     "types:watch": "run-p types:watch:core types:watch:demo",
-    "ssr:demo": "bun --filter @didact/core build && bun --filter demo ssr",
+    "ssr:demo": "bun --filter lumon build && bun --filter demo ssr",
     "lint": "eslint"
   },
   "dependencies": {

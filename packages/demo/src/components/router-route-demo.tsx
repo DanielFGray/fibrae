@@ -1,5 +1,5 @@
-import { h as H, render } from "@didact/core";
-import { Route } from "@didact/core/router";
+import { h as H, render } from "lumon";
+import { Route } from "lumon";
 import * as Schema from "effect/Schema";
 
 export function RouterRouteDemo() {

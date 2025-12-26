@@ -18,7 +18,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Context from "effect/Context";
 import { Registry as AtomRegistry } from "@effect-atom/atom";
-import { History, MemoryHistoryLive } from "./History.js";
+import { History, MemoryHistoryLive, type HistoryLocation } from "./History.js";
 import { Navigator, NavigatorLive } from "./Navigator.js";
 import { RouterHandlers } from "./RouterBuilder.js";
 import { RouterStateAtom } from "./RouterState.js";
@@ -135,7 +135,7 @@ export interface BrowserLayerOptions {
   readonly router: Router;
   /** 
    * @deprecated Use atom hydration instead. RouterStateAtom is automatically
-   * hydrated from __DIDACT_STATE__ and used by RouterOutlet.
+   * hydrated from __LUMON_STATE__ and used by RouterOutlet.
    */
   readonly initialState?: DehydratedRouterState;
   /** Base path prefix for the app (e.g., "/ssr/router") */
@@ -171,7 +171,7 @@ export interface SSRRouteResult {
  * Service tag for the current route's rendered element.
  * Used by SSR to provide the matched route's component.
  */
-export class CurrentRouteElement extends Context.Tag("@didact/router/CurrentRouteElement")<
+export class CurrentRouteElement extends Context.Tag("lumon/CurrentRouteElement")<
   CurrentRouteElement,
   { readonly element: VElement; readonly state: DehydratedRouterState }
 >() {}
@@ -240,7 +240,8 @@ export function serverLayer(
   
   // Create memory history for SSR (static, no navigation)
   const historyLayer = MemoryHistoryLive({
-    initialEntries: [`${pathname}${search ? `?${search.replace(/^\?/, "")}` : ""}`],
+    initialPathname: pathname,
+    initialSearch: search ? `?${search.replace(/^\?/, "")}` : "",
   });
   
   // Create navigator layer with basePath - needs History and AtomRegistry
@@ -313,12 +314,12 @@ export function serverLayer(
  * 
  * SSR hydration works automatically via atom hydration - no need to 
  * pass initialState manually. The RouterStateAtom is hydrated from
- * __DIDACT_STATE__ before this layer is created.
+ * __LUMON_STATE__ before this layer is created.
  * 
  * Usage in client:
  * ```typescript
  * // Hydrate atoms first (includes RouterStateAtom)
- * hydrate(container, app, window.__DIDACT_STATE__);
+ * hydrate(container, app, window.__LUMON_STATE__);
  * 
  * // Browser layer reads from hydrated RouterStateAtom
  * const browserLayer = Router.browserLayer({
@@ -341,15 +342,14 @@ export function browserLayer(
       const { Atom } = yield* Effect.promise(() => import("@effect-atom/atom"));
       
       // Create location atom with initial browser location
-      const getBrowserLocation = () => ({
+      const getBrowserLocation = (): HistoryLocation => ({
         pathname: window.location.pathname,
         search: window.location.search,
         hash: window.location.hash,
-        href: `${window.location.pathname}${window.location.search}${window.location.hash}`,
         state: window.history.state,
       });
       
-      const locationAtom = Atom.make(getBrowserLocation());
+      const locationAtom = Atom.make<HistoryLocation>(getBrowserLocation());
       
       // Subscribe to popstate for browser back/forward
       const handlePopState = () => {
@@ -368,7 +368,7 @@ export function browserLayer(
       // Track history index for canGoBack
       let historyIndex = 0;
       
-      const parseLocation = (href: string, state: unknown = null) => {
+      const parseLocation = (href: string, state?: unknown): HistoryLocation => {
         const url = href.startsWith("/")
           ? new URL(href, "http://localhost")
           : new URL(href);
@@ -376,7 +376,6 @@ export function browserLayer(
           pathname: url.pathname,
           search: url.search,
           hash: url.hash,
-          href: `${url.pathname}${url.search}${url.hash}`,
           state,
         };
       };
@@ -387,7 +386,8 @@ export function browserLayer(
         push: (path: string, state?: unknown) =>
           Effect.sync(() => {
             const location = parseLocation(path, state);
-            window.history.pushState(state, "", location.href);
+            const fullPath = `${location.pathname}${location.search}${location.hash}`;
+            window.history.pushState(state, "", fullPath);
             historyIndex++;
             registry.set(locationAtom, { ...location, state });
           }),
@@ -395,7 +395,8 @@ export function browserLayer(
         replace: (path: string, state?: unknown) =>
           Effect.sync(() => {
             const location = parseLocation(path, state);
-            window.history.replaceState(state, "", location.href);
+            const fullPath = `${location.pathname}${location.search}${location.hash}`;
+            window.history.replaceState(state, "", fullPath);
             registry.set(locationAtom, { ...location, state });
           }),
         
@@ -445,7 +446,15 @@ export function browserLayer(
           searchParams: state.searchParams,
         });
         
-        return { element, state };
+        // Cast RouterState to DehydratedRouterState (same shape)
+        const dehydratedState: DehydratedRouterState = {
+          routeName: state.routeName,
+          params: state.params,
+          searchParams: state.searchParams,
+          loaderData: state.loaderData,
+        };
+        
+        return { element, state: dehydratedState };
       }
       
       // Non-hydration mode: match and run loader

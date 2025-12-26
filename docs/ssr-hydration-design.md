@@ -66,7 +66,7 @@ window.__PRELOADED_STATE__ = { counter: 5, todos: [...] };
 
 ---
 
-## Didact's Approach
+## Lumon's Approach
 
 ### Philosophy
 
@@ -100,7 +100,7 @@ window.__PRELOADED_STATE__ = { counter: 5, todos: [...] };
 ```html
 <!-- Server output -->
 <div id="root">...SSR content...</div>
-<script id="__DIDACT_STATE__" type="application/json">
+<script id="__LUMON_STATE__" type="application/json">
 {"atoms":{"counter:a":0,"counter:b":5,"todos":["item1","item2"]}}
 </script>
 ```
@@ -111,14 +111,14 @@ Use comment markers like React:
 
 ```html
 <!-- Resolved during SSR -->
-<!--didact:sus:resolved-->
+<!--lumon:sus:resolved-->
 <div>actual content</div>
-<!--/didact:sus-->
+<!--/lumon:sus-->
 
 <!-- Fallback shown (timed out or pending) -->
-<!--didact:sus:fallback-->
+<!--lumon:sus:fallback-->
 <div>Loading...</div>
-<!--/didact:sus-->
+<!--/lumon:sus-->
 ```
 
 Client hydration:
@@ -165,7 +165,7 @@ const UserData = () => Effect.gen(function*() {
 ### Server
 
 ```typescript
-import { renderToString } from "@didact/core/server";
+import { renderToString } from "lumon/server";
 
 // Render to HTML with state manifest
 const { html, stateScript, dehydratedState } = yield* renderToString(h(App));
@@ -190,7 +190,7 @@ Atoms must use `Atom.serializable({ key, schema })` to be included in the state 
 ### Client
 
 ```typescript
-import { hydrate } from "@didact/core";
+import { hydrate } from "lumon";
 
 // Hydrate existing SSR content
 const container = document.getElementById("root")!;
@@ -203,7 +203,7 @@ Effect.runFork(render(h(App), container));
 ### Detecting Environment
 
 ```typescript
-import { RenderEnv } from "@didact/core";
+import { RenderEnv } from "lumon";
 
 const MyComponent = () => Effect.gen(function*() {
   const env = yield* RenderEnv;
@@ -227,7 +227,7 @@ const MyComponent = () => Effect.gen(function*() {
 1. Create `SSRAtomRegistry` - read-only, tracks accessed atoms
 2. Provide it during SSR render
 3. After render, extract `{ atomId → value }` map
-4. Serialize to `<script id="__DIDACT_STATE__">`
+4. Serialize to `<script id="__LUMON_STATE__">`
 
 ### Phase 2: State Manifest
 

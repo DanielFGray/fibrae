@@ -32,7 +32,7 @@ import {
   isProperty,
   isStream,
 } from "./shared.js";
-import { DidactRuntime, type FiberState, runForkWithRuntime } from "./runtime.js";
+import { LumonRuntime, type FiberState, runForkWithRuntime } from "./runtime.js";
 import { setDomProperty, attachEventListeners } from "./dom.js";
 import { normalizeToStream, makeTrackingRegistry } from "./tracking.js";
 import { h } from "./h.js";
@@ -58,7 +58,7 @@ const subscribeComponentStream = <E>(
   stream: Stream.Stream<VElement, E>,
   fiberRef: FiberRefType,
   scope: Scope.Scope
-): Effect.Effect<Deferred.Deferred<VElement, E>, never, DidactRuntime> =>
+): Effect.Effect<Deferred.Deferred<VElement, E>, never, LumonRuntime> =>
   Effect.gen(function* () {
     const firstValueDeferred = yield* Deferred.make<VElement, E>();
 
@@ -167,7 +167,7 @@ const getComponentScopeOrDie = (fiber: Fiber, msg: string) =>
 
 const queueFiberForRerender = (fiber: Fiber) =>
   Effect.gen(function* () {
-    const runtime = yield* DidactRuntime;
+    const runtime = yield* LumonRuntime;
     const stateRef = runtime.fiberState;
 
     const didSchedule = yield* Ref.modify(stateRef, (s: FiberState) => {
@@ -193,20 +193,26 @@ const queueFiberForRerender = (fiber: Fiber) =>
 // Process Batch (handles queued re-renders)
 // =============================================================================
 
-const processBatch = () =>
+const processBatch = (): Effect.Effect<void, never, LumonRuntime> =>
   Effect.gen(function* () {
-    const runtime = yield* DidactRuntime;
+    const runtime = yield* LumonRuntime;
     const stateRef = runtime.fiberState;
     const stateSnapshot = yield* Ref.get(stateRef);
 
     const batch = Array.from(stateSnapshot.renderQueue);
+    
+    // Clear the queue but keep batchScheduled = true to prevent concurrent batches
     yield* Ref.update(stateRef, (s) => ({
       ...s,
       renderQueue: new Set<Fiber>(),
-      batchScheduled: false,
+      // DO NOT set batchScheduled = false here - keep it true during workLoop
     }));
 
-    if (batch.length === 0) return;
+    if (batch.length === 0) {
+      // No work to do - reset batchScheduled
+      yield* Ref.update(stateRef, (s) => ({ ...s, batchScheduled: false }));
+      return;
+    }
 
     yield* Option.match(stateSnapshot.currentRoot, {
       onNone: () => Effect.void,
@@ -243,6 +249,16 @@ const processBatch = () =>
           yield* workLoop(runtime);
         }),
     });
+    
+    // After workLoop completes, check if more work was queued during processing
+    const afterState = yield* Ref.get(stateRef);
+    if (afterState.renderQueue.size > 0) {
+      // More work was queued during the batch - process it immediately
+      yield* processBatch();
+    } else {
+      // No more work - allow new batches to be scheduled
+      yield* Ref.update(stateRef, (s) => ({ ...s, batchScheduled: false }));
+    }
   });
 
 // =============================================================================
@@ -311,9 +327,9 @@ const findDomParent = (fiber: Fiber): Option.Option<Node> => {
 const findNearestErrorBoundary = (fiber: Fiber): Option.Option<Fiber> =>
   findAncestor(fiber, (f) => Option.isSome(f.errorBoundary));
 
-const handleFiberError = (fiber: Fiber, cause: unknown): Effect.Effect<Option.Option<Fiber>, never, DidactRuntime> =>
+const handleFiberError = (fiber: Fiber, cause: unknown): Effect.Effect<Option.Option<Fiber>, never, LumonRuntime> =>
   Effect.gen(function* () {
-    const runtime = yield* DidactRuntime;
+    const runtime = yield* LumonRuntime;
     const stateRef = runtime.fiberState;
     const state = yield* Ref.get(stateRef);
     
@@ -374,7 +390,7 @@ const getSuspenseThreshold = (fiber: Fiber): number => {
  * Called when a stream component's threshold expires before first emission.
  * Parks the fiber and switches the boundary to show fallback.
  */
-const handleFiberSuspension = (fiber: Fiber): Effect.Effect<void, never, DidactRuntime> =>
+const handleFiberSuspension = (fiber: Fiber): Effect.Effect<void, never, LumonRuntime> =>
   Effect.gen(function* () {
     const boundaryOpt = findNearestSuspenseBoundary(fiber);
     if (Option.isNone(boundaryOpt)) {
@@ -409,7 +425,7 @@ const handleFiberSuspension = (fiber: Fiber): Effect.Effect<void, never, DidactR
  * Called when a parked fiber finally gets its first emission.
  * Signals the boundary to swap back to showing children.
  */
-const signalFiberReady = (fiber: Fiber): Effect.Effect<void, never, DidactRuntime> =>
+const signalFiberReady = (fiber: Fiber): Effect.Effect<void, never, LumonRuntime> =>
   Effect.gen(function* () {
     const boundaryOpt = findNearestSuspenseBoundary(fiber);
     if (Option.isNone(boundaryOpt)) return;
@@ -434,7 +450,7 @@ const signalFiberReady = (fiber: Fiber): Effect.Effect<void, never, DidactRuntim
 // Update Function Component
 // =============================================================================
 
-const updateFunctionComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.Effect<void, never, DidactRuntime> =>
+const updateFunctionComponent = (fiber: Fiber, runtime: LumonRuntime): Effect.Effect<void, never, LumonRuntime> =>
   Effect.gen(function* () {
     // Initialize deferred for child first commit signaling
     if (Option.isNone(fiber.childFirstCommitDeferred)) {
@@ -600,8 +616,8 @@ const updateFunctionComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.E
 
 const performUnitOfWork = (
   fiber: Fiber,
-  runtime: DidactRuntime
-): Effect.Effect<Option.Option<Fiber>, never, DidactRuntime> =>
+  runtime: LumonRuntime
+): Effect.Effect<Option.Option<Fiber>, never, LumonRuntime> =>
   Effect.gen(function* () {
     const isFunctionComponent = fiberTypeIsFunction(fiber);
 
@@ -648,7 +664,7 @@ const resubscribeFiber = (fiber: Fiber) =>
     fiber.componentScope = Option.some(newScope);
   });
 
-const subscribeFiberAtoms = (fiber: Fiber, accessedAtoms: Set<Atom.Atom<any>>, runtime: DidactRuntime) =>
+const subscribeFiberAtoms = (fiber: Fiber, accessedAtoms: Set<Atom.Atom<any>>, runtime: LumonRuntime) =>
   Effect.gen(function* () {
     const scope = yield* getComponentScopeOrDie(
       fiber,
@@ -671,7 +687,7 @@ const subscribeFiberAtoms = (fiber: Fiber, accessedAtoms: Set<Atom.Atom<any>>, r
 // Update Host Component
 // =============================================================================
 
-const updateHostComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.Effect<void, never, DidactRuntime> =>
+const updateHostComponent = (fiber: Fiber, runtime: LumonRuntime): Effect.Effect<void, never, LumonRuntime> =>
   Effect.gen(function* () {
     // Inherit renderContext from parent fiber (function components capture it during render)
     // This propagates Navigator, RouterHandlers, etc. down to host elements for event handlers
@@ -802,7 +818,7 @@ const updateHostComponent = (fiber: Fiber, runtime: DidactRuntime): Effect.Effec
     yield* reconcileChildren(fiber, children || []);
   });
 
-const createDom = (fiber: Fiber, runtime: DidactRuntime) =>
+const createDom = (fiber: Fiber, runtime: LumonRuntime) =>
   Effect.gen(function* () {
     const dom = yield* Option.match(fiber.type, {
       onNone: () => Effect.die("createDom called with no type"),
@@ -845,7 +861,7 @@ const updateDom = (
   prevProps: { [key: string]: unknown },
   nextProps: { [key: string]: unknown },
   ownerFiber: Fiber,
-  runtime: DidactRuntime
+  runtime: LumonRuntime
 ) =>
   Effect.gen(function* () {
     const stateRef = runtime.fiberState;
@@ -901,7 +917,7 @@ const updateDom = (
           const result = handler(event);
           if (Effect.isEffect(result)) {
             // Use runForkWithRuntime to get the full application context
-            // This provides Navigator, DidactRuntime, AtomRegistry, etc.
+            // This provides Navigator, LumonRuntime, AtomRegistry, etc.
             const effectWithErrorHandling = result.pipe(
               Effect.catchAllCause((cause) =>
                 ownerFiber ? handleFiberError(ownerFiber, cause) : Effect.void
@@ -929,7 +945,7 @@ const updateDom = (
 
 const reconcileChildren = (wipFiber: Fiber, elements: VElement[]) =>
   Effect.gen(function* () {
-    const runtime = yield* DidactRuntime;
+    const runtime = yield* LumonRuntime;
     const stateRef = runtime.fiberState;
 
     // Collect old children from alternate
@@ -1099,7 +1115,7 @@ const commitDeletion = (fiber: Fiber, domParent: Node): Effect.Effect<void, neve
       }),
   });
 
-const commitRoot = (runtime: DidactRuntime) =>
+const commitRoot = (runtime: LumonRuntime) =>
   Effect.gen(function* () {
     const stateRef = runtime.fiberState;
     const currentState = yield* Ref.get(stateRef);
@@ -1136,7 +1152,7 @@ const commitRoot = (runtime: DidactRuntime) =>
     }));
   });
 
-const commitWork = (fiber: Fiber, runtime: DidactRuntime): Effect.Effect<void, never, DidactRuntime> =>
+const commitWork = (fiber: Fiber, runtime: LumonRuntime): Effect.Effect<void, never, LumonRuntime> =>
   Effect.gen(function* () {
     // KEY INSIGHT: If fiber has no DOM (function component), just process children
     if (Option.isNone(fiber.dom)) {
@@ -1208,7 +1224,7 @@ const commitWork = (fiber: Fiber, runtime: DidactRuntime): Effect.Effect<void, n
 // Work Loop
 // =============================================================================
 
-const workLoop = (runtime: DidactRuntime) =>
+const workLoop = (runtime: LumonRuntime) =>
   Effect.gen(function* () {
     const stateRef = runtime.fiberState;
 
@@ -1250,7 +1266,7 @@ const workLoop = (runtime: DidactRuntime) =>
  */
 export const renderFiber = (element: VElement, container: HTMLElement) =>
   Effect.gen(function* () {
-    const runtime = yield* DidactRuntime;
+    const runtime = yield* LumonRuntime;
     const stateRef = runtime.fiberState;
     const currentState = yield* Ref.get(stateRef);
 
@@ -1294,7 +1310,7 @@ export const renderFiber = (element: VElement, container: HTMLElement) =>
  */
 export const hydrateFiber = (element: VElement, container: HTMLElement) =>
   Effect.gen(function* () {
-    const runtime = yield* DidactRuntime;
+    const runtime = yield* LumonRuntime;
     const stateRef = runtime.fiberState;
 
     // Create root fiber with container as DOM
@@ -1326,8 +1342,8 @@ const hydrateChildren = (
   parentFiber: Fiber,
   vElements: VElement[],
   domNodes: Node[],
-  runtime: DidactRuntime
-): Effect.Effect<void, unknown, DidactRuntime> =>
+  runtime: LumonRuntime
+): Effect.Effect<void, unknown, LumonRuntime> =>
   Effect.gen(function* () {
     let domIndex = 0;
     const fibers: Fiber[] = [];
@@ -1352,8 +1368,8 @@ const hydrateElement = (
   vElement: VElement,
   domNodes: Node[],
   domIndex: number,
-  runtime: DidactRuntime
-): Effect.Effect<Fiber, unknown, DidactRuntime> =>
+  runtime: LumonRuntime
+): Effect.Effect<Fiber, unknown, LumonRuntime> =>
   Effect.gen(function* () {
     const fiber = createFiber(
       Option.some(vElement.type),
@@ -1405,8 +1421,8 @@ const hydrateFunctionComponent = (
   vElement: VElement,
   domNodes: Node[],
   domIndex: number,
-  runtime: DidactRuntime
-): Effect.Effect<void, unknown, DidactRuntime> =>
+  runtime: LumonRuntime
+): Effect.Effect<void, unknown, LumonRuntime> =>
   Effect.gen(function* () {
     // Capture current context during render phase for event handlers in commit phase
     const currentContext = (yield* FiberRef.get(FiberRef.currentContext)) as Context.Context<any>;

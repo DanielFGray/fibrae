@@ -1,7 +1,7 @@
-# AST-grep Guide for didact-ts
+# AST-grep Guide for lumon
 
 ## Overview
-ast-grep is a fast and polyglot tool for code structural search, lint, and rewriting at large scale. This guide covers practical usage examples for the didact-ts project.
+ast-grep is a fast and polyglot tool for code structural search, lint, and rewriting at large scale. This guide covers practical usage examples for the lumon project.
 
 ## Basic Pattern Syntax
 
@@ -127,7 +127,7 @@ ast-grep run --pattern 'PATTERN' --rewrite 'NEW' -i file.ts
 - Pattern matching is syntactic, not semantic
 - Be careful with whitespace and formatting in patterns
 
-## Example Rules for didact-ts
+## Example Rules for lumon
 
 See the `rules/` directory for practical examples:
 - `no-console-log.yml` - Enforce Effect.log usage

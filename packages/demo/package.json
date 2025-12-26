@@ -18,7 +18,7 @@
     "ssr:html": "mkdir -p dist && bun src/demo-ssr.ts > dist/ssr.html && echo 'Wrote dist/ssr.html'"
   },
   "dependencies": {
-    "@didact/core": "workspace:*",
+    "lumon": "workspace:*",
     "@effect-atom/atom": "catalog:",
     "@effect/opentelemetry": "^0.58.0",
     "@effect/platform": "catalog:",

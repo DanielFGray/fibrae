@@ -9,7 +9,7 @@
     "types": [
       "vite/client",
       "cypress",
-      "@didact/core/jsx-runtime",
+      "lumon/jsx-runtime",
       "node"
     ]
   },

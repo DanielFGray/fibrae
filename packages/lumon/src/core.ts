@@ -6,7 +6,7 @@ import * as Context from "effect/Context";
 
 import { Registry as AtomRegistry, Hydration } from "@effect-atom/atom";
 import { type VElement } from "./shared.js";
-import { DidactRuntime } from "./runtime.js";
+import { LumonRuntime } from "./runtime.js";
 import { renderFiber, hydrateFiber } from "./fiber-render.js";
 
 // =============================================================================
@@ -44,7 +44,7 @@ export function render(
 ) {
   const program = (cont: HTMLElement) =>
     Effect.gen(function*() {
-      const runtime = yield* DidactRuntime;
+      const runtime = yield* LumonRuntime;
       const registry = yield* AtomRegistry.AtomRegistry;
 
       // Capture the full context NOW (after all layers are built) and store it in runtime
@@ -71,12 +71,12 @@ export function render(
       // This line is unreachable but satisfies the type system
       return yield* Effect.never;
     }).pipe(
-      // Always use LiveWithRegistry so the program has access to both DidactRuntime AND AtomRegistry
+      // Always use LiveWithRegistry so the program has access to both LumonRuntime AND AtomRegistry
       // If user provided a layer, merge it in as well
       Effect.provide(
         options?.layer
-          ? Layer.provideMerge(options.layer, DidactRuntime.LiveWithRegistry)
-          : DidactRuntime.LiveWithRegistry
+          ? Layer.provideMerge(options.layer, LumonRuntime.LiveWithRegistry)
+          : LumonRuntime.LiveWithRegistry
       )
     );
 

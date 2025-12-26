@@ -15,9 +15,9 @@ import {
   BunFileSystem,
   BunPath,
 } from "@effect/platform-bun";
-import { h } from "@didact/core";
-import { renderToString, renderToStringWith, SSRAtomRegistryLayer } from "@didact/core/server";
-import { Router } from "@didact/core/router";
+import { h } from "lumon";
+import { renderToString, renderToStringWith, SSRAtomRegistryLayer } from "lumon/server";
+import { Router } from "lumon/router";
 import { CounterApp, TodoApp, SuspenseApp, SlowSuspenseApp, setInitialTodos } from "../src/ssr-app.js";
 import { SSRRouter, App, createSSRRouterHandlers } from "../src/ssr-router-app.js";
 
@@ -57,11 +57,11 @@ const buildPage = (html: string, dehydratedState: unknown[], hydrationScript: st
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Didact SSR</title>
+<title>Lumon SSR</title>
 </head>
 <body>
 <div id="root">${html}</div>
-<script>window.__DIDACT_STATE__ = ${JSON.stringify(dehydratedState)};</script>
+<script>window.__LUMON_STATE__ = ${JSON.stringify(dehydratedState)};</script>
 <script type="module" src="${VITE_DEV_URL}/src/${hydrationScript}"></script>
 </body>
 </html>`;

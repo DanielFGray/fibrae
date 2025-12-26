@@ -1,5 +1,5 @@
 /**
- * Didact Demo App with Router
+ * Lumon Demo App with Router
  *
  * A real app showcasing:
  * - Link component with active states
@@ -14,15 +14,17 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
-import { render, Atom, AtomRegistry } from "@didact/core";
+import { render, Atom, AtomRegistry } from "lumon";
 import {
   Route,
   Router,
+  RouterBuilder,
+  RouterOutlet,
   BrowserHistoryLive,
   NavigatorTag,
   NavigatorLive,
   createLink,
-} from "@didact/core/router";
+} from "lumon";
 
 // =============================================================================
 // Route Definitions
@@ -55,11 +57,10 @@ const Link = createLink(appRouter);
 const counterAtom = Atom.make(0);
 const todosAtom = Atom.make<Array<{ id: number; text: string }>>([]);
 const todoCompletedAtom = Atom.family((id: number) => Atom.make(false));
-const sortAtom = Atom.make<string>("");
 
 // Mock posts data
 const posts = [
-  { id: 1, title: "Getting Started with Didact", excerpt: "Learn the basics of Effect-first rendering" },
+  { id: 1, title: "Getting Started with Lumon", excerpt: "Learn the basics of Effect-first rendering" },
   { id: 2, title: "Understanding Atoms", excerpt: "Reactive state management with fine-grained updates" },
   { id: 3, title: "Building with Streams", excerpt: "Progressive rendering and async data" },
 ];
@@ -71,7 +72,7 @@ const posts = [
 const HomePage = () => (
   <div class="page">
     <h1 data-cy="page-title">Home</h1>
-    <p>Welcome to the Didact demo app!</p>
+    <p>Welcome to the Lumon demo app!</p>
     <p>This demonstrates Effect-first JSX rendering with:</p>
     <ul>
       <li>Reactive state with Atoms</li>
@@ -197,10 +198,11 @@ const TodosPage = () =>
     );
   });
 
-const PostsPage = () =>
+// PostsPage now receives searchParams from the loader via props
+const PostsPage = ({ searchParams }: { searchParams: { sort?: string } }) =>
   Effect.gen(function* () {
     const navigator = yield* NavigatorTag;
-    const currentSort = yield* Atom.get(sortAtom);
+    const currentSort = searchParams.sort ?? "";
 
     return (
       <div class="page">
@@ -266,6 +268,38 @@ const PostDetailPage = ({ id }: { id: number }) => {
 };
 
 // =============================================================================
+// Route Handlers (using RouterBuilder)
+// =============================================================================
+
+const AppRoutesLive = RouterBuilder.group(
+  appRouter,
+  "main",
+  (handlers) => Effect.succeed(
+    handlers
+      .handle("home", {
+        loader: () => Effect.succeed(null),
+        component: () => <HomePage />,
+      })
+      .handle("counter", {
+        loader: () => Effect.succeed(null),
+        component: () => <CounterPage />,
+      })
+      .handle("todos", {
+        loader: () => Effect.succeed(null),
+        component: () => <TodosPage />,
+      })
+      .handle("posts", {
+        loader: () => Effect.succeed(null),
+        component: ({ searchParams }) => <PostsPage searchParams={searchParams} />,
+      })
+      .handle("post", {
+        loader: ({ path }) => Effect.succeed(path.id as number),
+        component: ({ loaderData }) => <PostDetailPage id={loaderData} />,
+      })
+  )
+);
+
+// =============================================================================
 // Navigation Bar
 // =============================================================================
 
@@ -301,47 +335,6 @@ const NavBar = () =>
   });
 
 // =============================================================================
-// Router Outlet
-// =============================================================================
-
-const RouterOutlet = () =>
-  Effect.gen(function* () {
-    const navigator = yield* NavigatorTag;
-    const registry = yield* AtomRegistry.AtomRegistry;
-    const currentRoute = yield* Atom.get(navigator.currentRoute);
-
-    // Update sort atom from search params
-    if (Option.isSome(currentRoute) && currentRoute.value.searchParams.sort) {
-      registry.set(sortAtom, currentRoute.value.searchParams.sort);
-    }
-
-    return Option.match(currentRoute, {
-      onNone: () => <div class="page">Loading...</div>,
-      onSome: (route) => {
-        switch (route.routeName) {
-          case "home":
-            return <HomePage />;
-          case "counter":
-            return <CounterPage />;
-          case "todos":
-            return <TodosPage />;
-          case "posts":
-            return <PostsPage />;
-          case "post":
-            return <PostDetailPage id={route.params.id as number} />;
-          default:
-            return (
-              <div class="page">
-                <h1>404</h1>
-                <p>Page not found</p>
-              </div>
-            );
-        }
-      },
-    });
-  });
-
-// =============================================================================
 // Main App
 // =============================================================================
 
@@ -359,7 +352,12 @@ const App = () =>
 // Bootstrap
 // =============================================================================
 
-const routerLayer = Layer.provideMerge(NavigatorLive(appRouter), BrowserHistoryLive);
+// Compose all layers: History -> Navigator -> RouterHandlers
+const routerLayer = pipe(
+  NavigatorLive(appRouter),
+  Layer.provideMerge(BrowserHistoryLive),
+  Layer.provideMerge(AppRoutesLive)
+);
 
 Effect.gen(function* () {
   const root = pipe(

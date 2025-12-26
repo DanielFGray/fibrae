@@ -486,4 +486,4 @@ export interface Context {
 4. **Service Integration**: AtomRuntime provides dependency injection via Effect services
 5. **Stream Support**: Native support for Effect streams and async operations
 
-This covers the core non-React APIs for working with Effect Atom in your didact-ts project.
+This covers the core non-React APIs for working with Effect Atom in your lumon project.

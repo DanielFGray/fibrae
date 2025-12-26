@@ -8,8 +8,8 @@
 
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import type { VElement } from "@didact/core";
-import { Route, Router, RouterBuilder, createLink, RouterOutlet } from "@didact/core/router";
+import type { VElement } from "lumon";
+import { Route, Router, RouterBuilder, createLink, RouterOutlet } from "lumon";
 
 // =============================================================================
 // Route Definitions

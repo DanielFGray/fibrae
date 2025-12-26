@@ -1,6 +1,6 @@
 Title: Typed SSR/Hydration APIs — What They Do and Where To Find Them
 Overview
-- Goal: Summarize @typed’s SSR and hydration primitives to inform Didact’s SSR design.
+- Goal: Summarize @typed’s SSR and hydration primitives to inform Lumon’s SSR design.
 - Key ideas: environment-driven rendering, streaming HTML, hydration markers, scheduling abstraction, and template/cache layering.
 Core Services
 - RenderTemplate
@@ -77,8 +77,8 @@ Key Behaviors To Mirror
 - Template + root caches
   - Cache parsed templates and root attachments for performance and correctness across re-renders.
   - Where: packages/typed/packages/template/src/RenderContext.ts:30, packages/typed/packages/template/src/RenderContext.ts:35
-How This Informs Didact
-- Introduce a DidactRenderTemplate service and DidactRenderContext with environment + caches.
+How This Informs Lumon
+- Introduce a LumonRenderTemplate service and LumonRenderContext with environment + caches.
 - Provide server/static layers that expose renderToHtml/renderToString.
 - Add hydrate(root, app) that locates server markers and attaches handlers without node recreation.
 - Gate Atoms/Streams to single emission in “server” env, remain reactive in “dom”.

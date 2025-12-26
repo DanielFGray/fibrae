@@ -4,7 +4,7 @@ import * as Scope from "effect/Scope";
 
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import { type VElement, isStream } from "./shared.js";
-import { DidactRuntime } from "./runtime.js";
+import { LumonRuntime } from "./runtime.js";
 
 // =============================================================================
 // Stream Normalization
@@ -56,7 +56,7 @@ export const makeTrackingRegistry = (
 export const subscribeToAtoms = (
   atoms: Set<Atom.Atom<unknown>>,
   onUpdate: () => void,
-  runtime: DidactRuntime,
+  runtime: LumonRuntime,
   scope: Scope.Scope.Closeable
 ): Effect.Effect<void, never, never> =>
   Effect.forEach(

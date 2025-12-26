@@ -57,7 +57,7 @@ interface BridgeStream<A> {
 
 ### 2. HTML Serialization Updates
 
-**Current State** (packages/didact/src/server.ts):
+**Current State** (packages/lumon/src/server.ts):
 - Text nodes wrapped: `<span data-dx-t>text</span>` (line 108)
 - No deterministic IDs yet
 - No bridge token emission
@@ -153,10 +153,10 @@ interface BridgeClient {
 ### 4. Network Protocol
 
 **Option A: Simple HTTP** (MVP)
-- Promise endpoint: `GET /didact/p/{id}`
+- Promise endpoint: `GET /lumon/p/{id}`
   - Returns JSON when resolved
   - Long-poll if pending (with timeout)
-- Stream endpoint: `GET /didact/s/{id}`
+- Stream endpoint: `GET /lumon/s/{id}`
   - Server-Sent Events (SSE)
   - Chunked transfer encoding
   - Client closes connection when done
@@ -254,7 +254,7 @@ const LiveCounterComponent: Component = () => Effect.gen(function*() {
 
 #### Phase 1: Foundation (Required First)
 **Prerequisite**: Fix current issues before adding bridge
-- [ ] Fix stream detection bug (packages/didact/src/server.ts:129)
+- [ ] Fix stream detection bug (packages/lumon/src/server.ts:129)
   - Replace `Symbol.iterator in result` with proper `Stream.isStream(result)` guard
   - Keep arrays as children, not streams
 - [ ] Add deterministic path IDs to all nodes
@@ -303,12 +303,12 @@ const LiveCounterComponent: Component = () => Effect.gen(function*() {
 
 ### 8. Integration with Existing Code
 
-**Fiber Fields** (packages/didact/src/rewrite.ts:33-52):
+**Fiber Fields** (packages/lumon/src/rewrite.ts:33-52):
 - `latestStreamValue` (line 47): use for SSR first emission capture
 - `componentScope` (line 45): attach bridge cleanup to this
 - No new fiber fields needed; bridge is Layer-provided service
 
-**Current SSR** (packages/didact/src/server.ts):
+**Current SSR** (packages/lumon/src/server.ts):
 - Keep `renderToString` signature
 - Add optional `Bridge` layer to Effect context
 - Components opt-in by calling `Bridge.promise`/`Bridge.stream`
@@ -316,7 +316,7 @@ const LiveCounterComponent: Component = () => Effect.gen(function*() {
 **Environment Strategy**:
 - Server: one-shot semantics (already present for streams at line 129)
 - Client: full reactivity with bridge reconnection
-- Future: add `DidactEnv` service to formalize this (from previous plan)
+- Future: add `LumonEnv` service to formalize this (from previous plan)
 
 ### 9. Testing Strategy
 

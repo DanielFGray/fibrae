@@ -4,17 +4,17 @@
  */
 import * as Effect from "effect/Effect";
 import * as BrowserPlatform from "@effect/platform-browser";
-import { render } from "@didact/core";
+import { render } from "lumon";
 import { SlowSuspenseApp } from "./ssr-app.js";
 
 declare global {
   interface Window {
-    __DIDACT_STATE__?: ReadonlyArray<unknown>;
+    __LUMON_STATE__?: ReadonlyArray<unknown>;
   }
 }
 
 const container = document.getElementById("root") as HTMLElement;
-const initialState = window.__DIDACT_STATE__;
+const initialState = window.__LUMON_STATE__;
 
 // Run the hydration
 render(<SlowSuspenseApp />, container, { 
