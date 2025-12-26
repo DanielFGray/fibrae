@@ -25,9 +25,15 @@ Building an Effect-first JSX renderer where components are Effect programs with 
 
 ## Commands
   - Build: `bun run build` (tsc)
-  - E2E Tests: `bun --filter demo cypress:run` (headless Cypress E2E tests)
-    - Single test: `bun --filter demo cypress:run --spec "cypress/e2e/<test-name>.cy.ts"`
+  - Lint: `bun eslint packages/didact/src/` (check for lint errors)
+  - E2E Tests: `cd packages/demo && bun cypress:run` (headless Cypress E2E tests)
+    - Single test: `cd packages/demo && bun cypress:run --spec "cypress/e2e/<test-name>.cy.ts"`
   - **IMPORTANT:** Do NOT pipe test output through `head`, `tail`, or other filters. Let tests run to completion and show full output.
+
+**After making changes, always verify:**
+1. `bun run build` - TypeScript compiles without errors
+2. `bun eslint packages/didact/src/` - No new lint errors introduced
+3. `cd packages/demo && bun cypress:run` - All tests pass
 
 Assume the vite dev server is already running. Do not try to run it with `bun dev`.
 
