@@ -4,7 +4,7 @@
   "description": "Effect-first JSX renderer with automatic reactivity",
   "repository": {
     "type": "git",
-    "url": "https://github.com/DanielFGray/lumon"
+    "url": "https://github.com/DanielFGray/fibrae"
   },
   "license": "MIT",
   "type": "module",
