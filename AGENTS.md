@@ -17,8 +17,14 @@ cd packages/demo && bun cypress:run
 **Workflow:**
 1. Work on the `develop` branch
 2. Commit changes to `develop`
-3. Push: `git push origin develop`
-4. For releases: merge develop → main, bump version, push main
+3. Push: `git push origin develop` **only when user explicitly requests**
+
+**NEVER push to main without explicit user direction.** The `main` branch requires:
+- Explicit user request to release
+- Version bump in package.json
+- User approval before push
+
+**NEVER push to any branch without explicit user direction.** This allows cleaning up history and fixing mistakes before they're pushed.
 
 ## Project Goal
 
@@ -134,26 +140,12 @@ Database location: `.beads/beads.db`
 
 ## Landing the Plane (Session Completion)
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
-
-**MANDATORY WORKFLOW:**
+**When ending a work session:**
 
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
-   ```bash
-   git pull --rebase
-   bd sync
-   git push
-   git status  # MUST show "up to date with origin"
-   ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+4. **Commit all changes** - Ensure working directory is clean
+5. **Hand off** - Provide context for next session
 
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
+**Push only when explicitly requested by the user.**
