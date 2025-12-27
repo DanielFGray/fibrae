@@ -148,6 +148,60 @@ Components return `VElement`, `Effect<VElement>`, or `Stream<VElement>`.
 | `registry.set(atom, value)` | Set value                     |
 | `registry.update(atom, fn)` | Update with function          |
 
+### Services (like React Context)
+
+Use `Effect.Service` to share state and behavior across components:
+
+```tsx
+import { Atom, AtomRegistry } from "fibrae";
+
+// Define a service with shared atoms
+const themeAtom = Atom.make<"light" | "dark">("dark");
+
+class ThemeService extends Effect.Service<ThemeService>()("ThemeService", {
+  accessors: true,
+  effect: Effect.gen(function* () {
+    const registry = yield* AtomRegistry.AtomRegistry;
+    return {
+      getTheme: () => Atom.get(themeAtom),
+      toggleTheme: () => Effect.sync(() =>
+        registry.update(themeAtom, (t) => t === "light" ? "dark" : "light")
+      ),
+    };
+  }),
+}) {}
+
+// Async service with Effect.sleep
+class UserService extends Effect.Service<UserService>()("UserService", {
+  accessors: true,
+  sync: () => ({
+    getCurrentUser: () =>
+      Effect.sleep("1 second").pipe(
+        Effect.map(() => ({ name: "Alice", role: "admin" }))
+      ),
+  }),
+}) {}
+
+// Components yield from services - Suspense shows fallback during async
+const UserCard = () =>
+  Effect.gen(function* () {
+    const theme = yield* ThemeService.getTheme();
+    const user = yield* UserService.getCurrentUser();
+    return (
+      <div style={{ background: theme === "dark" ? "#2a2a2a" : "#f0f0f0" }}>
+        <p>{user.name} ({user.role})</p>
+        <button onClick={() => ThemeService.toggleTheme()}>Toggle Theme</button>
+      </div>
+    );
+  });
+```
+
+Key points:
+- Services are Effect programs that yield dependencies
+- Use `accessors: true` for static method access (`ThemeService.getTheme()`)
+- Async services (with `Effect.sleep`, fetches) work with `Suspense`
+- Atom changes trigger re-renders across all components using that atom
+
 ### Routing
 
 Router features are available via `fibrae/router`:
