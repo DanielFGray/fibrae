@@ -1,5 +1,13 @@
 # Agent Guidelines for fibrae
 
+## Git Workflow
+
+**Always work on the `develop` branch.** The main branch is for releases only.
+
+- All agent work should be committed to `develop`
+- Use `bd sync` to synchronize beads database between branches
+- The develop branch lives in a separate worktree at `.git/beads-worktrees/develop`
+
 ## Project Goal
 
 Building an Effect-first JSX renderer where components are Effect programs with automatic reactivity. Not React - uses Effect.ts primitives directly.
