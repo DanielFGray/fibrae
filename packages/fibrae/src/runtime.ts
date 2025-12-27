@@ -5,9 +5,15 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Option from "effect/Option";
 import * as Context from "effect/Context";
+// These imports are needed for TypeScript declaration file emission
+import type * as EffectFiber from "effect/Fiber";
+import type * as Runtime from "effect/Runtime";
 
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import type { Fiber } from "./shared.js";
+
+// Re-export to satisfy declaration file requirements
+export type { EffectFiber, Runtime };
 
 // =============================================================================
 // Fiber State (per render tree)

@@ -5,7 +5,13 @@ import * as Scope from "effect/Scope";
 import * as Deferred from "effect/Deferred";
 import * as Data from "effect/Data";
 import * as Context from "effect/Context";
+// Import Cause and Types for declaration file emission (needed by Data.TaggedError)
+import type * as Cause from "effect/Cause";
+import type * as Types from "effect/Types";
 import { Atom as BaseAtom } from "@effect-atom/atom";
+
+// Re-export to satisfy declaration file requirements
+export type { Cause, Types };
 
 /**
  * Primitive element types: HTML tags, text nodes, fragments, suspense, or boundary

@@ -47,6 +47,7 @@ if (!container) {
 const routerLayer = Layer.provideMerge(browserLayer, handlersLayer);
 
 // Run hydration
+console.log("[ssr-hydrate-router] Starting hydration");
 Effect.gen(function* () {
   // Create RouterOutlet - it will read from hydrated RouterStateAtom
   const outlet = h(RouterOutlet, {});

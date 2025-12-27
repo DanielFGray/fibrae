@@ -352,9 +352,12 @@ export function browserLayer(
 
       // Subscribe to popstate for browser back/forward
       const handlePopState = () => {
-        registry.set(locationAtom, getBrowserLocation());
+        const newLocation = getBrowserLocation();
+        console.log("[Router] popstate fired, new location:", newLocation.pathname);
+        registry.set(locationAtom, newLocation);
       };
 
+      console.log("[Router] Adding popstate listener");
       window.addEventListener("popstate", handlePopState);
 
       // Cleanup on scope close
@@ -495,9 +498,11 @@ export function browserLayer(
     }),
   );
 
-  return Layer.mergeAll(
-    historyLayer,
-    Layer.provideMerge(navigatorLayer, historyLayer),
-    routeElementLayer,
-  );
+  // Layer composition: historyLayer provides History, which navigatorLayer needs.
+  // We use provideMerge to give Navigator the History it needs, then merge with routeElementLayer.
+  // Important: historyLayer should only be instantiated once - putting it in mergeAll separately
+  // would create a second instance with a different locationAtom.
+  const historyAndNavigator = Layer.provideMerge(navigatorLayer, historyLayer);
+
+  return Layer.mergeAll(historyAndNavigator, routeElementLayer);
 }

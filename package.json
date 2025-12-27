@@ -20,7 +20,7 @@
   "type": "module",
   "scripts": {
     "dev": "mprocs 'bun dev:demo' 'bun build:watch' 'bun dev:server'",
-    "dev:demo": "bun --filter demo dev:server",
+    "dev:demo": "cd packages/demo && bun run dev:server",
     "dev:server": "cd packages/demo && bun server/index.ts",
     "test": "bun --filter demo cypress:open --e2e --browser=chromium",
     "cypress:run": "cd packages/demo && bun cypress:run",

@@ -11,6 +11,10 @@ export default defineConfig({
       // Proxy SSR requests to Effect HTTP server
       "/ssr": "http://localhost:3001",
     },
+    fs: {
+      // Allow serving files from the worktree and parent directories
+      allow: ["../.."],
+    },
   },
   // IMPORTANT: Classic JSX transform - do NOT use jsxImportSource in tsconfig.json!
   // This manually injects the jsx/Fragment imports. Adding jsxImportSource causes:

@@ -208,28 +208,30 @@ export function NavigatorLive(
 ): Layer.Layer<Navigator, never, History | AtomRegistry.AtomRegistry> {
   const basePath = options.basePath ?? "";
 
-  return Layer.effect(
+  return Layer.scoped(
     Navigator,
     Effect.gen(function* () {
       const history = yield* History;
       const registry = yield* AtomRegistry.AtomRegistry;
 
-      // Get initial location and match
-      const initialLocation = yield* Atom.get(history.location);
+      // Get initial location and create currentRoute atom
+      const initialLocation = registry.get(history.location);
       const initialRoute = matchLocation(router, initialLocation, basePath);
-
-      // Create currentRoute Atom
       const currentRouteAtom = Atom.make(initialRoute);
 
-      // Create a derived effect that updates currentRoute when location changes
-      // This is a reactive subscription
-      const updateCurrentRoute = (location: HistoryLocation) => {
-        const matched = matchLocation(router, location, basePath);
-        registry.set(currentRouteAtom, matched);
-      };
+      console.log("[Navigator] Setting up location subscription, initial location:", initialLocation.pathname);
 
-      // Note: The actual subscription to location changes should be handled
-      // by by component rendering - currentRoute will be updated when go/back/forward are called
+      // Subscribe to location changes to update currentRoute.
+      // This handles popstate events (browser back/forward) automatically.
+      const unsubscribe = registry.subscribe(history.location, (location) => {
+        console.log("[Navigator] Location changed to:", location.pathname);
+        const matched = matchLocation(router, location, basePath);
+        console.log("[Navigator] Matched route:", matched);
+        registry.set(currentRouteAtom, matched);
+      });
+
+      // Cleanup subscription when scope closes
+      yield* Effect.addFinalizer(() => Effect.sync(unsubscribe));
 
       const service: NavigatorService = {
         basePath,
@@ -251,33 +253,19 @@ export function NavigatorLive(
             const search = options.searchParams ? buildSearchString(options.searchParams) : "";
             const url = `${pathname}${search}`;
 
-            // Navigate
+            // Navigate - currentRoute updates automatically via derived atom
             if (options.replace) {
               yield* history.replace(url);
             } else {
               yield* history.push(url);
             }
-
-            // Update currentRoute
-            const newLocation = yield* Atom.get(history.location);
-            updateCurrentRoute(newLocation);
           }),
 
-        back: Effect.gen(function* () {
-          yield* history.back;
-          // Wait a tick for popstate to fire, then update
-          yield* Effect.sleep("10 millis");
-          const location = yield* Atom.get(history.location);
-          updateCurrentRoute(location);
-        }),
+        // Back/forward - currentRoute updates automatically when history.location
+        // changes (popstate handler updates locationAtom, derived atom recomputes)
+        back: history.back,
 
-        forward: Effect.gen(function* () {
-          yield* history.forward;
-          // Wait a tick for popstate to fire, then update
-          yield* Effect.sleep("10 millis");
-          const location = yield* Atom.get(history.location);
-          updateCurrentRoute(location);
-        }),
+        forward: history.forward,
 
         isActive: (routeName, params) =>
           Effect.gen(function* () {

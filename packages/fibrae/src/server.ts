@@ -13,9 +13,14 @@ import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import * as Option from "effect/Option";
 import * as Deferred from "effect/Deferred";
+// Import Layer type for declaration file emission
+import type * as Layer from "effect/Layer";
 
 import { Atom, Registry as AtomRegistry, Hydration } from "@effect-atom/atom";
 import { type VElement, type ElementType, type Primitive, isStream, isProperty } from "./shared.js";
+
+// Re-export to satisfy declaration file requirements
+export type { Layer };
 
 // =============================================================================
 // Types
