@@ -2,11 +2,25 @@
 
 ## Git Workflow
 
-**Always work on the `develop` branch.** The main branch is for releases only.
+**Always work in the develop worktree.** The main branch is for releases only.
 
-- All agent work should be committed to `develop`
-- Use `bd sync` to synchronize beads database between branches
-- The develop branch lives in a separate worktree at `.git/beads-worktrees/develop`
+```bash
+# Work here (NOT in /home/dan/build/fibrae):
+cd /home/dan/build/fibrae/.git/beads-worktrees/develop
+
+# All commands (build, test, commit) should run from this directory
+bun run build
+bun eslint packages/fibrae/src/
+cd packages/demo && bun cypress:run
+```
+
+**Workflow:**
+1. Work in `.git/beads-worktrees/develop` on the `develop` branch
+2. Commit changes to `develop`
+3. Push: `git push origin develop`
+4. For releases: merge develop → main, bump version, push main
+
+**Beads sync:** Use `bd sync` to synchronize beads database between branches
 
 ## Project Goal
 
