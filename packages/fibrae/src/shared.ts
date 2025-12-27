@@ -8,14 +8,14 @@ import * as Context from "effect/Context";
 import { Atom as BaseAtom } from "@effect-atom/atom";
 
 /**
- * Primitive element types: HTML tags, text nodes, fragments, error boundary, or suspense
+ * Primitive element types: HTML tags, text nodes, fragments, suspense, or boundary
  */
 export type Primitive =
   | keyof HTMLElementTagNameMap
   | "TEXT_ELEMENT"
   | "FRAGMENT"
-  | "ERROR_BOUNDARY"
-  | "SUSPENSE";
+  | "SUSPENSE"
+  | "BOUNDARY";
 
 /**
  * What can appear as children in JSX (recursive type)
@@ -80,11 +80,17 @@ export type SuspenseConfig = {
 };
 
 /**
- * Error boundary configuration
+ * Effect-native boundary configuration (ErrorBoundary API)
+ * 
+ * Created when the renderer encounters a BOUNDARY marker from ErrorBoundary().
+ * The onError callback fails the boundary's stream, triggering catchTags.
  */
-export type ErrorBoundaryConfig = {
-  fallback: VElement;
-  onError?: (cause: unknown) => void;
+export type BoundaryConfig = {
+  /** Unique identifier for this boundary (for debugging) */
+  boundaryId: string;
+  /** Callback to report errors - fails the boundary stream */
+  onError: (error: ComponentError) => void;
+  /** True when an error has occurred and fallback is being shown */
   hasError: boolean;
 };
 
@@ -110,7 +116,8 @@ export interface Fiber {
   childFirstCommitDeferred: Option.Option<Deferred.Deferred<void>>;
   fiberRef: Option.Option<FiberRef>;
   isMultiEmissionStream: boolean;
-  errorBoundary: Option.Option<ErrorBoundaryConfig>;
+  /** Effect-native boundary config (ErrorBoundary API) */
+  boundary: Option.Option<BoundaryConfig>;
   suspense: Option.Option<SuspenseConfig>;
   /** Context captured during render phase, used for event handlers in commit phase */
   renderContext: Option.Option<Context.Context<unknown>>;
@@ -176,3 +183,58 @@ export class HydrationMismatch extends Data.TaggedError("HydrationMismatch")<{
   /** Human-readable path to the mismatch location (e.g., "div > ul > li:2") */
   readonly path: string;
 }> {}
+
+// =============================================================================
+// Component Errors
+// =============================================================================
+
+/**
+ * Error during component render (sync throw or Effect failure).
+ *
+ * Caught by ErrorBoundary and can be handled via Stream.catchTags:
+ * ```typescript
+ * const SafeApp = () => ErrorBoundary(<MyComponent />).pipe(
+ *   Stream.catchTags({
+ *     RenderError: (e) => Stream.succeed(<div>Render failed: {e.componentName}</div>),
+ *   })
+ * );
+ * ```
+ */
+export class RenderError extends Data.TaggedError("RenderError")<{
+  /** The underlying error that caused the render failure */
+  readonly cause: unknown;
+  /** Name of the component that failed (if available) */
+  readonly componentName?: string;
+}> {}
+
+/**
+ * Error from a Stream component (before or after first emission).
+ *
+ * The `phase` field distinguishes:
+ * - "before-first-emission": Stream failed before producing any value (shows fallback immediately)
+ * - "after-first-emission": Stream failed after showing content (replaces content with fallback)
+ */
+export class StreamError extends Data.TaggedError("StreamError")<{
+  /** The underlying error that caused the stream failure */
+  readonly cause: unknown;
+  /** When the error occurred relative to first emission */
+  readonly phase: "before-first-emission" | "after-first-emission";
+}> {}
+
+/**
+ * Error from an event handler Effect.
+ *
+ * The `eventType` field indicates which event triggered the failure (e.g., "click", "change").
+ */
+export class EventHandlerError extends Data.TaggedError("EventHandlerError")<{
+  /** The underlying error that caused the event handler failure */
+  readonly cause: unknown;
+  /** The DOM event type that triggered this handler (e.g., "click", "change") */
+  readonly eventType: string;
+}> {}
+
+/**
+ * Union of all component error types.
+ * Used with ErrorBoundary's onError handlers for typed error matching.
+ */
+export type ComponentError = RenderError | StreamError | EventHandlerError;

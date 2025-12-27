@@ -1,5 +1,7 @@
 import * as Effect from "effect/Effect";
+import * as Cause from "effect/Cause";
 import { FibraeRuntime, runForkWithRuntime } from "./runtime.js";
+import { EventHandlerError } from "./shared.js";
 
 // =============================================================================
 // DOM Property Handling
@@ -57,11 +59,13 @@ export const setDomProperty = (el: HTMLElement, name: string, value: unknown): v
 /**
  * Attach event listeners to a DOM element.
  * Uses runForkWithRuntime to get the full application context.
+ * When an event handler Effect fails, converts to EventHandlerError and calls onError callback.
  */
 export const attachEventListeners = (
   el: HTMLElement,
   props: Record<string, unknown>,
   runtime: FibraeRuntime,
+  onError?: (error: EventHandlerError) => Effect.Effect<unknown, never, unknown>,
 ): void => {
   for (const [key, handler] of Object.entries(props)) {
     if (isEvent(key) && typeof handler === "function") {
@@ -72,8 +76,18 @@ export const attachEventListeners = (
 
         if (Effect.isEffect(result)) {
           // Use runForkWithRuntime to get the full application context
-          const effectWithErrorHandling = (result as Effect.Effect<unknown, unknown, unknown>).pipe(
-            Effect.catchAllCause((cause) => Effect.logError("Event handler error", cause)),
+          const effectWithErrorHandling = result.pipe(
+            Effect.catchAllCause((cause) => {
+              // Convert to EventHandlerError with the event type
+              const error = new EventHandlerError({
+                cause: Cause.squash(cause),
+                eventType,
+              });
+              if (onError) {
+                return onError(error);
+              }
+              return Effect.logError("Event handler error", error);
+            }),
           );
           runForkWithRuntime(runtime)(effectWithErrorHandling);
         }

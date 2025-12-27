@@ -27,7 +27,10 @@ import {
   type ElementType,
   type Fiber,
   type FiberRef as FiberRefType,
-  type ErrorBoundaryConfig,
+  type ComponentError,
+  RenderError,
+  StreamError,
+  EventHandlerError,
   isEvent,
   isProperty,
   isStream,
@@ -35,7 +38,6 @@ import {
 import { FibraeRuntime, type FiberState, runForkWithRuntime } from "./runtime.js";
 import { setDomProperty, attachEventListeners } from "./dom.js";
 import { normalizeToStream, makeTrackingRegistry } from "./tracking.js";
-import { h } from "./h.js";
 
 // =============================================================================
 // Stream Subscription Helper
@@ -78,11 +80,17 @@ const subscribeComponentStream = <E>(
       Effect.catchAllCause((cause: Cause.Cause<E>) =>
         Effect.gen(function* () {
           const done = yield* Deferred.isDone(firstValueDeferred);
+          // Convert to StreamError with the correct phase
+          const streamError = new StreamError({
+            cause: Cause.squash(cause),
+            phase: done ? "after-first-emission" : "before-first-emission",
+          });
           if (!done) {
-            yield* Deferred.failCause(firstValueDeferred, cause);
+            // Fail the deferred with StreamError so awaiting code gets the typed error
+            yield* Deferred.fail(firstValueDeferred, streamError as E);
           }
           const currentFiber = fiberRef.current;
-          yield* handleFiberError(currentFiber, cause);
+          yield* handleFiberError(currentFiber, streamError);
         }),
       ),
     );
@@ -117,7 +125,7 @@ const createFiber = (
   childFirstCommitDeferred: Option.none(),
   fiberRef: Option.none(),
   isMultiEmissionStream: false,
-  errorBoundary: Option.none(),
+  boundary: Option.none(),
   suspense: Option.none(),
   renderContext: Option.none(),
   isParked: false,
@@ -266,19 +274,6 @@ const processBatch = (): Effect.Effect<void, never, FibraeRuntime> =>
 // =============================================================================
 
 /**
- * Walk up the fiber tree from the starting fiber, returning the first ancestor
- * (including the starting fiber) that matches the predicate.
- */
-const findAncestor = (fiber: Fiber, predicate: (f: Fiber) => boolean): Option.Option<Fiber> => {
-  let current: Option.Option<Fiber> = Option.some(fiber);
-  while (Option.isSome(current)) {
-    if (predicate(current.value)) return current;
-    current = current.value.parent;
-  }
-  return Option.none();
-};
-
-/**
  * Walk up the fiber tree from the starting fiber's parent, returning the first
  * ancestor that matches the predicate (excludes the starting fiber itself).
  */
@@ -321,49 +316,71 @@ const findDomParent = (fiber: Fiber): Option.Option<Node> => {
 // Error Boundary Support
 // =============================================================================
 
-const findNearestErrorBoundary = (fiber: Fiber): Option.Option<Fiber> =>
-  findAncestor(fiber, (f) => Option.isSome(f.errorBoundary));
+/** Find nearest BOUNDARY by walking up the fiber tree */
+const findNearestBoundary = (fiber: Fiber): Option.Option<Fiber> =>
+  findAncestorExcludingSelf(fiber, (f) => Option.isSome(f.boundary));
 
+/**
+ * Convert a raw cause/error to a ComponentError.
+ * If it's already a ComponentError, return as-is.
+ * Otherwise, wrap in RenderError as a fallback.
+ */
+const toComponentError = (cause: unknown): ComponentError => {
+  // Check if it's already a ComponentError
+  if (
+    cause instanceof RenderError ||
+    cause instanceof StreamError ||
+    cause instanceof EventHandlerError
+  ) {
+    return cause;
+  }
+  // Extract the actual error from Cause if needed
+  const actualError = Cause.isCause(cause) ? Cause.squash(cause) : cause;
+  if (
+    actualError instanceof RenderError ||
+    actualError instanceof StreamError ||
+    actualError instanceof EventHandlerError
+  ) {
+    return actualError;
+  }
+  // Wrap unknown errors as RenderError
+  return new RenderError({ cause: actualError });
+};
+
+/**
+ * Handle an error by finding the nearest error boundary and invoking its handler.
+ * 
+ * Finds the nearest BOUNDARY and calls its onError callback to fail the stream.
+ * The Stream.catchTags in user code will produce the fallback.
+ */
 const handleFiberError = (
   fiber: Fiber,
   cause: unknown,
 ): Effect.Effect<Option.Option<Fiber>, never, FibraeRuntime> =>
   Effect.gen(function* () {
-    const runtime = yield* FibraeRuntime;
-    const stateRef = runtime.fiberState;
-    const state = yield* Ref.get(stateRef);
+    const componentError = toComponentError(cause);
 
-    const boundaryOpt = findNearestErrorBoundary(fiber);
-    if (Option.isSome(boundaryOpt)) {
-      const boundary = boundaryOpt.value;
-      const cfg = Option.getOrElse(
-        boundary.errorBoundary,
-        (): ErrorBoundaryConfig => ({
-          fallback: h("div", {}, []),
-          hasError: false,
-          onError: undefined,
+    // Find nearest boundary
+    const boundaryOpt = findNearestBoundary(fiber);
+
+    return yield* Option.match(boundaryOpt, {
+      onNone: () =>
+        Effect.gen(function* () {
+          yield* Effect.logError("Unhandled error without any error boundary", componentError);
+          return Option.none<Fiber>();
         }),
-      );
-      cfg.onError?.(cause);
-      cfg.hasError = true;
-      boundary.errorBoundary = Option.some(cfg);
-
-      // Check if we're in initial render (no currentRoot yet)
-      if (Option.isNone(state.currentRoot)) {
-        // During initial render: re-reconcile boundary with fallback immediately
-        // This replaces the errored child with the fallback element
-        yield* reconcileChildren(boundary, [cfg.fallback]);
-        // Return the boundary's new child (fallback) so work continues
-        return boundary.child;
-      } else {
-        // After initial render: queue for re-render
-        yield* queueFiberForRerender(boundary);
-        return Option.none<Fiber>();
-      }
-    } else {
-      yield* Effect.logError("Unhandled error without ErrorBoundary", cause);
-      return Option.none<Fiber>();
-    }
+      onSome: (boundary) =>
+        Effect.sync(() => {
+          // Call onError to fail the stream
+          const cfg = Option.getOrThrow(boundary.boundary);
+          cfg.onError(componentError);
+          cfg.hasError = true;
+          
+          // The stream will fail and catchTags will produce fallback
+          // which will trigger a re-render via the stream subscription
+          return Option.none<Fiber>();
+        }),
+    });
   });
 
 // =============================================================================
@@ -537,11 +554,7 @@ const updateFunctionComponent = (
       const vElement = output;
       if (typeof vElement === "object" && vElement !== null && "type" in vElement) {
         const elementType = vElement.type;
-        if (
-          elementType === "SUSPENSE" ||
-          elementType === "ERROR_BOUNDARY" ||
-          elementType === "FRAGMENT"
-        ) {
+        if (elementType === "SUSPENSE" || elementType === "FRAGMENT") {
           // Simple wrapper component - just reconcile with the VElement directly
           yield* reconcileChildren(fiber, [vElement]);
           return;
@@ -712,31 +725,35 @@ const updateHostComponent = (
       fiber.renderContext = fiber.parent.value.renderContext;
     }
 
-    // Handle ERROR_BOUNDARY specially
-    const isErrorBoundary = fiberTypeIs(fiber, "ERROR_BOUNDARY");
+    // Handle BOUNDARY specially (Effect-native error boundary API)
+    const isBoundary = fiberTypeIs(fiber, "BOUNDARY");
 
-    if (isErrorBoundary) {
-      // Initialize errorBoundary config if not already set
-      if (Option.isNone(fiber.errorBoundary)) {
-        const fallback = fiber.props.fallback as VElement;
-        const onError = fiber.props.onError as ((cause: unknown) => void) | undefined;
-        fiber.errorBoundary = Option.some({
-          fallback,
+    if (isBoundary) {
+      const boundaryId = fiber.props.boundaryId as string;
+      const onError = fiber.props.onError as (error: ComponentError) => void;
+
+      // Inherit boundary state from alternate (previous render) if present
+      // This preserves hasError state across re-renders
+      if (Option.isNone(fiber.boundary) && Option.isSome(fiber.alternate)) {
+        const alt = fiber.alternate.value;
+        if (Option.isSome(alt.boundary)) {
+          fiber.boundary = alt.boundary;
+        }
+      }
+
+      // Initialize boundary config if not already set
+      if (Option.isNone(fiber.boundary)) {
+        fiber.boundary = Option.some({
+          boundaryId,
           onError,
           hasError: false,
         });
       }
 
-      const config = Option.getOrThrow(fiber.errorBoundary);
-
-      if (config.hasError) {
-        // Error state - render fallback instead of children
-        yield* reconcileChildren(fiber, [config.fallback]);
-      } else {
-        // Normal state - render children
-        const children = fiber.props.children;
-        yield* reconcileChildren(fiber, children || []);
-      }
+      // Render children (BOUNDARY doesn't have fallback state -
+      // the fallback is handled by Stream.catchTags in userland)
+      const children = fiber.props.children;
+      yield* reconcileChildren(fiber, children || []);
       return;
     }
 
@@ -933,9 +950,14 @@ const updateDom = (
             // Use runForkWithRuntime to get the full application context
             // This provides Navigator, FibraeRuntime, AtomRegistry, etc.
             const effectWithErrorHandling = result.pipe(
-              Effect.catchAllCause((cause) =>
-                ownerFiber ? handleFiberError(ownerFiber, cause) : Effect.void,
-              ),
+              Effect.catchAllCause((cause) => {
+                // Convert to EventHandlerError with the event type
+                const error = new EventHandlerError({
+                  cause: Cause.squash(cause),
+                  eventType,
+                });
+                return ownerFiber ? handleFiberError(ownerFiber, error) : Effect.void;
+              }),
             );
             runForkWithRuntime(runtime)(effectWithErrorHandling);
           }
@@ -1048,7 +1070,7 @@ const reconcileChildren = (wipFiber: Fiber, elements: VElement[]) =>
                 Option.some("UPDATE" as const),
               );
               fiber.dom = matched.dom;
-              fiber.errorBoundary = matched.errorBoundary;
+              fiber.boundary = matched.boundary;
               fiber.suspense = matched.suspense;
               return fiber;
             } else {
@@ -1318,11 +1340,71 @@ export const renderFiber = (element: VElement, container: HTMLElement) =>
 // Hydration Support
 // =============================================================================
 
+// =============================================================================
+// Hydration Helpers - Cursor-based DOM Walking (like React)
+// =============================================================================
+
 /**
- * Hydrate an existing DOM tree with a VElement tree.
+ * Get the next hydratable node, skipping whitespace-only text nodes
+ * and non-marker comments. Returns None if no more hydratable nodes.
  *
- * This walks the existing DOM and builds a fiber tree that matches it,
- * enabling reactive updates without re-creating the DOM.
+ * Hydratable nodes are:
+ * - Element nodes (always)
+ * - Text nodes with non-whitespace content
+ * - Comment nodes that are Fibrae markers (fibrae:...)
+ */
+const getNextHydratable = (node: Node | null): Option.Option<Node> => {
+  let current = node;
+  while (current) {
+    const nodeType = current.nodeType;
+
+    // Element nodes are always hydratable
+    if (nodeType === Node.ELEMENT_NODE) {
+      return Option.some(current);
+    }
+
+    // Text nodes are hydratable if they have non-whitespace content
+    if (nodeType === Node.TEXT_NODE) {
+      const textContent = current.textContent;
+      if (textContent !== null && textContent.trim() !== "") {
+        return Option.some(current);
+      }
+      // Skip whitespace-only text nodes
+    }
+
+    // Comment nodes are hydratable if they're Fibrae markers
+    if (nodeType === Node.COMMENT_NODE) {
+      const data = (current as Comment).data;
+      if (data.startsWith("fibrae:")) {
+        return Option.some(current);
+      }
+      // Skip non-marker comments
+    }
+
+    current = current.nextSibling;
+  }
+  return Option.none();
+};
+
+const getFirstHydratableChild = (parent: Node): Option.Option<Node> => {
+  return getNextHydratable(parent.firstChild);
+};
+
+const getNextHydratableSibling = (node: Node): Option.Option<Node> => {
+  return getNextHydratable(node.nextSibling);
+};
+
+// =============================================================================
+// Fiber Hydration - Cursor-based Implementation
+// =============================================================================
+
+/**
+ * Hydrate an existing DOM tree by building a fiber tree that references
+ * the existing DOM nodes. This enables event handlers and reactivity
+ * without replacing the DOM.
+ *
+ * Uses cursor-based DOM walking (like React) to match VElement tree
+ * against existing DOM, skipping whitespace-only text nodes and comments.
  */
 export const hydrateFiber = (element: VElement, container: HTMLElement) =>
   Effect.gen(function* () {
@@ -1340,8 +1422,9 @@ export const hydrateFiber = (element: VElement, container: HTMLElement) =>
     rootFiber.dom = Option.some(container);
 
     // Build fiber tree by walking DOM and VElement together
-    // The element itself is the child of the root fiber (same as renderFiber)
-    yield* hydrateChildren(rootFiber, [element], Array.from(container.childNodes), runtime);
+    // Start with first hydratable child (skipping whitespace)
+    const firstChild = getFirstHydratableChild(container);
+    yield* hydrateChildren(rootFiber, [element], firstChild, runtime);
 
     yield* Ref.update(stateRef, (s) => ({
       ...s,
@@ -1354,38 +1437,53 @@ export const hydrateFiber = (element: VElement, container: HTMLElement) =>
     return yield* Effect.never;
   });
 
+/**
+ * Hydrate multiple vElements against DOM nodes using cursor-based walking.
+ * Returns the next DOM cursor position after all children are hydrated.
+ */
 const hydrateChildren = (
   parentFiber: Fiber,
   vElements: VElement[],
-  domNodes: Node[],
+  startCursor: Option.Option<Node>,
   runtime: FibraeRuntime,
-): Effect.Effect<void, unknown, FibraeRuntime> =>
+): Effect.Effect<Option.Option<Node>, unknown, FibraeRuntime> =>
   Effect.gen(function* () {
-    let domIndex = 0;
+    let cursor = startCursor;
     const fibers: Fiber[] = [];
 
     for (const vElement of vElements) {
-      const fiber = yield* hydrateElement(parentFiber, vElement, domNodes, domIndex, runtime);
-      fibers.push(fiber);
-
-      // Advance DOM index based on element type
-      if (typeof vElement.type === "string") {
-        domIndex++;
+      if (Option.isNone(cursor)) {
+        // No more DOM nodes but we have more vElements - mismatch
+        // For now, just skip (could throw HydrationMismatch in strict mode)
+        break;
       }
-      // Function components don't consume DOM nodes directly
+
+      const { fiber, nextCursor } = yield* hydrateElement(
+        parentFiber,
+        vElement,
+        cursor.value,
+        runtime,
+      );
+      fibers.push(fiber);
+      cursor = nextCursor;
     }
 
     // Link fibers
     linkFibersAsSiblings(fibers, parentFiber);
+
+    return cursor;
   });
 
+/**
+ * Hydrate a single vElement against a DOM node.
+ * Returns the created fiber and the next DOM cursor position.
+ */
 const hydrateElement = (
   parentFiber: Fiber,
   vElement: VElement,
-  domNodes: Node[],
-  domIndex: number,
+  domNode: Node,
   runtime: FibraeRuntime,
-): Effect.Effect<Fiber, unknown, FibraeRuntime> =>
+): Effect.Effect<{ fiber: Fiber; nextCursor: Option.Option<Node> }, unknown, FibraeRuntime> =>
   Effect.gen(function* () {
     const fiber = createFiber(
       Option.some(vElement.type),
@@ -1395,25 +1493,27 @@ const hydrateElement = (
       Option.none(), // No effect tag - already in DOM
     );
 
+    let nextCursor: Option.Option<Node>;
+
     if (typeof vElement.type === "function") {
       // Function component - invoke to get children
-      yield* hydrateFunctionComponent(fiber, vElement, domNodes, domIndex, runtime);
+      nextCursor = yield* hydrateFunctionComponent(fiber, vElement, domNode, runtime);
     } else if (vElement.type === "TEXT_ELEMENT") {
-      // Text node
-      const domNode = domNodes[domIndex];
+      // Text node - adopt the DOM text node
       fiber.dom = Option.some(domNode);
+      nextCursor = getNextHydratableSibling(domNode);
     } else if (vElement.type === "FRAGMENT") {
-      // Fragment - children are direct children of parent DOM
-      yield* hydrateChildren(
+      // Fragment - children consume DOM nodes starting from current cursor
+      nextCursor = yield* hydrateChildren(
         fiber,
         vElement.props.children || [],
-        domNodes.slice(domIndex),
+        Option.some(domNode),
         runtime,
       );
     } else {
-      // Host element
-      const domNode = domNodes[domIndex] as HTMLElement;
-      fiber.dom = Option.some(domNode);
+      // Host element - adopt DOM node and hydrate children
+      const el = domNode as HTMLElement;
+      fiber.dom = Option.some(el);
 
       // Inherit renderContext from parent fiber (function components capture it during render)
       if (Option.isNone(fiber.renderContext) && Option.isSome(fiber.parent)) {
@@ -1421,29 +1521,41 @@ const hydrateElement = (
       }
 
       // Attach event listeners - uses runForkWithRuntime internally for full context
-      attachEventListeners(domNode, vElement.props as Record<string, unknown>, runtime);
+      // Pass error callback to trigger ErrorBoundary on event handler failures
+      attachEventListeners(
+        el,
+        vElement.props as Record<string, unknown>,
+        runtime,
+        (cause) => handleFiberError(fiber, cause),
+      );
 
       // Handle ref
       const ref = vElement.props.ref;
       if (ref && typeof ref === "object" && "current" in ref) {
-        (ref as { current: unknown }).current = domNode;
+        (ref as { current: unknown }).current = el;
       }
 
-      // Hydrate children
-      const childNodes = Array.from(domNode.childNodes);
-      yield* hydrateChildren(fiber, vElement.props.children || [], childNodes, runtime);
+      // Hydrate children using cursor-based walking
+      const firstChildCursor = getFirstHydratableChild(el);
+      yield* hydrateChildren(fiber, vElement.props.children || [], firstChildCursor, runtime);
+
+      // Move to next sibling for the parent's cursor
+      nextCursor = getNextHydratableSibling(domNode);
     }
 
-    return fiber;
+    return { fiber, nextCursor };
   });
 
+/**
+ * Hydrate a function component by invoking it and hydrating its output.
+ * Returns the next DOM cursor position.
+ */
 const hydrateFunctionComponent = (
   fiber: Fiber,
   vElement: VElement,
-  domNodes: Node[],
-  domIndex: number,
+  domNode: Node,
   runtime: FibraeRuntime,
-): Effect.Effect<void, unknown, FibraeRuntime> =>
+): Effect.Effect<Option.Option<Node>, unknown, FibraeRuntime> =>
   Effect.gen(function* () {
     // Capture current context during render phase for event handlers in commit phase
     const currentContext = (yield* FiberRef.get(FiberRef.currentContext)) as Context.Context<any>;
@@ -1487,9 +1599,17 @@ const hydrateFunctionComponent = (
     const childVElement = yield* Deferred.await(firstValueDeferred);
     fiber.latestStreamValue = Option.some(childVElement);
 
-    // Hydrate the child VElement against remaining DOM nodes
-    yield* hydrateChildren(fiber, [childVElement], domNodes.slice(domIndex), runtime);
+    // Hydrate the child VElement against DOM node
+    // Function components render output directly to DOM (no wrapper)
+    const nextCursor = yield* hydrateChildren(
+      fiber,
+      [childVElement],
+      Option.some(domNode),
+      runtime,
+    );
 
     // Subscribe to atom changes
     yield* subscribeFiberAtoms(fiber, accessedAtoms, runtime);
+
+    return nextCursor;
   });

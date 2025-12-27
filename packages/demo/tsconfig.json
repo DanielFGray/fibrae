@@ -5,8 +5,10 @@
     "rootDir": "./src",
     "declaration": true,
     "emitDeclarationOnly": false,
+    // IMPORTANT: Do NOT add "jsxImportSource" here!
+    // Vite uses classic JSX transform with manual injection (see vite.config.ts esbuild settings).
+    // Adding jsxImportSource causes: "importSource cannot be set when runtime is classic"
     "jsx": "preserve",
-    "jsxImportSource": "fibrae",
     "types": ["vite/client", "cypress", "fibrae/jsx-runtime", "node"]
   },
   "include": ["src/**/*"],

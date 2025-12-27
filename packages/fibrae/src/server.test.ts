@@ -215,50 +215,6 @@ describe("components", () => {
 });
 
 // =============================================================================
-// Error Boundary
-// =============================================================================
-
-describe("ErrorBoundary", () => {
-  test("renders children when no error", async () => {
-    const element = h("ERROR_BOUNDARY" as any, { fallback: h("p", {}, ["Error!"]) }, [
-      h("div", {}, ["Content"]),
-    ]);
-    const result = await runTest(renderToString(element));
-    expect(result.html).toBe("<div>Content</div>");
-  });
-
-  test("renders fallback when child throws", async () => {
-    const Throwing = () => {
-      throw new Error("Test error");
-    };
-    const element = h("ERROR_BOUNDARY" as any, { fallback: h("p", {}, ["Error caught!"]) }, [
-      h(Throwing, {}, []),
-    ]);
-    const result = await runTest(renderToString(element));
-    expect(result.html).toBe("<p>Error caught!</p>");
-  });
-
-  test("calls onError callback when error occurs", async () => {
-    let capturedError: unknown;
-    const Throwing = () => {
-      throw new Error("Test error");
-    };
-    const element = h(
-      "ERROR_BOUNDARY" as any,
-      {
-        fallback: h("p", {}, ["Error!"]),
-        onError: (cause: unknown) => {
-          capturedError = cause;
-        },
-      },
-      [h(Throwing, {}, [])],
-    );
-    await runTest(renderToString(element));
-    expect(capturedError).toBeDefined();
-  });
-});
-
-// =============================================================================
 // Suspense
 // =============================================================================
 

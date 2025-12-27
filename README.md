@@ -105,13 +105,21 @@ const AppRoutesLive = RouterBuilder.group(appRouter, "main", (handlers) =>
 );
 
 // --- App with Suspense + ErrorBoundary ---
+const SafeRouterOutlet = () => ErrorBoundary(<RouterOutlet />).pipe(
+  Stream.catchTags({
+    RenderError: (e) => Stream.succeed(<div>Render failed: {e.componentName}</div>),
+    StreamError: (e) => Stream.succeed(<div>Stream failed ({e.phase})</div>),
+    EventHandlerError: (e) => Stream.succeed(<div>Event {e.eventType} failed</div>),
+  })
+);
+
 const App = () => (
-  <ErrorBoundary fallback={<div>Something went wrong</div>}>
+  <>
     <Nav />
     <Suspense fallback={<div>Loading...</div>} threshold={100}>
-      <RouterOutlet />
+      <SafeRouterOutlet />
     </Suspense>
-  </ErrorBoundary>
+  </>
 );
 
 // --- Render ---
@@ -155,10 +163,29 @@ Components return `VElement`, `Effect<VElement>`, or `Stream<VElement>`.
 
 ### Built-in Components
 
-| Component       | Props                                     |
-| --------------- | ----------------------------------------- |
-| `Suspense`      | `fallback`, `threshold` (ms, default 100) |
-| `ErrorBoundary` | `fallback`, `onError`                     |
+| Component       | Description                                                    |
+| --------------- | -------------------------------------------------------------- |
+| `Suspense`      | Shows `fallback` while children load (`threshold` ms, default 100) |
+| `ErrorBoundary` | Returns `Stream<VElement, ComponentError>` for `Stream.catchTags` |
+
+### Error Handling
+
+`ErrorBoundary(children)` returns a `Stream` that can catch typed errors:
+
+```tsx
+const SafeApp = () => ErrorBoundary(<App />).pipe(
+  Stream.catchTags({
+    RenderError: (e) => Stream.succeed(<div>Render failed: {e.componentName}</div>),
+    StreamError: (e) => Stream.succeed(<div>Stream failed: {e.phase}</div>),
+    EventHandlerError: (e) => Stream.succeed(<div>Event {e.eventType} failed</div>),
+  })
+);
+```
+
+Error types:
+- `RenderError` - Component threw during render (`cause`, `componentName?`)
+- `StreamError` - Stream component failed (`cause`, `phase: "before-first-emission" | "after-first-emission"`)
+- `EventHandlerError` - Event handler Effect failed (`cause`, `eventType`)
 
 ### SSR
 

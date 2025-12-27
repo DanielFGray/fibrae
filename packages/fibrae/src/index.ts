@@ -18,6 +18,14 @@ export { h, createTextElement } from "./h.js";
 export type { VElement, ElementType, Primitive } from "./shared.js";
 export type { VElement as VNode } from "./shared.js";
 
+// Error types
+export {
+  RenderError,
+  StreamError,
+  EventHandlerError,
+  type ComponentError,
+} from "./shared.js";
+
 // Re-export upstream Effect Atom APIs for consumers
 export { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 

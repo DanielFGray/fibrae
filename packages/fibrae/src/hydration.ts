@@ -300,40 +300,6 @@ export const hydrateVElementToDOM = (
       );
 
       return finalState.cursor;
-    } else if (type === "ERROR_BOUNDARY") {
-      // For error boundary during hydration, just hydrate children directly
-      // The boundary behavior only matters for runtime errors, not initial hydration
-      const children = vElement.props.children as VElement[];
-      const wrapper = domNode as HTMLElement;
-
-      // Use cursor-based hydration for children
-      yield* Effect.iterate(
-        { index: 0, cursor: Option.fromNullable(wrapper.firstChild as Node) },
-        {
-          while: (state) => state.index < children.length && Option.isSome(state.cursor),
-          body: (state) =>
-            Option.match(state.cursor, {
-              onNone: () =>
-                Effect.succeed({
-                  index: state.index,
-                  cursor: Option.none<Node>(),
-                }),
-              onSome: (cursorNode) =>
-                Effect.gen(function* () {
-                  const nextCursor = yield* hydrateVElementToDOM(
-                    children[state.index],
-                    cursorNode,
-                    runtime,
-                    parentScope,
-                    [...path, { tag: "error_boundary", index: state.index }],
-                  );
-                  return { index: state.index + 1, cursor: nextCursor };
-                }),
-            }),
-        },
-      );
-
-      return Option.fromNullable(domNode.nextSibling);
     } else if (type === "SUSPENSE") {
       // Suspense during hydration: domNode should be the opening comment marker
       // Phase 4: Handle <!--fibrae:sus:resolved--> ... <!--/fibrae:sus-->

@@ -34,6 +34,10 @@
     "./shared": {
       "types": "./dist/shared.d.ts",
       "import": "./dist/shared.js"
+    },
+    "./router": {
+      "types": "./dist/router/index.d.ts",
+      "import": "./dist/router/index.js"
     }
   },
   "scripts": {

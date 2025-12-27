@@ -15,13 +15,20 @@ const StreamFailerImmediate = () => {
   return Stream.fromEffect(Effect.fail(new Error("stream-crash-immediate")));
 };
 
+// Wrap with ErrorBoundary and catch errors with Stream.catchTags
+const SafeStreamFailer = () => ErrorBoundary(<StreamFailerImmediate />).pipe(
+  Stream.catchTags({
+    RenderError: () => Stream.succeed(<div data-cy="fallback">Error caught! Fallback rendered.</div>),
+    StreamError: () => Stream.succeed(<div data-cy="fallback">Error caught! Fallback rendered.</div>),
+    EventHandlerError: () => Stream.succeed(<div data-cy="fallback">Error caught! Fallback rendered.</div>),
+  }),
+);
+
 const App = () => (
-  <div>
-    <h2>Test: Stream fails before first emission</h2>
-    <ErrorBoundary fallback={<div data-cy="fallback">Error caught! Fallback rendered.</div>}>
-      <StreamFailerImmediate />
-    </ErrorBoundary>
-  </div>
+   <div>
+     <h2>Test: Stream fails before first emission</h2>
+     <SafeStreamFailer />
+   </div>
 );
 
 Effect.gen(function* () {

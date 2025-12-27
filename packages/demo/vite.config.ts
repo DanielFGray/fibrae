@@ -12,6 +12,9 @@ export default defineConfig({
       "/ssr": "http://localhost:3001",
     },
   },
+  // IMPORTANT: Classic JSX transform - do NOT use jsxImportSource in tsconfig.json!
+  // This manually injects the jsx/Fragment imports. Adding jsxImportSource causes:
+  // "importSource cannot be set when runtime is classic"
   esbuild: {
     jsx: "transform",
     jsxDev: false,

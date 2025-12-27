@@ -211,29 +211,6 @@ const renderVElementToString = (
         html += yield* renderVElementToString(child);
       }
       return html;
-    } else if (type === "ERROR_BOUNDARY") {
-      // Error boundary - try to render children, catch errors and render fallback
-      const fallback = vElement.props.fallback as VElement;
-      const children = vElement.props.children as VElement[];
-
-      const result = yield* Effect.either(
-        Effect.gen(function* () {
-          let html = "";
-          for (const child of children) {
-            html += yield* renderVElementToString(child);
-          }
-          return html;
-        }),
-      );
-
-      if (result._tag === "Left") {
-        // Error occurred - render fallback
-        const onError = vElement.props.onError as ((cause: unknown) => void) | undefined;
-        onError?.(result.left);
-        return yield* renderVElementToString(fallback);
-      }
-
-      return result.right;
     } else if (type === "SUSPENSE") {
       // Suspense boundary - race child rendering against timeout
       // Phase 5: If children complete first → resolved marker
