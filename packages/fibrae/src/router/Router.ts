@@ -353,11 +353,9 @@ export function browserLayer(
       // Subscribe to popstate for browser back/forward
       const handlePopState = () => {
         const newLocation = getBrowserLocation();
-        console.log("[Router] popstate fired, new location:", newLocation.pathname);
         registry.set(locationAtom, newLocation);
       };
 
-      console.log("[Router] Adding popstate listener");
       window.addEventListener("popstate", handlePopState);
 
       // Cleanup on scope close

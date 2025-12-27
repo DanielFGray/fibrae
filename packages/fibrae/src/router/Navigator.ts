@@ -219,14 +219,10 @@ export function NavigatorLive(
       const initialRoute = matchLocation(router, initialLocation, basePath);
       const currentRouteAtom = Atom.make(initialRoute);
 
-      console.log("[Navigator] Setting up location subscription, initial location:", initialLocation.pathname);
-
       // Subscribe to location changes to update currentRoute.
       // This handles popstate events (browser back/forward) automatically.
       const unsubscribe = registry.subscribe(history.location, (location) => {
-        console.log("[Navigator] Location changed to:", location.pathname);
         const matched = matchLocation(router, location, basePath);
-        console.log("[Navigator] Matched route:", matched);
         registry.set(currentRouteAtom, matched);
       });
 
