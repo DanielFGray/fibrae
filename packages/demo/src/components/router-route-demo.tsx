@@ -1,5 +1,5 @@
 import { h as H, render } from "fibrae";
-import { Route } from "fibrae";
+import { Route } from "fibrae/router";
 import * as Schema from "effect/Schema";
 
 export function RouterRouteDemo() {

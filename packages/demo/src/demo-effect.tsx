@@ -24,7 +24,7 @@ import {
   NavigatorTag,
   NavigatorLive,
   createLink,
-} from "fibrae";
+} from "fibrae/router";
 
 // =============================================================================
 // Route Definitions

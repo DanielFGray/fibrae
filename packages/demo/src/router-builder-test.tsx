@@ -15,8 +15,8 @@ import * as Schema from "effect/Schema";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
 import { render } from "fibrae";
-import { Route, Router, RouterBuilder } from "fibrae";
 import type { VElement } from "fibrae";
+import { Route, Router, RouterBuilder } from "fibrae/router";
 
 // =============================================================================
 // Route Definitions

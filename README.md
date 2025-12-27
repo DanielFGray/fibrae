@@ -28,11 +28,11 @@ import * as Stream from "effect/Stream";
 import * as Schedule from "effect/Schedule";
 import * as Layer from "effect/Layer";
 import { pipe } from "effect/Function";
+import { render, Atom, AtomRegistry, Suspense, ErrorBoundary } from "fibrae";
 import {
-  render, Atom, AtomRegistry, Route, Router, RouterBuilder,
-  createLink, RouterOutlet, Navigator, Suspense, ErrorBoundary,
-  BrowserHistoryLive, NavigatorLive
-} from "fibrae";
+  Route, Router, RouterBuilder, createLink, RouterOutlet,
+  Navigator, BrowserHistoryLive, NavigatorLive
+} from "fibrae/router";
 
 // --- State ---
 const countAtom = Atom.make(0);
@@ -149,6 +149,12 @@ Components return `VElement`, `Effect<VElement>`, or `Stream<VElement>`.
 | `registry.update(atom, fn)` | Update with function          |
 
 ### Routing
+
+Router features are available via `fibrae/router`:
+
+```tsx
+import { Route, Router, RouterBuilder, createLink, RouterOutlet } from "fibrae/router";
+```
 
 | API                                     | Description                     |
 | --------------------------------------- | ------------------------------- |

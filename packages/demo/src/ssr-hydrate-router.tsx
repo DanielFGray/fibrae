@@ -13,7 +13,7 @@ import * as Layer from "effect/Layer";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { h, render } from "fibrae";
 import { Hydration } from "@effect-atom/atom";
-import { Router } from "fibrae";
+import { Router } from "fibrae/router";
 import { SSRRouter, App, RouterOutlet, createSSRRouterHandlers } from "./ssr-router-app.js";
 
 // Declare global for TypeScript
