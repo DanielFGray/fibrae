@@ -31,6 +31,8 @@ export interface CurrentRoute {
   readonly routeName: string;
   readonly params: Record<string, unknown>;
   readonly searchParams: Record<string, string>;
+  /** Layout names wrapping this route, from outermost to innermost */
+  readonly layouts: readonly string[];
 }
 
 /**
@@ -163,17 +165,21 @@ function matchLocation(
     routeName: match.value.route.name,
     params: match.value.params,
     searchParams: parseSearchParams(location.search),
+    layouts: match.value.layouts.map((l) => l.name),
   });
 }
 
 /**
  * Find a route by name in the router.
+ * Also checks routes inside layout groups.
  */
-function findRouteByName(router: Router, name: string): Option.Option<Route> {
+function findRouteByName(router: Router, name: string): Option.Option<{ route: Route; basePath: string }> {
   for (const group of router.groups) {
     for (const route of group.routes) {
       if (route.name === name) {
-        return Option.some(route);
+        // For layout groups, include the basePath for URL building
+        const basePath = group._tag === "LayoutGroup" ? (group as any).basePath : "";
+        return Option.some({ route, basePath });
       }
     }
   }
@@ -235,17 +241,19 @@ export function NavigatorLive(
 
         go: (routeName, options = {}) =>
           Effect.gen(function* () {
-            const route = findRouteByName(router, routeName);
-            if (Option.isNone(route)) {
+            const found = findRouteByName(router, routeName);
+            if (Option.isNone(found)) {
               yield* Effect.logWarning(`Route not found: ${routeName}`);
               return;
             }
 
+            const { route, basePath: routeBasePath } = found.value;
+
             // Build URL from route and params
             const pathParams = options.path ?? ({} as Record<string, unknown>);
-            const routePathname = route.value.interpolate(pathParams);
-            // Prepend basePath to route pathname
-            const pathname = basePath + routePathname;
+            const routePathname = route.interpolate(pathParams);
+            // Prepend navigator basePath AND route's layout basePath
+            const pathname = basePath + routeBasePath + routePathname;
             const search = options.searchParams ? buildSearchString(options.searchParams) : "";
             const url = `${pathname}${search}`;
 

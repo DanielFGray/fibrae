@@ -33,6 +33,8 @@ export type {
   HandlerConfig,
   RouteHandler,
   GroupHandlers,
+  LayoutGroupHandlers,
+  LayoutHandler,
 } from "./RouterBuilder.js";
 
 export { RouterHandlers } from "./RouterBuilder.js";
@@ -51,7 +53,7 @@ export { createLink } from "./Link.js";
 
 // Re-export RouterOutlet component
 export type { RouterOutletProps } from "./RouterOutlet.js";
-export { RouterOutlet } from "./RouterOutlet.js";
+export { RouterOutlet, OutletDepth } from "./RouterOutlet.js";
 
 // Re-export SSR integration types and functions
 export type {
@@ -59,6 +61,10 @@ export type {
   BrowserLayerOptions,
   DehydratedRouterState,
   SSRRouteResult,
+  RouteMatch,
+  LayoutGroup,
+  RouteGroup,
+  AnyGroup,
 } from "./Router.js";
 export { CurrentRouteElement } from "./Router.js";
 

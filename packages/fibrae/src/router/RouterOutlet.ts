@@ -7,6 +7,10 @@
  * For SSR hydration, the RouterStateAtom is pre-populated and the loader is skipped
  * on first render.
  *
+ * Supports nested layouts - when a route is matched inside a layout group,
+ * the outlet renders the layout component first. The layout component should
+ * render its own <RouterOutlet /> which will then render the child route.
+ *
  * Usage:
  * ```typescript
  * function App() {
@@ -17,17 +21,34 @@
  *     </div>
  *   );
  * }
+ *
+ * // Layout component
+ * function DashboardLayout() {
+ *   return (
+ *     <div class="dashboard">
+ *       <Sidebar />
+ *       <RouterOutlet />  // Renders child route
+ *     </div>
+ *   );
+ * }
  * ```
  */
 
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import * as Option from "effect/Option";
+import * as Context from "effect/Context";
 import { Registry as AtomRegistry } from "@effect-atom/atom";
 import { Navigator } from "./Navigator.js";
 import { RouterHandlers } from "./RouterBuilder.js";
 import { RouterStateAtom, type RouterState } from "./RouterState.js";
 import type { VElement } from "../shared.js";
+
+/**
+ * Context for tracking outlet depth in nested layouts.
+ * Each nested RouterOutlet increments the depth.
+ */
+export class OutletDepth extends Context.Tag("fibrae/OutletDepth")<OutletDepth, number>() {}
 
 // =============================================================================
 // Types
@@ -60,11 +81,12 @@ export interface RouterOutletProps {
  * RouterOutlet component for reactive route rendering.
  *
  * The RouterOutlet:
- * 1. Checks if RouterStateAtom has data (SSR hydration case)
- * 2. Subscribes to Navigator.currentRoute for navigation changes
- * 3. When route changes, runs the matched route's loader
- * 4. Updates RouterStateAtom with the full state (for DI access)
- * 5. Renders the route's component with loader data
+ * 1. Gets current outlet depth from context (default 0)
+ * 2. If at depth < layouts.length, renders the layout at that depth
+ * 3. If at depth === layouts.length, renders the actual route component
+ * 4. Subscribes to Navigator.currentRoute for navigation changes
+ * 5. When route changes, runs the matched route's loader
+ * 6. Updates RouterStateAtom with the full state (for DI access)
  *
  * For SSR hydration, the RouterStateAtom is pre-populated by the server,
  * so the first render uses that data and skips the loader.
@@ -80,6 +102,11 @@ export function RouterOutlet(
       const navigator = yield* Navigator;
       const routerHandlers = yield* RouterHandlers;
       const registry = yield* AtomRegistry.AtomRegistry;
+
+      // Get current depth from context, default to 0 for root outlet
+      const currentDepth = yield* Effect.serviceOption(OutletDepth).pipe(
+        Effect.map(Option.getOrElse(() => 0)),
+      );
 
       // Check if we have hydrated state from SSR
       const hydratedState = registry.get(RouterStateAtom);
@@ -106,9 +133,39 @@ export function RouterOutlet(
             } as VElement;
           }
 
-          const { routeName, params, searchParams } = currentRoute.value;
+          const { routeName, params, searchParams, layouts } = currentRoute.value;
 
-          // Get handler for this route
+          // Check if we should render a layout or the route component
+          if (currentDepth < layouts.length) {
+            // Render the layout at this depth
+            const layoutName = layouts[currentDepth];
+            const layoutHandler = routerHandlers.getLayoutHandler(layoutName);
+
+            if (Option.isNone(layoutHandler)) {
+              return {
+                type: "div",
+                props: {
+                  children: [
+                    {
+                      type: "TEXT_ELEMENT",
+                      props: {
+                        nodeValue: `No layout handler for: ${layoutName}`,
+                        children: [],
+                      },
+                    },
+                  ],
+                },
+              } as VElement;
+            }
+
+            // The layout component renders its own <RouterOutlet /> which will
+            // have depth = currentDepth + 1. We need to provide the incremented
+            // depth via context - this is handled by the rendering system
+            // that provides OutletDepth = currentDepth + 1 to nested outlets.
+            return layoutHandler.value.component();
+          }
+
+          // At the deepest level - render the actual route component
           const handler = routerHandlers.getHandler(routeName);
           if (Option.isNone(handler)) {
             registry.set(RouterStateAtom, Option.none());

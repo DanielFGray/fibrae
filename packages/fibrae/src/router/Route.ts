@@ -222,7 +222,10 @@ export const post = makeGetter();
  *
  * Stores the parameter name in the schema's annotations for extraction during template literal parsing.
  */
-export function param<T>(name: string, schema: Schema.Schema<T>): Schema.Schema<T> {
+export function param<A, I, R>(
+  name: string,
+  schema: Schema.Schema<A, I, R>,
+): Schema.Schema<A, I, R> {
   const annotations: Record<string | symbol, unknown> = {
     [AnnotationParam]: { name, schema },
   };

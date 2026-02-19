@@ -17,6 +17,7 @@ import * as Option from "effect/Option";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import { Registry as AtomRegistry } from "@effect-atom/atom";
 import { History, MemoryHistoryLive, type HistoryLocation } from "./History.js";
 import { Navigator, NavigatorLive } from "./Navigator.js";
@@ -25,13 +26,50 @@ import { RouterStateAtom } from "./RouterState.js";
 import type { VElement } from "../shared.js";
 
 /**
+ * Router error for route matching and navigation failures.
+ */
+export class RouterError extends Data.TaggedError("RouterError")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+/**
  * A group of routes for organizational purposes.
  * Groups provide namespacing for handler implementation.
  */
 export interface RouteGroup<Name extends string = string> {
+  readonly _tag: "RouteGroup";
   readonly name: Name;
   readonly routes: readonly Route[];
   readonly add: (route: Route) => RouteGroup<Name>;
+}
+
+/**
+ * A layout group wraps routes with a layout component.
+ * The layout component should render <RouterOutlet /> for children.
+ */
+export interface LayoutGroup<Name extends string = string> {
+  readonly _tag: "LayoutGroup";
+  readonly name: Name;
+  readonly basePath: string;
+  readonly routes: readonly Route[];
+  readonly add: (route: Route) => LayoutGroup<Name>;
+}
+
+/**
+ * Union of group types that can be added to a router.
+ */
+export type AnyGroup<Name extends string = string> = RouteGroup<Name> | LayoutGroup<Name>;
+
+/**
+ * Result of matching a route, including any layout wrappers.
+ */
+export interface RouteMatch {
+  readonly groupName: string;
+  readonly route: Route;
+  readonly params: Record<string, unknown>;
+  /** Layout groups wrapping this route, from outermost to innermost */
+  readonly layouts: readonly LayoutGroup[];
 }
 
 /**
@@ -39,18 +77,15 @@ export interface RouteGroup<Name extends string = string> {
  */
 export interface Router<Name extends string = string> {
   readonly name: Name;
-  readonly groups: readonly RouteGroup[];
-  readonly add: (group: RouteGroup) => Router<Name>;
+  readonly groups: readonly AnyGroup[];
+  readonly add: (group: AnyGroup) => Router<Name>;
 
   /**
    * Match a pathname against all routes in the router.
-   * Returns the matched route, group name, and decoded path parameters.
+   * Returns the matched route, group name, decoded path parameters,
+   * and any layout groups that wrap the route.
    */
-  readonly matchRoute: (pathname: string) => Option.Option<{
-    readonly groupName: string;
-    readonly route: Route;
-    readonly params: Record<string, unknown>;
-  }>;
+  readonly matchRoute: (pathname: string) => Option.Option<RouteMatch>;
 }
 
 /**
@@ -59,9 +94,56 @@ export interface Router<Name extends string = string> {
  */
 export function group<const Name extends string>(name: Name): RouteGroup<Name> {
   return {
+    _tag: "RouteGroup",
     name,
     routes: [],
     add(route: Route): RouteGroup<Name> {
+      return {
+        ...this,
+        routes: [...this.routes, route],
+      };
+    },
+  };
+}
+
+/**
+ * Create a layout group with the given name, base path, and layout component.
+ *
+ * Layout groups wrap their child routes with a layout component that should
+ * render <RouterOutlet /> to display the matched child route.
+ *
+ * Child routes are matched relative to the basePath.
+ *
+ * Usage:
+ * ```typescript
+ * const DashboardLayout = () => (
+ *   <div class="dashboard">
+ *     <Sidebar />
+ *     <RouterOutlet />
+ *   </div>
+ * );
+ *
+ * const DashboardRoutes = Router.layout("dashboard", "/dashboard")
+ *   .add(Route.get("overview", "/overview"))   // matches /dashboard/overview
+ *   .add(Route.get("settings", "/settings"));  // matches /dashboard/settings
+ * ```
+ */
+export function layout<const Name extends string>(
+  name: Name,
+  basePath: string,
+): LayoutGroup<Name> {
+  // Normalize basePath - ensure it starts with / and doesn't end with /
+  const normalizedBase = basePath.startsWith("/") ? basePath : `/${basePath}`;
+  const cleanBase = normalizedBase.endsWith("/")
+    ? normalizedBase.slice(0, -1)
+    : normalizedBase;
+
+  return {
+    _tag: "LayoutGroup",
+    name,
+    basePath: cleanBase,
+    routes: [],
+    add(route: Route): LayoutGroup<Name> {
       return {
         ...this,
         routes: [...this.routes, route],
@@ -78,27 +160,47 @@ export function make<const Name extends string>(name: Name): Router<Name> {
   return {
     name,
     groups: [],
-    add(g: RouteGroup): Router<Name> {
+    add(g: AnyGroup): Router<Name> {
       return {
         ...this,
         groups: [...this.groups, g],
       };
     },
-    matchRoute(pathname: string): Option.Option<{
-      readonly groupName: string;
-      readonly route: Route;
-      readonly params: Record<string, unknown>;
-    }> {
+    matchRoute(pathname: string): Option.Option<RouteMatch> {
       // Try to match against each route in each group
       for (const g of this.groups) {
-        for (const route of g.routes) {
-          const match = route.match(pathname);
-          if (Option.isSome(match)) {
-            return Option.some({
-              groupName: g.name,
-              route,
-              params: match.value,
-            });
+        if (g._tag === "LayoutGroup") {
+          // For layout groups, check if pathname starts with basePath
+          const layoutGroup = g as LayoutGroup;
+          if (pathname.startsWith(layoutGroup.basePath)) {
+            // Get the remaining path after the base
+            const remainingPath = pathname.slice(layoutGroup.basePath.length) || "/";
+
+            // Try to match child routes against remaining path
+            for (const route of layoutGroup.routes) {
+              const match = route.match(remainingPath);
+              if (Option.isSome(match)) {
+                return Option.some({
+                  groupName: layoutGroup.name,
+                  route,
+                  params: match.value,
+                  layouts: [layoutGroup],
+                });
+              }
+            }
+          }
+        } else {
+          // Regular route group - match directly
+          for (const route of g.routes) {
+            const match = route.match(pathname);
+            if (Option.isSome(match)) {
+              return Option.some({
+                groupName: g.name,
+                route,
+                params: match.value,
+                layouts: [],
+              });
+            }
           }
         }
       }
@@ -260,7 +362,7 @@ export function serverLayer(
       // Match route using stripped pathname
       const match = router.matchRoute(matchPathname);
       if (Option.isNone(match)) {
-        return yield* Effect.fail(new Error(`No route matched pathname: ${matchPathname}`));
+        return yield* Effect.fail(new RouterError({ message: `No route matched pathname: ${matchPathname}` }));
       }
 
       const { route, params } = match.value;
@@ -268,7 +370,7 @@ export function serverLayer(
       // Get handler for this route
       const handler = routerHandlers.getHandler(route.name);
       if (Option.isNone(handler)) {
-        return yield* Effect.fail(new Error(`No handler found for route: ${route.name}`));
+        return yield* Effect.fail(new RouterError({ message: `No handler found for route: ${route.name}` }));
       }
 
       // Execute loader and render component
@@ -434,7 +536,7 @@ export function browserLayer(
         const state = hydratedState.value;
         const handler = routerHandlers.getHandler(state.routeName);
         if (Option.isNone(handler)) {
-          return yield* Effect.fail(new Error(`No handler found for route: ${state.routeName}`));
+          return yield* Effect.fail(new RouterError({ message: `No handler found for route: ${state.routeName}` }));
         }
 
         // Render component with SSR loader data (skip loader)
@@ -463,14 +565,14 @@ export function browserLayer(
 
       const match = router.matchRoute(matchPathname);
       if (Option.isNone(match)) {
-        return yield* Effect.fail(new Error(`No route matched pathname: ${matchPathname}`));
+        return yield* Effect.fail(new RouterError({ message: `No route matched pathname: ${matchPathname}` }));
       }
 
       const { route, params } = match.value;
 
       const handler = routerHandlers.getHandler(route.name);
       if (Option.isNone(handler)) {
-        return yield* Effect.fail(new Error(`No handler found for route: ${route.name}`));
+        return yield* Effect.fail(new RouterError({ message: `No handler found for route: ${route.name}` }));
       }
 
       const loaderCtx = { path: params, searchParams };

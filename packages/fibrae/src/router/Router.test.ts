@@ -57,10 +57,8 @@ describe("Router module", () => {
 
       const match = router.matchRoute("/");
       expect(Option.isSome(match)).toBe(true);
-      if (Option.isSome(match)) {
-        expect(match.value.route.name).toBe("home");
-        expect(match.value.groupName).toBe("app");
-      }
+      expect(match.value.route.name).toBe("home");
+      expect(match.value.groupName).toBe("app");
     });
 
     test("router.matchRoute returns None for unmatched paths", () => {
@@ -81,9 +79,7 @@ describe("Router module", () => {
 
       const match = router.matchRoute("/about");
       expect(Option.isSome(match)).toBe(true);
-      if (Option.isSome(match)) {
-        expect(match.value.route.name).toBe("about");
-      }
+      expect(match.value.route.name).toBe("about");
     });
 
     test("router.matchRoute extracts params", () => {
@@ -93,9 +89,7 @@ describe("Router module", () => {
 
       const match = router.matchRoute("/posts/123");
       expect(Option.isSome(match)).toBe(true);
-      if (Option.isSome(match)) {
-        expect(match.value.params.id).toBe("123");
-      }
+      expect(match.value.params.id).toBe("123");
     });
 
     test("router.matchRoute searches across multiple groups", () => {
@@ -107,17 +101,86 @@ describe("Router module", () => {
 
       const match1 = router.matchRoute("/");
       expect(Option.isSome(match1)).toBe(true);
-      if (Option.isSome(match1)) {
-        expect(match1.value.route.name).toBe("home");
-        expect(match1.value.groupName).toBe("app");
-      }
+      expect(match1.value.route.name).toBe("home");
+      expect(match1.value.groupName).toBe("app");
 
       const match2 = router.matchRoute("/api/users");
       expect(Option.isSome(match2)).toBe(true);
-      if (Option.isSome(match2)) {
-        expect(match2.value.route.name).toBe("users");
-        expect(match2.value.groupName).toBe("api");
-      }
+      expect(match2.value.route.name).toBe("users");
+      expect(match2.value.groupName).toBe("api");
+    });
+  });
+
+  describe("layout groups", () => {
+    test("Router.layout creates a layout group", () => {
+      const dashboardLayout = Router.layout("dashboard", "/dashboard");
+      expect(dashboardLayout.name).toBe("dashboard");
+      expect(dashboardLayout.basePath).toBe("/dashboard");
+      expect(dashboardLayout._tag).toBe("LayoutGroup");
+      expect(dashboardLayout.routes.length).toBe(0);
+    });
+
+    test("layout.add adds routes", () => {
+      const overview = Route.get("overview", "/overview");
+      const dashboardLayout = Router.layout("dashboard", "/dashboard").add(overview);
+      expect(dashboardLayout.routes.length).toBe(1);
+      expect(dashboardLayout.routes[0]).toBe(overview);
+    });
+
+    test("layout.add is chainable", () => {
+      const overview = Route.get("overview", "/overview");
+      const settings = Route.get("settings", "/settings");
+      const dashboardLayout = Router.layout("dashboard", "/dashboard")
+        .add(overview)
+        .add(settings);
+      expect(dashboardLayout.routes.length).toBe(2);
+    });
+
+    test("router.matchRoute matches layout routes with basePath prefix", () => {
+      const overview = Route.get("overview", "/overview");
+      const settings = Route.get("settings", "/settings");
+      const dashboardLayout = Router.layout("dashboard", "/dashboard")
+        .add(overview)
+        .add(settings);
+      const router = Router.make("root").add(dashboardLayout);
+
+      // Should match /dashboard/overview
+      const match1 = router.matchRoute("/dashboard/overview");
+      expect(Option.isSome(match1)).toBe(true);
+      expect(match1.value.route.name).toBe("overview");
+      expect(match1.value.groupName).toBe("dashboard");
+      expect(match1.value.layouts.length).toBe(1);
+      expect(match1.value.layouts[0].name).toBe("dashboard");
+
+      // Should match /dashboard/settings
+      const match2 = router.matchRoute("/dashboard/settings");
+      expect(Option.isSome(match2)).toBe(true);
+      expect(match2.value.route.name).toBe("settings");
+      expect(match2.value.layouts.length).toBe(1);
+
+      // Should NOT match /overview (without /dashboard prefix)
+      const noMatch = router.matchRoute("/overview");
+      expect(Option.isNone(noMatch)).toBe(true);
+    });
+
+    test("regular routes have empty layouts array", () => {
+      const home = Route.get("home", "/");
+      const group = Router.group("app").add(home);
+      const router = Router.make("root").add(group);
+
+      const match = router.matchRoute("/");
+      expect(Option.isSome(match)).toBe(true);
+      expect(match.value.layouts.length).toBe(0);
+    });
+
+    test("layout basePath is normalized", () => {
+      // Without leading slash
+      const layout1 = Router.layout("admin", "admin");
+      expect(layout1.basePath).toBe("/admin");
+
+      // With trailing slash
+      const layout2 = Router.layout("admin", "/admin/");
+      expect(layout2.basePath).toBe("/admin");
     });
   });
 });

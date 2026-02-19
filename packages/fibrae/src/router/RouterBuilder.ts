@@ -11,7 +11,7 @@ import * as Effect from "effect/Effect";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import type { Router, RouteGroup } from "./Router.js";
+import type { Router, RouteGroup, LayoutGroup, AnyGroup } from "./Router.js";
 import type { Route } from "./Route.js";
 import type { VElement } from "../shared.js";
 
@@ -79,6 +79,15 @@ export interface RouteHandler {
 }
 
 /**
+ * A registered layout handler.
+ * The layout component should render <RouterOutlet /> for children.
+ */
+export interface LayoutHandler {
+  readonly layoutName: string;
+  readonly component: () => VElement;
+}
+
+/**
  * Handlers builder for a route group.
  * Accumulates handler registrations for routes in the group.
  */
@@ -103,6 +112,37 @@ export interface GroupHandlers<GroupName extends string = string> {
 }
 
 /**
+ * Handlers builder for a layout group.
+ * Includes layout component registration plus child route handlers.
+ */
+export interface LayoutGroupHandlers<GroupName extends string = string> {
+  readonly groupName: GroupName;
+  readonly handlers: readonly RouteHandler[];
+  readonly layoutHandler: LayoutHandler | null;
+
+  /**
+   * Register the layout component for this layout group.
+   * The layout component should render <RouterOutlet /> for children.
+   */
+  readonly layout: (component: () => VElement) => LayoutGroupHandlers<GroupName>;
+
+  /**
+   * Register a handler for a route in this layout group.
+   */
+  readonly handle: <
+    RouteName extends string,
+    LoaderData,
+    PathParams extends Record<string, unknown>,
+    SearchParams extends Record<string, unknown>,
+    R,
+    E,
+  >(
+    routeName: RouteName,
+    config: HandlerConfig<LoaderData, PathParams, SearchParams, R, E>,
+  ) => LayoutGroupHandlers<GroupName>;
+}
+
+/**
  * Tag for the RouterHandlers service.
  * Provides access to all registered handlers.
  */
@@ -110,7 +150,9 @@ export class RouterHandlers extends Context.Tag("fibrae/RouterHandlers")<
   RouterHandlers,
   {
     readonly handlers: ReadonlyMap<string, RouteHandler>;
+    readonly layoutHandlers: ReadonlyMap<string, LayoutHandler>;
     readonly getHandler: (routeName: string) => Option.Option<RouteHandler>;
+    readonly getLayoutHandler: (layoutName: string) => Option.Option<LayoutHandler>;
   }
 >() {}
 
@@ -119,9 +161,9 @@ export class RouterHandlers extends Context.Tag("fibrae/RouterHandlers")<
  */
 function makeGroupHandlers<GroupName extends string>(
   groupName: GroupName,
-  group: RouteGroup<GroupName>,
+  grp: RouteGroup<GroupName>,
 ): GroupHandlers<GroupName> {
-  const routesByName = new Map<string, Route>(group.routes.map((r) => [r.name, r]));
+  const routesByName = new Map<string, Route>(grp.routes.map((r) => [r.name, r]));
 
   const buildHandlers = (handlers: readonly RouteHandler[]): GroupHandlers<GroupName> => ({
     groupName,
@@ -169,17 +211,82 @@ function makeGroupHandlers<GroupName extends string>(
 }
 
 /**
+ * Create handlers builder for a layout group.
+ */
+function makeLayoutGroupHandlers<GroupName extends string>(
+  groupName: GroupName,
+  layoutGroup: LayoutGroup<GroupName>,
+): LayoutGroupHandlers<GroupName> {
+  const routesByName = new Map<string, Route>(layoutGroup.routes.map((r) => [r.name, r]));
+
+  const buildHandlers = (
+    handlers: readonly RouteHandler[],
+    layoutHandler: LayoutHandler | null,
+  ): LayoutGroupHandlers<GroupName> => ({
+    groupName,
+    handlers,
+    layoutHandler,
+
+    layout(component: () => VElement): LayoutGroupHandlers<GroupName> {
+      return buildHandlers(handlers, {
+        layoutName: groupName,
+        component,
+      });
+    },
+
+    handle<
+      RouteName extends string,
+      LoaderData,
+      PathParams extends Record<string, unknown>,
+      SearchParams extends Record<string, unknown>,
+      R,
+      E,
+    >(
+      routeName: RouteName,
+      config: HandlerConfig<LoaderData, PathParams, SearchParams, R, E>,
+    ): LayoutGroupHandlers<GroupName> {
+      const maybeRoute = Option.fromNullable(routesByName.get(routeName));
+      if (Option.isNone(maybeRoute)) {
+        throw new Error(`Route "${routeName}" not found in layout group "${groupName}"`);
+      }
+      const route = maybeRoute.value;
+
+      const normalizedLoader = (ctx: LoaderContext): Effect.Effect<unknown> => {
+        if (!config.loader) {
+          return Effect.succeed(null);
+        }
+        const result = config.loader(ctx as LoaderContext<PathParams, SearchParams>);
+        return (
+          Effect.isEffect(result) ? result : Effect.succeed(result)
+        ) as Effect.Effect<unknown>;
+      };
+
+      const handler: RouteHandler = {
+        routeName,
+        route,
+        loader: normalizedLoader,
+        component: config.component as (props: ComponentProps) => VElement,
+      };
+
+      return buildHandlers([...handlers, handler], layoutHandler);
+    },
+  });
+
+  return buildHandlers([], null);
+}
+
+/**
  * Find a route group by name in a router.
  */
 function findGroup<GroupName extends string>(
   router: Router,
   groupName: GroupName,
-): RouteGroup<GroupName> {
+): AnyGroup<GroupName> {
   const maybeGroup = Option.fromNullable(router.groups.find((g) => g.name === groupName));
   if (Option.isNone(maybeGroup)) {
     throw new Error(`Group "${groupName}" not found in router "${router.name}"`);
   }
-  return maybeGroup.value as RouteGroup<GroupName>;
+  return maybeGroup.value as AnyGroup<GroupName>;
 }
 
 /**
@@ -229,7 +336,15 @@ export function group<GroupName extends string, R>(
   ) => GroupHandlers<GroupName> | Effect.Effect<GroupHandlers<GroupName>, never, R>,
 ): Layer.Layer<RouterHandlers, never, R> {
   const routeGroup = findGroup(router, groupName);
-  const initialHandlers = makeGroupHandlers(groupName, routeGroup);
+
+  // Check if it's a layout group - if so, throw helpful error
+  if (routeGroup._tag === "LayoutGroup") {
+    throw new Error(
+      `Group "${groupName}" is a LayoutGroup. Use RouterBuilder.layoutGroup() instead of RouterBuilder.group().`,
+    );
+  }
+
+  const initialHandlers = makeGroupHandlers(groupName, routeGroup as RouteGroup<GroupName>);
 
   return Layer.effect(
     RouterHandlers,
@@ -243,8 +358,96 @@ export function group<GroupName extends string, R>(
 
       return {
         handlers: handlersMap,
+        layoutHandlers: new Map(),
         getHandler(routeName: string): Option.Option<RouteHandler> {
           const handler = handlersMap.get(routeName);
+          return handler ? Option.some(handler) : Option.none();
+        },
+        getLayoutHandler(_layoutName: string): Option.Option<LayoutHandler> {
+          return Option.none();
+        },
+      };
+    }),
+  );
+}
+
+/**
+ * Create a Layer that provides handlers for a layout group.
+ *
+ * Layout groups require a layout component that renders <RouterOutlet /> for children.
+ *
+ * Usage:
+ * ```typescript
+ * const DashboardLayout = () => (
+ *   <div class="dashboard">
+ *     <Sidebar />
+ *     <RouterOutlet />
+ *   </div>
+ * );
+ *
+ * const DashboardRoutesLive = RouterBuilder.layoutGroup(
+ *   AppRouter,
+ *   "dashboard",
+ *   (handlers) => handlers
+ *     .layout(DashboardLayout)
+ *     .handle("overview", { component: () => <Overview /> })
+ *     .handle("settings", { component: () => <Settings /> })
+ * )
+ * ```
+ */
+export function layoutGroup<GroupName extends string>(
+  router: Router,
+  groupName: GroupName,
+  build: (handlers: LayoutGroupHandlers<GroupName>) => LayoutGroupHandlers<GroupName>,
+): Layer.Layer<RouterHandlers, never, never>;
+export function layoutGroup<GroupName extends string, R>(
+  router: Router,
+  groupName: GroupName,
+  build: (
+    handlers: LayoutGroupHandlers<GroupName>,
+  ) => Effect.Effect<LayoutGroupHandlers<GroupName>, never, R>,
+): Layer.Layer<RouterHandlers, never, R>;
+export function layoutGroup<GroupName extends string, R>(
+  router: Router,
+  groupName: GroupName,
+  build: (
+    handlers: LayoutGroupHandlers<GroupName>,
+  ) => LayoutGroupHandlers<GroupName> | Effect.Effect<LayoutGroupHandlers<GroupName>, never, R>,
+): Layer.Layer<RouterHandlers, never, R> {
+  const routeGroup = findGroup(router, groupName);
+
+  if (routeGroup._tag !== "LayoutGroup") {
+    throw new Error(
+      `Group "${groupName}" is not a LayoutGroup. Use RouterBuilder.group() instead.`,
+    );
+  }
+
+  const initialHandlers = makeLayoutGroupHandlers(groupName, routeGroup as LayoutGroup<GroupName>);
+
+  return Layer.effect(
+    RouterHandlers,
+    Effect.gen(function* () {
+      const result = build(initialHandlers);
+      const builtHandlers = Effect.isEffect(result) ? yield* result : result;
+
+      const handlersMap = new Map<string, RouteHandler>(
+        builtHandlers.handlers.map((h) => [h.routeName, h]),
+      );
+
+      const layoutHandlersMap = new Map<string, LayoutHandler>();
+      if (builtHandlers.layoutHandler) {
+        layoutHandlersMap.set(builtHandlers.layoutHandler.layoutName, builtHandlers.layoutHandler);
+      }
+
+      return {
+        handlers: handlersMap,
+        layoutHandlers: layoutHandlersMap,
+        getHandler(routeName: string): Option.Option<RouteHandler> {
+          const handler = handlersMap.get(routeName);
+          return handler ? Option.some(handler) : Option.none();
+        },
+        getLayoutHandler(layoutName: string): Option.Option<LayoutHandler> {
+          const handler = layoutHandlersMap.get(layoutName);
           return handler ? Option.some(handler) : Option.none();
         },
       };
@@ -267,7 +470,11 @@ export function router(_router: Router): Layer.Layer<RouterHandlers> {
   // Start with an empty handlers layer
   return Layer.succeed(RouterHandlers, {
     handlers: new Map(),
+    layoutHandlers: new Map(),
     getHandler(_routeName: string): Option.Option<RouteHandler> {
+      return Option.none();
+    },
+    getLayoutHandler(_layoutName: string): Option.Option<LayoutHandler> {
       return Option.none();
     },
   });
