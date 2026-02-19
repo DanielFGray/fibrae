@@ -77,6 +77,18 @@ describe("renderToString", () => {
       expect(result.html).toBe("<input />");
     });
 
+    test("converts camelCase boolean attrs to lowercase HTML", async () => {
+      const element = h("input", { readOnly: true }, []);
+      const result = await runTest(renderToString(element));
+      expect(result.html).toBe("<input readonly />");
+    });
+
+    test("omits camelCase boolean false attributes", async () => {
+      const element = h("input", { readOnly: false }, []);
+      const result = await runTest(renderToString(element));
+      expect(result.html).toBe("<input />");
+    });
+
     test("skips event handlers", async () => {
       const element = h("button", { onClick: () => {} }, ["Click"]);
       const result = await runTest(renderToString(element));

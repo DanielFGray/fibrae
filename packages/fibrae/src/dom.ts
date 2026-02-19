@@ -17,7 +17,36 @@ export const propertyUpdateMap: Record<
   class: "classList",
   className: "classList",
   value: "property",
-  checked: "property",
+  // Boolean HTML attributes: presence means true, absence means false
+  checked: "booleanAttribute",
+  disabled: "booleanAttribute",
+  hidden: "booleanAttribute",
+  multiple: "booleanAttribute",
+  muted: "booleanAttribute",
+  open: "booleanAttribute",
+  required: "booleanAttribute",
+  selected: "booleanAttribute",
+  controls: "booleanAttribute",
+  loop: "booleanAttribute",
+  reversed: "booleanAttribute",
+  default: "booleanAttribute",
+  inert: "booleanAttribute",
+  // Lowercase form (HTML attribute names)
+  readonly: "booleanAttribute",
+  autofocus: "booleanAttribute",
+  autoplay: "booleanAttribute",
+  novalidate: "booleanAttribute",
+  formnovalidate: "booleanAttribute",
+  allowfullscreen: "booleanAttribute",
+  playsinline: "booleanAttribute",
+  // JSX camelCase equivalents
+  readOnly: "booleanAttribute",
+  autoFocus: "booleanAttribute",
+  autoPlay: "booleanAttribute",
+  noValidate: "booleanAttribute",
+  formNoValidate: "booleanAttribute",
+  allowFullscreen: "booleanAttribute",
+  playsInline: "booleanAttribute",
 };
 
 export const isEvent = (key: string) => key.startsWith("on");
@@ -34,7 +63,14 @@ export const setDomProperty = (el: HTMLElement, name: string, value: unknown): v
 
   switch (method) {
     case "attribute":
-      el.setAttribute(name, String(value ?? ""));
+      if (value == null || value === false) {
+        el.removeAttribute(name);
+      } else if (value === true) {
+        el.setAttribute(name, "");
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-base-to-string
+        el.setAttribute(name, String(value));
+      }
       break;
     case "property":
       Reflect.set(el, name, value);
@@ -43,7 +79,8 @@ export const setDomProperty = (el: HTMLElement, name: string, value: unknown): v
       if (Array.isArray(value)) {
         value.forEach((v: string) => el.classList.add(v));
       } else {
-        el.setAttribute("class", String(value ?? ""));
+        // eslint-disable-next-line @typescript-eslint/no-base-to-string
+        el.setAttribute("class", value == null ? "" : String(value));
       }
       break;
     case "booleanAttribute":

@@ -17,7 +17,7 @@ import * as Deferred from "effect/Deferred";
 import type * as Layer from "effect/Layer";
 
 import { Atom, Registry as AtomRegistry, Hydration } from "@effect-atom/atom";
-import { type VElement, type ElementType, type Primitive, isStream, isProperty } from "./shared.js";
+import { type VElement, type ElementType, type Primitive, isStream, isProperty, RenderError } from "./shared.js";
 
 // Re-export to satisfy declaration file requirements
 export type { Layer };
@@ -86,13 +86,26 @@ const escapeHtml = (str: string): string => {
 // =============================================================================
 
 /**
+ * JSX camelCase prop names to their HTML attribute equivalents
+ */
+const jsxToHtmlAttr: Record<string, string> = {
+  className: "class",
+  htmlFor: "for",
+  readOnly: "readonly",
+  autoFocus: "autofocus",
+  autoPlay: "autoplay",
+  noValidate: "novalidate",
+  formNoValidate: "formnovalidate",
+  allowFullscreen: "allowfullscreen",
+  playsInline: "playsinline",
+};
+
+/**
  * Convert a prop name to its HTML attribute name
  */
 const propToAttr = (prop: string): string => {
-  // Handle className -> class
-  if (prop === "className") return "class";
-  // Handle htmlFor -> for
-  if (prop === "htmlFor") return "for";
+  const mapped = jsxToHtmlAttr[prop];
+  if (mapped) return mapped;
   // Convert camelCase to kebab-case for data-* and aria-*
   if (prop.startsWith("data") || prop.startsWith("aria")) {
     return prop.replace(/([A-Z])/g, "-$1").toLowerCase();
@@ -176,7 +189,7 @@ const renderVElementToString = (
       // Invoke the component, catching synchronous throws
       const outputEffect = Effect.try({
         try: () => type(vElement.props),
-        catch: (e) => e,
+        catch: (cause) => new RenderError({ cause }),
       });
 
       const output = yield* outputEffect;
@@ -266,19 +279,10 @@ const renderVElementToString = (
         return `<${type}${attrs}${keyAttr} />`;
       }
 
-      // Render children with text node markers between adjacent text nodes
-      // This preserves text node boundaries for hydration (React's approach)
       const children = vElement.props.children ?? [];
       let childrenHtml = "";
-      let prevWasText = false;
       for (const child of children) {
-        const isText = child.type === "TEXT_ELEMENT";
-        // Insert marker between adjacent text nodes to preserve boundaries
-        if (prevWasText && isText) {
-          childrenHtml += "<!--fibrae:$-->";
-        }
         childrenHtml += yield* renderVElementToString(child);
-        prevWasText = isText;
       }
 
       return `<${type}${attrs}${keyAttr}>${childrenHtml}</${type}>`;
