@@ -26,6 +26,9 @@ export {
   type ComponentError,
 } from "./shared.js";
 
+// Component lifecycle
+export { ComponentScope } from "./shared.js";
+
 // Re-export upstream Effect Atom APIs for consumers
 export { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 

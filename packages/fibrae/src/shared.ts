@@ -13,6 +13,61 @@ import { Atom as BaseAtom } from "@effect-atom/atom";
 // Re-export to satisfy declaration file requirements
 export type { Cause, Types };
 
+// =============================================================================
+// Component Scope Service
+// =============================================================================
+
+/**
+ * Service tag for accessing the current component's scope and mount signal.
+ *
+ * Provides:
+ * - `scope`: Register cleanup logic that runs when the component unmounts
+ * - `mounted`: Deferred that resolves after the component's DOM subtree commits
+ *
+ * @example
+ * ```tsx
+ * const JsonEditor = () =>
+ *   Effect.gen(function* () {
+ *     const { scope, mounted } = yield* ComponentScope;
+ *     const containerRef = { current: null as HTMLDivElement | null };
+ *
+ *     // Fork an effect that waits for mount, then initializes
+ *     yield* pipe(
+ *       Effect.gen(function* () {
+ *         yield* Deferred.await(mounted); // Wait for DOM to be ready
+ *         const editor = monaco.create(containerRef.current!);
+ *         yield* Scope.addFinalizer(scope, Effect.sync(() => editor.dispose()));
+ *       }),
+ *       Effect.forkScoped,
+ *       Scope.extend(scope)
+ *     );
+ *
+ *     return <div ref={el => containerRef.current = el} />;
+ *   });
+ * ```
+ *
+ * For simple cleanup without waiting for mount:
+ *
+ * @example
+ * ```tsx
+ * const JsonEditor = () =>
+ *   Effect.gen(function* () {
+ *     const { scope } = yield* ComponentScope;
+ *
+ *     // Register cleanup that runs on unmount
+ *     yield* Scope.addFinalizer(scope, Effect.sync(() => {
+ *       console.log("Editor unmounted");
+ *     }));
+ *
+ *     return <div />;
+ *   });
+ * ```
+ */
+export class ComponentScope extends Context.Tag("fibrae/ComponentScope")<
+  ComponentScope,
+  { scope: Scope.Scope; mounted: Deferred.Deferred<void> }
+>() {}
+
 /**
  * Primitive element types: HTML tags, text nodes, fragments, suspense, or boundary
  */
@@ -117,6 +172,8 @@ export interface Fiber {
   alternate: Option.Option<Fiber>;
   effectTag: Option.Option<"UPDATE" | "PLACEMENT" | "DELETION">;
   componentScope: Option.Option<Scope.Scope>;
+  /** Deferred that resolves after this component's DOM subtree commits */
+  mountedDeferred: Option.Option<Deferred.Deferred<void>>;
   accessedAtoms: Option.Option<Set<BaseAtom.Atom<any>>>;
   latestStreamValue: Option.Option<VElement>;
   childFirstCommitDeferred: Option.Option<Deferred.Deferred<void>>;

@@ -28,6 +28,7 @@ import {
   type Fiber,
   type FiberRef as FiberRefType,
   type ComponentError,
+  ComponentScope,
   RenderError,
   StreamError,
   EventHandlerError,
@@ -120,6 +121,7 @@ const createFiber = (
   alternate,
   effectTag,
   componentScope: Option.none(),
+  mountedDeferred: Option.none(),
   accessedAtoms: Option.none(),
   latestStreamValue: Option.none(),
   childFirstCommitDeferred: Option.none(),
@@ -167,6 +169,19 @@ const getComponentScopeOrDie = (fiber: Fiber, msg: string) =>
   Option.match(fiber.componentScope, {
     onNone: () => Effect.die(msg),
     onSome: (s) => Effect.succeed(s),
+  });
+
+/**
+ * Get the full ComponentScope service value (scope + mounted) for a fiber.
+ */
+const getComponentScopeService = (fiber: Fiber, msg: string) =>
+  Effect.gen(function* () {
+    const scope = yield* getComponentScopeOrDie(fiber, msg);
+    const mounted = yield* Option.match(fiber.mountedDeferred, {
+      onNone: () => Effect.die(`${msg} (missing mountedDeferred)`),
+      onSome: (d) => Effect.succeed(d),
+    });
+    return { scope, mounted };
   });
 
 // =============================================================================
@@ -523,12 +538,23 @@ const updateFunctionComponent = (
       return;
     }
 
+    // Create scope for this component FIRST so it's available in context
+    yield* resubscribeFiber(fiber);
+
+    const componentScopeService = yield* getComponentScopeService(
+      fiber,
+      "Expected componentScope to be created by resubscribeFiber",
+    );
+
     // Set up atom tracking
     const accessedAtoms = new Set<Atom.Atom<any>>();
     const trackingRegistry = makeTrackingRegistry(runtime.registry, accessedAtoms);
+    fiber.accessedAtoms = Option.some(accessedAtoms);
 
+    // Build context with tracking registry AND ComponentScope
+    // This allows Effect components to yield* ComponentScope for cleanup registration
     const contextWithTracking = Context.add(
-      currentContext,
+      Context.add(currentContext, ComponentScope, componentScopeService),
       AtomRegistry.AtomRegistry,
       trackingRegistry,
     );
@@ -568,15 +594,6 @@ const updateFunctionComponent = (
     // Normalize to stream and provide context
     const stream = normalizeToStream(output).pipe(Stream.provideContext(contextWithTracking));
 
-    // Create scope for this component
-    yield* resubscribeFiber(fiber);
-    fiber.accessedAtoms = Option.some(accessedAtoms);
-
-    const scope = yield* getComponentScopeOrDie(
-      fiber,
-      "Expected componentScope to be created by resubscribeFiber",
-    );
-
     // Set up fiber ref for stream subscriptions
     const fiberRef: FiberRefType = fiber.fiberRef.pipe(
       Option.getOrElse(() => ({ current: fiber })),
@@ -584,7 +601,11 @@ const updateFunctionComponent = (
     fiber.fiberRef = Option.some(fiberRef);
 
     // Subscribe to component stream - errors become defects via "die" mode
-    const firstValueDeferred = yield* subscribeComponentStream(stream, fiberRef, scope);
+    const firstValueDeferred = yield* subscribeComponentStream(
+      stream,
+      fiberRef,
+      componentScopeService.scope,
+    );
 
     // Get threshold from nearest Suspense boundary
     const threshold = getSuspenseThreshold(fiber);
@@ -611,7 +632,7 @@ const updateFunctionComponent = (
             currentFiber.latestStreamValue = Option.some(value);
             yield* signalFiberReady(currentFiber);
           }),
-          scope,
+          componentScopeService.scope,
         );
 
         // Return early - don't reconcile children yet
@@ -682,9 +703,11 @@ const resubscribeFiber = (fiber: Fiber) =>
       onSome: (scope) => Scope.close(scope as Scope.Scope.Closeable, Exit.void),
     });
 
-    // Create new scope
+    // Create new scope and mounted deferred
     const newScope = yield* Scope.make();
+    const newMounted = yield* Deferred.make<void>();
     fiber.componentScope = Option.some(newScope);
+    fiber.mountedDeferred = Option.some(newMounted);
   });
 
 const subscribeFiberAtoms = (
@@ -925,6 +948,16 @@ const updateDom = (
         delete stored[eventType];
       }
     }
+
+    // Remove properties that were in prevProps but not in nextProps
+    Object.keys(prevProps)
+      .filter(isProperty)
+      .filter((key) => !(key in nextProps))
+      .forEach((name) => {
+        if (el instanceof HTMLElement) {
+          setDomProperty(el, name, null);
+        }
+      });
 
     // Update changed properties
     Object.keys(nextProps)
@@ -1197,6 +1230,17 @@ const commitWork = (
       if (Option.isSome(fiber.child)) {
         yield* commitWork(fiber.child.value, runtime);
       }
+      // Signal mounted after subtree commits (for function components)
+      yield* Option.match(fiber.mountedDeferred, {
+        onNone: () => Effect.void,
+        onSome: (deferred) =>
+          Effect.gen(function* () {
+            const done = yield* Deferred.isDone(deferred);
+            if (!done) {
+              yield* Deferred.succeed(deferred, undefined);
+            }
+          }),
+      });
       if (Option.isSome(fiber.sibling)) {
         yield* commitWork(fiber.sibling.value, runtime);
       }
@@ -1561,12 +1605,22 @@ const hydrateFunctionComponent = (
     const currentContext = (yield* FiberRef.get(FiberRef.currentContext)) as Context.Context<any>;
     fiber.renderContext = Option.some(currentContext);
 
+    // Create scope for this component FIRST so it's available in context
+    yield* resubscribeFiber(fiber);
+
+    const componentScopeService = yield* getComponentScopeService(
+      fiber,
+      "Expected componentScope",
+    );
+
     // Set up atom tracking
     const accessedAtoms = new Set<Atom.Atom<any>>();
     const trackingRegistry = makeTrackingRegistry(runtime.registry, accessedAtoms);
+    fiber.accessedAtoms = Option.some(accessedAtoms);
 
+    // Build context with tracking registry AND ComponentScope
     const contextWithTracking = Context.add(
-      currentContext,
+      Context.add(currentContext, ComponentScope, componentScopeService),
       AtomRegistry.AtomRegistry,
       trackingRegistry,
     );
@@ -1582,18 +1636,16 @@ const hydrateFunctionComponent = (
     // Get first value from stream
     const stream = normalizeToStream(output).pipe(Stream.provideContext(contextWithTracking));
 
-    // Create scope for this component
-    yield* resubscribeFiber(fiber);
-    fiber.accessedAtoms = Option.some(accessedAtoms);
-
-    const scope = yield* getComponentScopeOrDie(fiber, "Expected componentScope");
-
     // Set up fiber ref
     const fiberRef: FiberRefType = { current: fiber };
     fiber.fiberRef = Option.some(fiberRef);
 
     // Subscribe to component stream - errors typed via "fail" mode
-    const firstValueDeferred = yield* subscribeComponentStream(stream, fiberRef, scope);
+    const firstValueDeferred = yield* subscribeComponentStream(
+      stream,
+      fiberRef,
+      componentScopeService.scope,
+    );
 
     // Wait for first value
     const childVElement = yield* Deferred.await(firstValueDeferred);
@@ -1607,6 +1659,9 @@ const hydrateFunctionComponent = (
       Option.some(domNode),
       runtime,
     );
+
+    // Signal mounted after subtree hydrates
+    yield* Deferred.succeed(componentScopeService.mounted, undefined);
 
     // Subscribe to atom changes
     yield* subscribeFiberAtoms(fiber, accessedAtoms, runtime);
