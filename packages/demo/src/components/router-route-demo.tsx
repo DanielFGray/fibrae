@@ -1,6 +1,5 @@
-import { h as H, render } from "fibrae";
+import { h as H } from "fibrae";
 import { Route } from "fibrae/router";
-import * as Schema from "effect/Schema";
 
 export function RouterRouteDemo() {
   // Test 1: Static route
@@ -23,7 +22,7 @@ export function RouterRouteDemo() {
     H("div", {}, [
       H("h2", {}, ["Test 2: Dynamic Route Matching"]),
       H("p", {}, [`Match "/posts/123" against "post" route: ${match2.toString()}`]),
-      match2._tag === "Some" && H("p", {}, [`Extracted ID: ${match2.value.id}`]),
+      match2._tag === "Some" && H("p", {}, [`Extracted ID: ${(match2.value as { id?: string }).id}`]),
     ]),
     H("div", {}, [
       H("h2", {}, ["Test 3: URL Interpolation"]),

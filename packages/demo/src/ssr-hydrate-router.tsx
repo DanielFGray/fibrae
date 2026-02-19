@@ -58,14 +58,11 @@ Effect.gen(function* () {
   // Render (hydrate) the app with router layer
   // render() automatically provides FibraeRuntime + AtomRegistry
   // The initialState includes RouterStateAtom which RouterOutlet uses
-  yield* render(app, container, {
+  yield* Effect.log("Hydrating SSR router app");
+  return yield* render(app, container, {
     layer: routerLayer,
     initialState,
   });
-
-  yield* Effect.log("Hydrated SSR router app");
-
-  return yield* Effect.never;
 }).pipe(
   Effect.catchAllDefect((e) => {
     console.error("Hydration error:", e);

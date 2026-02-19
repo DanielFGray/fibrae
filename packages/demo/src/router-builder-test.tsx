@@ -10,7 +10,6 @@
 
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
@@ -92,7 +91,7 @@ const AppRoutesLive = RouterBuilder.group(AppRouter, "app", (handlers) =>
         component: (props) => <HomePage loaderData={props.loaderData} />,
       })
       .handle("posts", {
-        loader: ({ searchParams }) =>
+        loader: (_args) =>
           Effect.succeed({
             posts: [
               { id: 1, title: "First Post" },
@@ -105,13 +104,15 @@ const AppRoutesLive = RouterBuilder.group(AppRouter, "app", (handlers) =>
         ),
       })
       .handle("post", {
-        loader: ({ path }) =>
-          Effect.succeed({
-            id: path.id,
-            title: `Post ${path.id}`,
-            content: `Content for post ${path.id}`,
-          }),
-        component: (props) => <PostPage loaderData={props.loaderData} path={props.path} />,
+        loader: ({ path }) => {
+          const id = path.id as number;
+          return Effect.succeed({
+            id,
+            title: `Post ${id}`,
+            content: `Content for post ${id}`,
+          });
+        },
+        component: (props) => <PostPage loaderData={props.loaderData} path={props.path as { id: number }} />,
       }),
   ),
 );
@@ -181,9 +182,7 @@ Effect.gen(function* () {
     </div>
   );
 
-  yield* render(<TestApp />, root);
-
-  return yield* Effect.never;
+  return yield* render(<TestApp />, root);
 }).pipe(
   Effect.provide(AppRoutesLive),
   Effect.catchAllDefect((e) => Effect.log(e)),

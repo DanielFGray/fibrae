@@ -10,10 +10,15 @@ import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
 import { render, Atom, AtomRegistry, Suspense, ErrorBoundary, type VNode } from "fibrae";
 
+// Test error for simulating failures in error handling examples
+class TestFailure extends Schema.TaggedError<TestFailure>()("TestFailure", {
+  message: Schema.String,
+}) {}
+
 // Module-scope atoms/families
-const counterAtom = Atom.family((label: string) => Atom.make(0));
+const counterAtom = Atom.family((_label: string) => Atom.make(0));
 const todosAtom = Atom.make<string[]>([]);
-const todoCompletedAtom = Atom.family((id: string) => Atom.make(false));
+const todoCompletedAtom = Atom.family((_id: string) => Atom.make(false));
 const queryAtom = Atom.make("");
 const debouncedQueryAtom = Atom.make("");
 const isSearchingAtom = Atom.make(false);
@@ -432,7 +437,7 @@ Effect.gen(function* () {
 
   const EventFailer = () => (
     <div>
-      <button data-cy="fail-event" onClick={() => Effect.fail(new Error("event-crash"))}>
+      <button data-cy="fail-event" onClick={() => Effect.fail(new TestFailure({ message: "event-crash" }))}>
         Fail Event
       </button>
     </div>
@@ -441,20 +446,20 @@ Effect.gen(function* () {
   // Stream that emits once then fails (tests post-first-emission failure)
   const StreamFailer = () => {
     const ok = <div data-cy="stream-ok">Stream OK once</div>;
-    const fail = Effect.delay(Effect.fail(new Error("stream-crash")), "300 millis");
+    const fail = Effect.delay(Effect.fail(new TestFailure({ message: "stream-crash" })), "300 millis");
     return Stream.concat(Stream.succeed(ok), Stream.fromEffect(fail));
   };
 
   // Stream that fails before first emission (tests pre-first-emission failure)
   const StreamFailerImmediate = () => {
-    return Stream.fromEffect(Effect.fail(new Error("stream-crash-immediate")));
+    return Stream.fromEffect(Effect.fail(new TestFailure({ message: "stream-crash-immediate" })));
   };
 
   // Stream that takes longer than Suspense threshold then fails
   // Tests that ErrorBoundary() takes precedence over Suspense fallback
   const SlowThenFail = () => {
     // Delay 200ms (> 100ms threshold) so Suspense shows loading, then fail
-    return Stream.fromEffect(Effect.delay(Effect.fail(new Error("slow-then-fail")), "200 millis"));
+    return Stream.fromEffect(Effect.delay(Effect.fail(new TestFailure({ message: "slow-then-fail" })), "200 millis"));
   };
 
   // Wrapper components using ErrorBoundary() API
@@ -565,7 +570,7 @@ Effect.gen(function* () {
 
   const BoundaryEventFailer = () => (
     <div>
-      <button data-cy="boundary-fail-event" onClick={() => Effect.fail(new Error("boundary-event-crash"))}>
+      <button data-cy="boundary-fail-event" onClick={() => Effect.fail(new TestFailure({ message: "boundary-event-crash" }))}>
         Fail Event (boundary)
       </button>
     </div>
@@ -574,7 +579,7 @@ Effect.gen(function* () {
   // Stream that emits once then fails
   const BoundaryStreamFailer = () => {
     const ok = <div data-cy="boundary-stream-ok">Boundary Stream OK once</div>;
-    const fail = Effect.delay(Effect.fail(new Error("boundary-stream-crash")), "300 millis");
+    const fail = Effect.delay(Effect.fail(new TestFailure({ message: "boundary-stream-crash" })), "300 millis");
     return Stream.concat(Stream.succeed(ok), Stream.fromEffect(fail));
   };
 

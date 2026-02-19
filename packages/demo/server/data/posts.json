@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "title": "Getting Started with Fibrae",
+    "content": "Fibrae is an Effect-first JSX renderer where components are Effect programs with automatic reactivity. Unlike React, components can yield effects directly and event handlers can return Effects that are automatically executed.",
+    "authorId": "alice",
+    "createdAt": "2024-01-15T10:00:00Z",
+    "updatedAt": "2024-01-15T10:00:00Z"
+  },
+  {
+    "id": 2,
+    "title": "Understanding Atoms",
+    "content": "Atoms provide fine-grained reactive state management. Unlike React's useState, Atoms are defined at module scope and can be shared across components. Use Atom.family for parameterized atoms.",
+    "authorId": "bob",
+    "createdAt": "2024-01-16T14:30:00Z",
+    "updatedAt": "2024-01-16T14:30:00Z"
+  },
+  {
+    "id": 3,
+    "title": "Building with Streams",
+    "content": "Components can return Streams for progressive rendering. Combined with Suspense, this enables loading states and incremental updates. Perfect for real-time data or chunked responses.",
+    "authorId": "alice",
+    "createdAt": "2024-01-17T09:15:00Z",
+    "updatedAt": "2024-01-17T09:15:00Z"
+  }
+]

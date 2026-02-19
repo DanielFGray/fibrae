@@ -22,7 +22,8 @@
     "dev": "mprocs 'bun dev:demo' 'bun build:watch' 'bun dev:server'",
     "dev:demo": "cd packages/demo && bun run dev:server",
     "dev:server": "cd packages/demo && bun server/index.ts",
-    "test": "bun --filter demo cypress:open --e2e --browser=chromium",
+    "test": "bun --filter demo cypress:run",
+    "test:open": "bun --filter demo cypress:open --e2e --browser=chromium",
     "cypress:run": "cd packages/demo && bun cypress:run",
     "cypress:open": "cd packages/demo && bun cypress:open",
     "build": "run-s build:core",
@@ -37,19 +38,20 @@
   },
   "dependencies": {
     "@effect-atom/atom": "0.4.11",
-    "@effect/platform": "^0.94.0",
+    "@effect/platform": "^0.94.5",
     "@effect/platform-browser": "^0.74.0",
-    "@effect/platform-bun": "^0.87.0",
-    "@effect/platform-node": "^0.104.0",
-    "mprocs": "^0.8.2",
+    "@effect/platform-bun": "^0.87.1",
+    "@effect/platform-node": "^0.104.1",
+    "mprocs": "^0.8.3",
     "npm-run-all": "^4.1.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "cypress": "^15.10.0",
     "eslint": "^9.39.2",
     "globals": "^16.5.0",
     "jiti": "^2.6.1",
-    "typescript-eslint": "^8.50.1"
+    "typescript-eslint": "^8.56.0"
   },
   "overrides": {
     "effect": "catalog:"

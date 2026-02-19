@@ -55,7 +55,7 @@ const Link = createLink(appRouter);
 
 const counterAtom = Atom.make(0);
 const todosAtom = Atom.make<Array<{ id: number; text: string }>>([]);
-const todoCompletedAtom = Atom.family((id: number) => Atom.make(false));
+const todoCompletedAtom = Atom.family((_id: number) => Atom.make(false));
 
 // Mock posts data
 const posts = [
@@ -365,9 +365,7 @@ const routerLayer = pipe(
 Effect.gen(function* () {
   const root = pipe(document.getElementById("root"), Option.fromNullable, Option.getOrThrow);
 
-  yield* render(<App />, root, { layer: routerLayer });
-
-  return yield* Effect.never;
+  return yield* render(<App />, root, { layer: routerLayer });
 }).pipe(
   Effect.catchAllDefect((e) => Effect.log(e)),
   BrowserPlatform.BrowserRuntime.runMain,

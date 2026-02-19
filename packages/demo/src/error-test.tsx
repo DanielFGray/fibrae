@@ -6,13 +6,19 @@ import * as Stream from "effect/Stream";
 import * as Option from "effect/Option";
 import * as Logger from "effect/Logger";
 import * as LogLevel from "effect/LogLevel";
+import * as Schema from "effect/Schema";
 import { pipe } from "effect/Function";
 import { render, ErrorBoundary } from "fibrae";
+
+// Test error for simulating failures in error handling tests
+class TestFailure extends Schema.TaggedError<TestFailure>()("TestFailure", {
+  message: Schema.String,
+}) {}
 
 // Stream that fails immediately before emitting anything
 const StreamFailerImmediate = () => {
   console.log("StreamFailerImmediate: creating stream that fails immediately");
-  return Stream.fromEffect(Effect.fail(new Error("stream-crash-immediate")));
+  return Stream.fromEffect(Effect.fail(new TestFailure({ message: "stream-crash-immediate" })));
 };
 
 // Wrap with ErrorBoundary and catch errors with Stream.catchTags
@@ -35,10 +41,7 @@ Effect.gen(function* () {
   const root = pipe(document.getElementById("root"), Option.fromNullable, Option.getOrThrow);
 
   console.log("Starting render...");
-  yield* render(<App />, root);
-  console.log("Render returned (should wait on Effect.never internally)");
-
-  return yield* Effect.never;
+  return yield* render(<App />, root);
 }).pipe(
   Effect.catchAllDefect((e) => {
     console.error("Defect caught:", e);

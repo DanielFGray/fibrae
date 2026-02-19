@@ -6,9 +6,9 @@ import { pipe } from "effect/Function";
 import { h, Atom, AtomRegistry, Suspense, type VNode } from "fibrae";
 
 // Effect pattern: define atoms at module level using Atom.family for parameterized state
-const counterAtom = Atom.family((label: string) => Atom.make(0));
-const todoItemCompletedAtom = Atom.family((text: string) => Atom.make(false));
-const todoItemTestCountAtom = Atom.family((text: string) => Atom.make(0));
+const counterAtom = Atom.family((_label: string) => Atom.make(0));
+const todoItemCompletedAtom = Atom.family((_text: string) => Atom.make(false));
+const todoItemTestCountAtom = Atom.family((_text: string) => Atom.make(0));
 const todosAtom = Atom.make<string[]>([]);
 
 export const Counter = ({ label }: { label: string }) =>
