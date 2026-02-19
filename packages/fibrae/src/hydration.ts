@@ -9,7 +9,7 @@ import * as Context from "effect/Context";
 import * as FiberRef from "effect/FiberRef";
 
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
-import { type VElement, type ElementType, type Primitive, HydrationMismatch } from "./shared.js";
+import { type VElement, type ElementType, type Primitive, HydrationMismatch, RenderError } from "./shared.js";
 import { FibraeRuntime, runForkWithRuntime } from "./runtime.js";
 import { attachEventListeners } from "./dom.js";
 import { normalizeToStream, makeTrackingRegistry, subscribeToAtoms } from "./tracking.js";
@@ -168,7 +168,7 @@ export const hydrateVElementToDOM = (
                     const newOutput = yield* Effect.try({
                       try: () =>
                         (type as (props: Record<string, unknown>) => unknown)(vElement.props),
-                      catch: (e) => e,
+                      catch: (cause) => new RenderError({ cause }),
                     });
 
                     const newStream = normalizeToStream(
@@ -246,15 +246,7 @@ export const hydrateVElementToDOM = (
         );
       }
       // DOM text content wins - we don't update it
-      // Skip past any text boundary marker (<!--fibrae:$-->) after text nodes
-      let nextSibling = domNode.nextSibling;
-      if (
-        nextSibling?.nodeType === Node.COMMENT_NODE &&
-        (nextSibling as Comment).data === "fibrae:$"
-      ) {
-        nextSibling = nextSibling.nextSibling;
-      }
-      return Option.fromNullable(nextSibling);
+      return Option.fromNullable(domNode.nextSibling);
     } else if (type === "FRAGMENT") {
       // Fragment - hydrate children using cursor-based walking
       const children = vElement.props.children ?? [];

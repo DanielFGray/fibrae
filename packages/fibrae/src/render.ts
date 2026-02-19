@@ -11,7 +11,7 @@ import * as Context from "effect/Context";
 import * as FiberRef from "effect/FiberRef";
 
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
-import { type VElement, type ElementType, type Primitive } from "./shared.js";
+import { type VElement, type ElementType, type Primitive, RenderError } from "./shared.js";
 import { FibraeRuntime, runForkWithRuntime } from "./runtime.js";
 import { setDomProperty, attachEventListeners, isProperty } from "./dom.js";
 import { normalizeToStream, makeTrackingRegistry, subscribeToAtoms } from "./tracking.js";
@@ -101,7 +101,7 @@ export const renderVElementToDOM = (
       // Invoke component - use Effect.try to catch sync render-time crashes
       const output = yield* Effect.try({
         try: () => (type as (props: Record<string, unknown>) => unknown)(vElement.props),
-        catch: (e) => e,
+        catch: (cause) => new RenderError({ cause }),
       }).pipe(Effect.tapError(() => Effect.sync(() => parent.removeChild(wrapper))));
 
       // Normalize to stream and provide context (with tracking registry) to it
@@ -178,7 +178,7 @@ export const renderVElementToDOM = (
                     const newOutput = yield* Effect.try({
                       try: () =>
                         (type as (props: Record<string, unknown>) => unknown)(vElement.props),
-                      catch: (e) => e,
+                      catch: (cause) => new RenderError({ cause }),
                     });
 
                     const newStream = normalizeToStream(

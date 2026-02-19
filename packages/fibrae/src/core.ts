@@ -32,11 +32,11 @@ export function render(
   element: VElement,
   container: HTMLElement,
 ): Effect.Effect<never, never, never>;
-export function render(
+export function render<ROut, E>(
   element: VElement,
   container: HTMLElement,
   options: {
-    layer?: Layer.Layer<unknown, unknown, AtomRegistry.AtomRegistry>;
+    layer?: Layer.Layer<ROut, E, AtomRegistry.AtomRegistry>;
     initialState?: ReadonlyArray<Hydration.DehydratedAtom>;
   },
 ): Effect.Effect<never, never, never>;
@@ -47,7 +47,7 @@ export function render(
   element: VElement,
   container?: HTMLElement,
   options?: {
-    layer?: Layer.Layer<unknown, unknown, AtomRegistry.AtomRegistry>;
+    layer?: Layer.Layer<any, any, AtomRegistry.AtomRegistry>;
     initialState?: ReadonlyArray<Hydration.DehydratedAtom>;
   },
 ) {
@@ -72,15 +72,11 @@ export function render(
       // (skip whitespace-only text nodes that may exist in pre-rendered HTML)
       const firstElementChild = cont.firstElementChild;
       if (firstElementChild) {
-        yield* hydrateFiber(element, cont);
+        return yield* hydrateFiber(element, cont);
       } else {
         // Fresh render - create new DOM using fiber-based reconciliation
-        yield* renderFiber(element, cont);
+        return yield* renderFiber(element, cont);
       }
-
-      // Note: renderFiber/hydrateFiber already return Effect.never
-      // This line is unreachable but satisfies the type system
-      return yield* Effect.never;
     }).pipe(
       // Always use LiveWithRegistry so the program has access to both FibraeRuntime AND AtomRegistry
       // If user provided a layer, merge it in as well

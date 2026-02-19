@@ -48,7 +48,6 @@ export const CustomAtomRegistryLayer = AtomRegistry.layerOptions({
 });
 
 export class FibraeRuntime extends Effect.Service<FibraeRuntime>()("FibraeRuntime", {
-  accessors: true,
   dependencies: [CustomAtomRegistryLayer],
   scoped: Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;
