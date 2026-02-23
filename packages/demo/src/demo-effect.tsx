@@ -94,7 +94,7 @@ const HomePage = () => (
 );
 
 const CounterPage = () =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const registry = yield* AtomRegistry.AtomRegistry;
     const count = yield* Atom.get(counterAtom);
 
@@ -130,7 +130,7 @@ const TodoItem = ({
   todo: { id: number; text: string };
   onRemove: (id: number) => void;
 }) =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const registry = yield* AtomRegistry.AtomRegistry;
     const completedAtom = todoCompletedAtom(todo.id);
     const isCompleted = yield* Atom.get(completedAtom);
@@ -162,7 +162,7 @@ const TodoItem = ({
 let nextTodoId = 1;
 
 const TodosPage = () =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const registry = yield* AtomRegistry.AtomRegistry;
     const todoList = yield* Atom.get(todosAtom);
 
@@ -213,7 +213,7 @@ const TodosPage = () =>
 
 // PostsPage now receives searchParams from the loader via props
 const PostsPage = ({ searchParams }: { searchParams: { sort?: string } }) =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const navigator = yield* NavigatorTag;
     const currentSort = searchParams.sort ?? "";
 
@@ -307,7 +307,7 @@ const AppRoutesLive = RouterBuilder.group(appRouter, "main", (handlers) =>
 // =============================================================================
 
 const NavBar = () =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const navigator = yield* NavigatorTag;
 
     return (
@@ -341,15 +341,12 @@ const NavBar = () =>
 // Main App
 // =============================================================================
 
-const App = () =>
-  Effect.gen(function* () {
-    return (
-      <>
-        <NavBar />
-        <RouterOutlet />
-      </>
-    );
-  });
+const App = () => (
+  <>
+    <NavBar />
+    <RouterOutlet />
+  </>
+);
 
 // =============================================================================
 // Bootstrap
@@ -362,7 +359,7 @@ const routerLayer = pipe(
   Layer.provideMerge(AppRoutesLive),
 );
 
-Effect.gen(function* () {
+Effect.gen(function*() {
   const root = pipe(document.getElementById("root"), Option.fromNullable, Option.getOrThrow);
 
   return yield* render(<App />, root, { layer: routerLayer });

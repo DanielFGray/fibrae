@@ -28,24 +28,21 @@ import { ApiClientLive } from "./api/index.js";
 // Navigation Bar (uses router Link)
 // =============================================================================
 
-const NavBar = () =>
-  Effect.gen(function* () {
-    return (
-      <nav data-cy="main-nav">
-        <Link data-cy="nav-home" to="home">
-          Home
-        </Link>
-        {" | "}
-        <Link data-cy="nav-posts" to="posts">
-          Posts
-        </Link>
-        {" | "}
-        <Link data-cy="nav-new-post" to="postNew">
-          New Post
-        </Link>
-      </nav>
-    );
-  });
+const NavBar = () => (
+  <nav data-cy="main-nav">
+    <Link data-cy="nav-home" to="home">
+      Home
+    </Link>
+    {" | "}
+    <Link data-cy="nav-posts" to="posts">
+      Posts
+    </Link>
+    {" | "}
+    <Link data-cy="nav-new-post" to="postNew">
+      New Post
+    </Link>
+  </nav>
+);
 
 // =============================================================================
 // Error Fallback Component
@@ -76,20 +73,17 @@ const RouteContent = () =>
     </Suspense>,
   ).pipe(Stream.catchAll((error) => Stream.succeed(AppErrorFallback(error))));
 
-const App = () =>
-  Effect.gen(function* () {
-    return (
-      <div class="app-container" data-cy="spa-app">
-        <header>
-          <h1>Fibrae Notes</h1>
-        </header>
-        <NavBar />
-        <main data-cy="main-content">
-          <RouteContent />
-        </main>
-      </div>
-    );
-  });
+const App = () => (
+  <div class="app-container" data-cy="spa-app">
+    <header>
+      <h1>Fibrae Notes</h1>
+    </header>
+    <NavBar />
+    <main data-cy="main-content">
+      <RouteContent />
+    </main>
+  </div>
+);
 
 // =============================================================================
 // Layer Composition
@@ -117,7 +111,7 @@ if (window.location.pathname === "/notes.html") {
   window.history.replaceState(null, "", "/");
 }
 
-Effect.gen(function* () {
+Effect.gen(function*() {
   const root = pipe(document.getElementById("root"), Option.fromNullable, Option.getOrThrow);
 
   return yield* render(<App />, root, { layer: appLayer });
