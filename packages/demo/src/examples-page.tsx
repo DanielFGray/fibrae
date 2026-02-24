@@ -15,6 +15,14 @@ class TestFailure extends Schema.TaggedError<TestFailure>()("TestFailure", {
   message: Schema.String,
 }) {}
 
+const CrashDuringRender = () => {
+  throw new Error("render-crash");
+};
+
+const BoundaryCrashDuringRender = () => {
+  throw new Error("boundary-render-crash");
+};
+
 // Module-scope atoms/families
 const counterAtom = Atom.family((_label: string) => Atom.make(0));
 const todosAtom = Atom.make<string[]>([]);
@@ -430,11 +438,6 @@ Effect.gen(function* () {
     "error-container",
   );
 
-  // Demo components for error boundaries
-  const CrashDuringRender = () => {
-    throw new Error("render-crash");
-  };
-
   const EventFailer = () => (
     <div>
       <button data-cy="fail-event" onClick={() => Effect.fail(new TestFailure({ message: "event-crash" }))}>
@@ -562,11 +565,6 @@ Effect.gen(function* () {
     "Type-safe error handling with Stream.catchTags",
     "boundary-container",
   );
-
-  // Demo components for ErrorBoundary() API
-  const BoundaryCrashDuringRender = () => {
-    throw new Error("boundary-render-crash");
-  };
 
   const BoundaryEventFailer = () => (
     <div>

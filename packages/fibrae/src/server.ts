@@ -29,9 +29,9 @@ export type { Layer };
 /**
  * Result of renderToString - HTML plus serialized state
  *
- * The dehydratedState can be serialized and embedded in your HTML however
- * you prefer (script tag, data attribute, separate endpoint, etc.).
- * On the client, pass this state to render() via the initialState option.
+ * The dehydratedState should be embedded as a JSON script tag:
+ * <script type="application/json" id="__fibrae-state__">${JSON.stringify(dehydratedState)}</script>
+ * The HydrationState service auto-discovers this tag during render().
  */
 export interface RenderResult {
   readonly html: string;
@@ -299,12 +299,10 @@ const renderVElementToString = (
 /**
  * Render a VElement tree to an HTML string with serialized state.
  *
- * Returns the HTML and the dehydrated atom state array. You can serialize
- * and embed the state in your HTML however you prefer (script tag, data
- * attribute, separate endpoint, etc.).
+ * Returns the HTML and the dehydrated atom state array. Embed the state as:
+ * <script type="application/json" id="__fibrae-state__">${JSON.stringify(dehydratedState)}</script>
  *
- * On the client, pass this state to render() via the initialState option
- * to hydrate atom values before DOM hydration.
+ * The HydrationState service auto-discovers this tag during client-side render().
  *
  * Note: Atoms must use `Atom.serializable({ key, schema })` to be included
  * in the dehydrated state.
@@ -315,14 +313,12 @@ const renderVElementToString = (
  *
  * const program = Effect.gen(function* () {
  *   const { html, dehydratedState } = yield* renderToString(<App />);
- *
- *   // Embed state however you prefer
  *   const page = `
  *     <!DOCTYPE html>
  *     <html>
  *       <body>
  *         <div id="root">${html}</div>
- *         <script>window.__STATE__ = ${JSON.stringify(dehydratedState)}</script>
+ *         <script type="application/json" id="__fibrae-state__">${JSON.stringify(dehydratedState)}</script>
  *         <script src="/client.js"></script>
  *       </body>
  *     </html>
@@ -391,5 +387,5 @@ export const renderToStringWith = <R>(
     return { html, dehydratedState };
   });
 
-// Re-export Hydration for convenience
-export { Hydration };
+// Re-export Hydration and Result for convenience
+export { Hydration, Result } from "@effect-atom/atom";

@@ -42,26 +42,6 @@ export default defineConfig({
         find: "@opentelemetry/sdk-trace-node",
         replacement: "@opentelemetry/sdk-trace-web",
       },
-      // Force all subpath imports like "effect/Effect" to resolve
-      // to the single root install to avoid version mismatch warnings.
-      {
-        find: /^effect(\/.*)?$/,
-        replacement: (match, subpath) => {
-          const effectRoot = path.resolve(
-            path.join(
-              import.meta.dirname,
-              "..",
-              "..",
-              "node_modules",
-              ".bun",
-              "effect@3.19.13",
-              "node_modules",
-              "effect",
-            ),
-          );
-          return subpath ? effectRoot + subpath : effectRoot;
-        },
-      },
     ],
     dedupe: ["effect"],
   },

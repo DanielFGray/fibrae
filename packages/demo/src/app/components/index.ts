@@ -9,8 +9,7 @@ export {
   PostForm,
   PostFormTitleAtom,
   PostFormContentAtom,
-  PostFormSubmittingAtom,
-  PostFormErrorAtom,
+  PostFormResultAtom,
   type PostFormProps,
 } from "./PostForm.js";
 export { ErrorFallback, NotFound, Loading, type ErrorFallbackProps } from "./ErrorFallback.js";

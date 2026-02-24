@@ -9,18 +9,10 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { h, render } from "fibrae";
-import { Hydration } from "@effect-atom/atom";
 import { Router, RouterOutlet } from "fibrae/router";
 
 import { AppRouter, AppHandlersClientLive, Link } from "./app/index.js";
 import { ApiClientLive } from "./api/index.js";
-
-// Declare global for TypeScript
-declare global {
-  interface Window {
-    __FIBRAE_STATE__?: ReadonlyArray<Hydration.DehydratedAtom>;
-  }
-}
 
 // =============================================================================
 // App Shell (same as SPA but for hydration)
@@ -45,9 +37,6 @@ const NavBar = () => (
 // =============================================================================
 // Hydration Bootstrap
 // =============================================================================
-
-// Get initial atom state from SSR (includes router state via RouterStateAtom)
-const initialState = window.__FIBRAE_STATE__;
 
 // Create browser layer - reads from hydrated RouterStateAtom
 // basePath matches the server mount point (/ssr/notes)
@@ -86,10 +75,10 @@ Effect.gen(function* () {
   );
 
   // Render (hydrate) the app with router layer
+  // HydrationState is auto-discovered from the script tag
   yield* Effect.log("Hydrating SSR Notes app");
   return yield* render(app, container, {
     layer: routerLayer,
-    initialState,
   });
 }).pipe(
   Effect.catchAllDefect((e) => {

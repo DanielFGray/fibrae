@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import * as Stream from "effect/Stream";
 import * as Scope from "effect/Scope";
 import * as FiberSet from "effect/FiberSet";
 import * as Layer from "effect/Layer";
@@ -9,7 +10,8 @@ import * as Context from "effect/Context";
 import type * as EffectFiber from "effect/Fiber";
 import type * as Runtime from "effect/Runtime";
 
-import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
+import { Atom, Registry as AtomRegistry, Result } from "@effect-atom/atom";
+import * as RegistryModule from "@effect-atom/atom/Registry";
 import type { Fiber } from "./shared.js";
 
 // Re-export to satisfy declaration file requirements
@@ -71,6 +73,17 @@ export class FibraeRuntime extends Effect.Service<FibraeRuntime>()("FibraeRuntim
         atom: Atom.Writable<R, W>,
         f: (_: R) => [returnValue: A, nextValue: W],
       ): A => registry.modify(atom, f),
+      getResult: <A, E>(
+        atom: Atom.Atom<Result.Result<A, E>>,
+        options?: { readonly suspendOnWaiting?: boolean },
+      ): Effect.Effect<A, E> =>
+        RegistryModule.getResult(registry, atom, options),
+      toStreamResult: <A, E>(
+        atom: Atom.Atom<Result.Result<A, E>>,
+      ): Stream.Stream<A, E> =>
+        RegistryModule.toStreamResult(registry, atom),
+      refresh: <A>(atom: Atom.Atom<A>): void =>
+        registry.refresh(atom),
     };
 
     return {

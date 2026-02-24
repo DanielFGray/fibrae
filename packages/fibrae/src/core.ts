@@ -8,6 +8,7 @@ import { Registry as AtomRegistry, Hydration } from "@effect-atom/atom";
 import { type VElement } from "./shared.js";
 import { FibraeRuntime } from "./runtime.js";
 import { renderFiber, hydrateFiber } from "./fiber-render.js";
+import { HydrationState, HydrationStateLive } from "./hydration-state.js";
 
 // =============================================================================
 // Public API
@@ -22,11 +23,14 @@ import { renderFiber, hydrateFiber } from "./fiber-render.js";
  * - Event handlers are attached to existing elements
  * - Throws HydrationMismatch if structure doesn't match
  *
+ * Hydration state is auto-discovered from a
+ * <script type="application/json" id="__fibrae-state__"> tag in the DOM.
+ * Provide a custom HydrationState layer to override this behavior.
+ *
  * @param element - The VElement tree to render
  * @param container - The DOM container to render into
  * @param options - Optional configuration
  * @param options.layer - Additional layer to provide (will have access to AtomRegistry)
- * @param options.initialState - Dehydrated atom state from SSR (enables atom hydration)
  */
 export function render(
   element: VElement,
@@ -37,7 +41,6 @@ export function render<ROut, E>(
   container: HTMLElement,
   options: {
     layer?: Layer.Layer<ROut, E, AtomRegistry.AtomRegistry>;
-    initialState?: ReadonlyArray<Hydration.DehydratedAtom>;
   },
 ): Effect.Effect<never, never, never>;
 export function render(
@@ -48,7 +51,6 @@ export function render(
   container?: HTMLElement,
   options?: {
     layer?: Layer.Layer<any, any, AtomRegistry.AtomRegistry>;
-    initialState?: ReadonlyArray<Hydration.DehydratedAtom>;
   },
 ) {
   const program = (cont: HTMLElement) =>
@@ -63,9 +65,10 @@ export function render(
       )) as Context.Context<unknown>;
       yield* Ref.set(runtime.fullContextRef, fullContext);
 
-      // If initialState provided, hydrate atoms first
-      if (options?.initialState) {
-        Hydration.hydrate(registry, options.initialState);
+      // Auto-discover and hydrate atoms from the HydrationState service
+      const hydrationState = yield* HydrationState;
+      if (hydrationState.length > 0) {
+        Hydration.hydrate(registry, hydrationState);
       }
 
       // If container has element children, use hydration mode
@@ -78,6 +81,8 @@ export function render(
         return yield* renderFiber(element, cont);
       }
     }).pipe(
+      // Provide HydrationState (default auto-discover from DOM)
+      Effect.provide(HydrationStateLive),
       // Always use LiveWithRegistry so the program has access to both FibraeRuntime AND AtomRegistry
       // If user provided a layer, merge it in as well
       Effect.provide(

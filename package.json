@@ -7,13 +7,13 @@
       "packages/*"
     ],
     "catalog": {
-      "@effect-atom/atom": "^0.4.1",
+      "@effect-atom/atom": "^0.5.2",
       "@effect/language-service": "^0.55.3",
       "@effect/platform": "^0.93.0",
       "@effect/platform-browser": "^0.73.0",
       "@effect/platform-bun": "^0.83.0",
       "@effect/platform-node": "^0.100.0",
-      "effect": "^3.19.3",
+      "effect": "^3.19.15",
       "typescript": "^5.9.3"
     }
   },
@@ -37,7 +37,7 @@
     "lint": "oxlint"
   },
   "dependencies": {
-    "@effect-atom/atom": "0.4.11",
+    "@effect-atom/atom": "0.5.2",
     "@effect/platform": "^0.94.5",
     "@effect/platform-browser": "^0.74.0",
     "@effect/platform-bun": "^0.87.1",

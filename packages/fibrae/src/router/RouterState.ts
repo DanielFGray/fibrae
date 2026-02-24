@@ -58,8 +58,8 @@ export const RouterStateSchema = Schema.Struct({
  * When Some, contains the matched route info and loader data.
  *
  * This atom is automatically:
- * - Dehydrated during SSR (included in __FIBRAE_STATE__)
- * - Hydrated on client (restored from __FIBRAE_STATE__)
+ * - Dehydrated during SSR (embedded in &lt;script type="application/json" id="__fibrae-state__"&gt;)
+ * - Hydrated on client (auto-discovered via the HydrationState service)
  */
 export const RouterStateAtom = Atom.make<Option.Option<RouterState>>(Option.none()).pipe(
   Atom.serializable({

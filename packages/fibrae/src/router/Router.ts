@@ -235,7 +235,7 @@ export interface BrowserLayerOptions {
   readonly router: Router;
   /**
    * @deprecated Use atom hydration instead. RouterStateAtom is automatically
-   * hydrated from __FIBRAE_STATE__ and used by RouterOutlet.
+   * hydrated via the HydrationState service and used by RouterOutlet.
    */
   readonly initialState?: DehydratedRouterState;
   /** Base path prefix for the app (e.g., "/ssr/router") */
@@ -409,20 +409,20 @@ export function serverLayer(
  * 3. If hydrated, uses that for initial render (skips loader)
  * 4. Provides Navigator for subsequent navigation
  *
- * SSR hydration works automatically via atom hydration - no need to
- * pass initialState manually. The RouterStateAtom is hydrated from
- * __FIBRAE_STATE__ before this layer is created.
+ * SSR hydration works automatically via the HydrationState service - no need to
+ * pass initialState manually. The RouterStateAtom is hydrated from the
+ * <script type="application/json" id="__fibrae-state__"> tag before this layer is created.
  *
  * Usage in client:
  * ```typescript
- * // Hydrate atoms first (includes RouterStateAtom)
- * hydrate(container, app, window.__FIBRAE_STATE__);
- *
  * // Browser layer reads from hydrated RouterStateAtom
  * const browserLayer = Router.browserLayer({
  *   router: AppRouter,
  *   basePath: "/ssr/router"
  * });
+ *
+ * // render() auto-discovers hydration state from the DOM
+ * render(app, container, { layer: browserLayer });
  * ```
  */
 export function browserLayer(

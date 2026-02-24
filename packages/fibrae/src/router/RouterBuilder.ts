@@ -279,12 +279,12 @@ function makeLayoutGroupHandlers<GroupName extends string>(
  * Find a route group by name in a router.
  */
 function findGroup<GroupName extends string>(
-  router: Router,
+  appRouter: Router,
   groupName: GroupName,
 ): AnyGroup<GroupName> {
-  const maybeGroup = Option.fromNullable(router.groups.find((g) => g.name === groupName));
+  const maybeGroup = Option.fromNullable(appRouter.groups.find((g) => g.name === groupName));
   if (Option.isNone(maybeGroup)) {
-    throw new Error(`Group "${groupName}" not found in router "${router.name}"`);
+    throw new Error(`Group "${groupName}" not found in router "${appRouter.name}"`);
   }
   return maybeGroup.value as AnyGroup<GroupName>;
 }
@@ -319,23 +319,23 @@ function findGroup<GroupName extends string>(
  * ```
  */
 export function group<GroupName extends string>(
-  router: Router,
+  appRouter: Router,
   groupName: GroupName,
   build: (handlers: GroupHandlers<GroupName>) => GroupHandlers<GroupName>,
 ): Layer.Layer<RouterHandlers, never, never>;
 export function group<GroupName extends string, R>(
-  router: Router,
+  appRouter: Router,
   groupName: GroupName,
   build: (handlers: GroupHandlers<GroupName>) => Effect.Effect<GroupHandlers<GroupName>, never, R>,
 ): Layer.Layer<RouterHandlers, never, R>;
 export function group<GroupName extends string, R>(
-  router: Router,
+  appRouter: Router,
   groupName: GroupName,
   build: (
     handlers: GroupHandlers<GroupName>,
   ) => GroupHandlers<GroupName> | Effect.Effect<GroupHandlers<GroupName>, never, R>,
 ): Layer.Layer<RouterHandlers, never, R> {
-  const routeGroup = findGroup(router, groupName);
+  const routeGroup = findGroup(appRouter, groupName);
 
   // Check if it's a layout group - if so, throw helpful error
   if (routeGroup._tag === "LayoutGroup") {
@@ -396,25 +396,25 @@ export function group<GroupName extends string, R>(
  * ```
  */
 export function layoutGroup<GroupName extends string>(
-  router: Router,
+  appRouter: Router,
   groupName: GroupName,
   build: (handlers: LayoutGroupHandlers<GroupName>) => LayoutGroupHandlers<GroupName>,
 ): Layer.Layer<RouterHandlers, never, never>;
 export function layoutGroup<GroupName extends string, R>(
-  router: Router,
+  appRouter: Router,
   groupName: GroupName,
   build: (
     handlers: LayoutGroupHandlers<GroupName>,
   ) => Effect.Effect<LayoutGroupHandlers<GroupName>, never, R>,
 ): Layer.Layer<RouterHandlers, never, R>;
 export function layoutGroup<GroupName extends string, R>(
-  router: Router,
+  appRouter: Router,
   groupName: GroupName,
   build: (
     handlers: LayoutGroupHandlers<GroupName>,
   ) => LayoutGroupHandlers<GroupName> | Effect.Effect<LayoutGroupHandlers<GroupName>, never, R>,
 ): Layer.Layer<RouterHandlers, never, R> {
-  const routeGroup = findGroup(router, groupName);
+  const routeGroup = findGroup(appRouter, groupName);
 
   if (routeGroup._tag !== "LayoutGroup") {
     throw new Error(

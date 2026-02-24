@@ -1,9 +1,11 @@
 /**
  * PostForm component - create/edit posts with Effect event handlers
+ *
+ * Uses Result<Post, string> to unify loading/error/success state into a single atom.
  */
 
 import type { VElement } from "fibrae";
-import { Atom, AtomRegistry } from "fibrae";
+import { Atom, AtomRegistry, Result } from "fibrae";
 import { NavigatorTag } from "fibrae/router";
 import * as Effect from "effect/Effect";
 import { PostsClient, type Post } from "../../api/index.js";
@@ -18,8 +20,7 @@ import { Link } from "../routes.js";
  */
 export const PostFormTitleAtom = Atom.make("");
 export const PostFormContentAtom = Atom.make("");
-export const PostFormSubmittingAtom = Atom.make(false);
-export const PostFormErrorAtom = Atom.make<string | null>(null);
+export const PostFormResultAtom = Atom.make<Result.Result<Post, string>>(Result.initial());
 
 // =============================================================================
 // PostForm Component
@@ -45,8 +46,8 @@ export function PostForm(props: PostFormProps): Effect.Effect<VElement, never, A
 
     const title = registry.get(PostFormTitleAtom);
     const content = registry.get(PostFormContentAtom);
-    const submitting = registry.get(PostFormSubmittingAtom);
-    const error = registry.get(PostFormErrorAtom);
+    const submitResult = registry.get(PostFormResultAtom);
+    const isSubmitting = Result.isWaiting(submitResult);
 
     const handleTitleChange = (e: Event) => {
       const target = e.target as HTMLInputElement;
@@ -62,15 +63,14 @@ export function PostForm(props: PostFormProps): Effect.Effect<VElement, never, A
       Effect.gen(function* () {
         e.preventDefault();
 
-        registry.set(PostFormSubmittingAtom, true);
-        registry.set(PostFormErrorAtom, null);
+        const current = registry.get(PostFormResultAtom);
+        registry.set(PostFormResultAtom, Result.waiting(current));
 
         const currentTitle = registry.get(PostFormTitleAtom);
         const currentContent = registry.get(PostFormContentAtom);
 
         if (!currentTitle.trim()) {
-          registry.set(PostFormErrorAtom, "Title is required");
-          registry.set(PostFormSubmittingAtom, false);
+          registry.set(PostFormResultAtom, Result.fail("Title is required"));
           return;
         }
 
@@ -82,12 +82,12 @@ export function PostForm(props: PostFormProps): Effect.Effect<VElement, never, A
             : client.create({ title: currentTitle, content: currentContent }),
         );
 
-        registry.set(PostFormSubmittingAtom, false);
-
         if (result._tag === "Left") {
-          registry.set(PostFormErrorAtom, "Failed to save post");
+          registry.set(PostFormResultAtom, Result.fail("Failed to save post"));
           return;
         }
+
+        registry.set(PostFormResultAtom, Result.success(result.right));
 
         // Clear form on success
         registry.set(PostFormTitleAtom, "");
@@ -98,15 +98,17 @@ export function PostForm(props: PostFormProps): Effect.Effect<VElement, never, A
         yield* navigator.go("posts");
       });
 
+    const statusEl = Result.builder(submitResult)
+      .onWaiting(() => <span class="status">Saving...</span>)
+      .onError((err) => <div class="error" data-cy="form-error">{err}</div>)
+      .onSuccess((savedPost) => <span class="success">Saved: {savedPost.title}</span>)
+      .orNull();
+
     return (
       <form data-cy="post-form" onsubmit={handleSubmit}>
         <h2>{isEdit ? "Edit Post" : "New Post"}</h2>
 
-        {error !== null && (
-          <div class="error" data-cy="form-error">
-            {error}
-          </div>
-        )}
+        {statusEl}
 
         <div class="form-field">
           <label for="title">Title</label>
@@ -116,7 +118,7 @@ export function PostForm(props: PostFormProps): Effect.Effect<VElement, never, A
             name="title"
             value={title}
             oninput={handleTitleChange}
-            disabled={submitting}
+            disabled={isSubmitting}
             data-cy="title-input"
           />
         </div>
@@ -128,15 +130,15 @@ export function PostForm(props: PostFormProps): Effect.Effect<VElement, never, A
             name="content"
             value={content}
             oninput={handleContentChange}
-            disabled={submitting}
+            disabled={isSubmitting}
             rows={10}
             data-cy="content-input"
           />
         </div>
 
         <div class="form-actions">
-          <button type="submit" disabled={submitting} data-cy="submit-btn">
-            {submitting ? "Saving..." : isEdit ? "Update Post" : "Create Post"}
+          <button type="submit" disabled={isSubmitting} data-cy="submit-btn">
+            {isSubmitting ? "Saving..." : isEdit ? "Update Post" : "Create Post"}
           </button>
           <Link to="posts" data-cy="cancel-link">Cancel</Link>
         </div>

@@ -123,7 +123,7 @@ function matchPath(
     try {
       const decoded = Schema.decodeSync(pathSchema.value)(params) as Record<string, unknown>;
       return Option.some(decoded);
-    } catch (_) {
+    } catch {
       return Option.none();
     }
   }

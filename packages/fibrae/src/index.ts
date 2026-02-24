@@ -29,7 +29,10 @@ export {
 // Component lifecycle
 export { ComponentScope } from "./shared.js";
 
+// Hydration state service
+export { HydrationState, HydrationStateLive, HydrationStateEmpty } from "./hydration-state.js";
+
 // Re-export upstream Effect Atom APIs for consumers
-export { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
+export { Atom, Registry as AtomRegistry, Result } from "@effect-atom/atom";
 
 // Router available via "fibrae/router" import

@@ -251,9 +251,10 @@ Error types:
 
 ```tsx
 // Server
-import { Router } from "fibrae/server";
-const { html, dehydratedState } = yield* Router.renderToString(<App />, { layer });
+import { renderToString } from "fibrae/server";
+const { html, dehydratedState } = yield* renderToString(<App />);
+// Embed: <script type="application/json" id="__fibrae-state__">${JSON.stringify(dehydratedState)}</script>
 
-// Client
-render(<App />, root, { layer, initialState: window.__FIBRAE_STATE__ });
+// Client — hydration state is auto-discovered from the DOM
+render(<App />, root, { layer });
 ```

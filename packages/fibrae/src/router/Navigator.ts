@@ -178,7 +178,7 @@ function findRouteByName(router: Router, name: string): Option.Option<{ route: R
     for (const route of group.routes) {
       if (route.name === name) {
         // For layout groups, include the basePath for URL building
-        const basePath = group._tag === "LayoutGroup" ? (group as any).basePath : "";
+        const basePath = group._tag === "LayoutGroup" ? group.basePath : "";
         return Option.some({ route, basePath });
       }
     }
@@ -210,9 +210,9 @@ export interface NavigatorOptions {
  */
 export function NavigatorLive(
   router: Router,
-  options: NavigatorOptions = {},
+  navigatorOptions: NavigatorOptions = {},
 ): Layer.Layer<Navigator, never, History | AtomRegistry.AtomRegistry> {
-  const basePath = options.basePath ?? "";
+  const basePath = navigatorOptions.basePath ?? "";
 
   return Layer.scoped(
     Navigator,
@@ -239,7 +239,7 @@ export function NavigatorLive(
         basePath,
         currentRoute: currentRouteAtom,
 
-        go: (routeName, options = {}) =>
+        go: (routeName, navigateOptions = {}) =>
           Effect.gen(function* () {
             const found = findRouteByName(router, routeName);
             if (Option.isNone(found)) {
@@ -250,15 +250,17 @@ export function NavigatorLive(
             const { route, basePath: routeBasePath } = found.value;
 
             // Build URL from route and params
-            const pathParams = options.path ?? ({} as Record<string, unknown>);
+            const pathParams = navigateOptions.path ?? ({} as Record<string, unknown>);
             const routePathname = route.interpolate(pathParams);
             // Prepend navigator basePath AND route's layout basePath
             const pathname = basePath + routeBasePath + routePathname;
-            const search = options.searchParams ? buildSearchString(options.searchParams) : "";
+            const search = navigateOptions.searchParams
+              ? buildSearchString(navigateOptions.searchParams)
+              : "";
             const url = `${pathname}${search}`;
 
             // Navigate - currentRoute updates automatically via derived atom
-            if (options.replace) {
+            if (navigateOptions.replace) {
               yield* history.replace(url);
             } else {
               yield* history.push(url);

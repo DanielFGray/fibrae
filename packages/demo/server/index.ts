@@ -70,7 +70,7 @@ const buildPage = (
 </head>
 <body>
 <div id="root">${html}</div>
-<script>window.__FIBRAE_STATE__ = ${JSON.stringify(dehydratedState)};</script>
+<script type="application/json" id="__fibrae-state__">${JSON.stringify(dehydratedState)}</script>
 <script type="module" src="${VITE_DEV_URL}/src/${hydrationScript}"></script>
 </body>
 </html>`;

@@ -4,27 +4,16 @@
  * This file is loaded by the browser after SSR.
  * It hydrates the server-rendered content and enables client-side navigation.
  *
- * The RouterStateAtom is automatically hydrated from __FIBRAE_STATE__,
- * so we don't need to pass router state separately.
+ * The RouterStateAtom is automatically hydrated from the
+ * <script type="application/json" id="__fibrae-state__"> tag via the HydrationState service.
  */
 
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { h, render } from "fibrae";
-import { Hydration } from "@effect-atom/atom";
 import { Router } from "fibrae/router";
 import { SSRRouter, App, RouterOutlet, createSSRRouterHandlers } from "./ssr-router-app.js";
-
-// Declare global for TypeScript
-declare global {
-  interface Window {
-    __FIBRAE_STATE__?: ReadonlyArray<Hydration.DehydratedAtom>;
-  }
-}
-
-// Get initial atom state from SSR (includes router state via RouterStateAtom)
-const initialState = window.__FIBRAE_STATE__;
 
 // Create handler layer (client-side loaders)
 const handlersLayer = createSSRRouterHandlers(false);
@@ -57,11 +46,10 @@ Effect.gen(function* () {
 
   // Render (hydrate) the app with router layer
   // render() automatically provides FibraeRuntime + AtomRegistry
-  // The initialState includes RouterStateAtom which RouterOutlet uses
+  // HydrationState is auto-discovered from the script tag
   yield* Effect.log("Hydrating SSR router app");
   return yield* render(app, container, {
     layer: routerLayer,
-    initialState,
   });
 }).pipe(
   Effect.catchAllDefect((e) => {
