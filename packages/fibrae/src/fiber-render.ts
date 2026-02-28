@@ -81,7 +81,6 @@ const subscribeComponentStream = <E>(
       Effect.catchAllCause((cause: Cause.Cause<E>) =>
         Effect.gen(function* () {
           const done = yield* Deferred.isDone(firstValueDeferred);
-          // Convert to StreamError with the correct phase
           const streamError = new StreamError({
             cause: Cause.squash(cause),
             phase: done ? "after-first-emission" : "before-first-emission",

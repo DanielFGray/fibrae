@@ -50,7 +50,6 @@ export const CustomAtomRegistryLayer = AtomRegistry.layerOptions({
 });
 
 export class FibraeRuntime extends Effect.Service<FibraeRuntime>()("FibraeRuntime", {
-  dependencies: [CustomAtomRegistryLayer],
   scoped: Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;
     const rootScope = yield* Scope.make();
@@ -101,9 +100,8 @@ export class FibraeRuntime extends Effect.Service<FibraeRuntime>()("FibraeRuntim
   /**
    * Layer that provides both FibraeRuntime AND AtomRegistry.
    * Use this when composing with user layers that need AtomRegistry access.
-   * (FibraeRuntime.Default consumes AtomRegistry internally but doesn't re-export it)
    */
-  static LiveWithRegistry = Layer.merge(FibraeRuntime.Default, CustomAtomRegistryLayer);
+  static LiveWithRegistry = Layer.provideMerge(FibraeRuntime.Default, CustomAtomRegistryLayer);
 }
 
 /**

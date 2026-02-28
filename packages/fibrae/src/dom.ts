@@ -17,6 +17,8 @@ export const propertyUpdateMap: Record<
   class: "classList",
   className: "classList",
   value: "property",
+  defaultValue: "property",
+  defaultChecked: "property",
   // Boolean HTML attributes: presence means true, absence means false
   checked: "booleanAttribute",
   disabled: "booleanAttribute",

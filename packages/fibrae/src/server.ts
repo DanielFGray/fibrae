@@ -98,6 +98,8 @@ const jsxToHtmlAttr: Record<string, string> = {
   formNoValidate: "formnovalidate",
   allowFullscreen: "allowfullscreen",
   playsInline: "playsinline",
+  defaultValue: "value",
+  defaultChecked: "checked",
 };
 
 /**
