@@ -41,7 +41,7 @@ export { RouterHandlers } from "./RouterBuilder.js";
 
 // Re-export History types and service tag
 export type { HistoryLocation, HistoryService } from "./History.js";
-export { History as HistoryTag, BrowserHistoryLive, MemoryHistoryLive } from "./History.js";
+export { History as HistoryTag, BrowserHistoryLive, MemoryHistoryLive, navigateTo } from "./History.js";
 
 // Re-export Navigator types and service tag
 export type { CurrentRoute, NavigateOptions, NavigatorService } from "./Navigator.js";

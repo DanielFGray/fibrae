@@ -383,3 +383,12 @@ export const go = (n: number): Effect.Effect<void, never, History> =>
     const history = yield* History;
     yield* history.go(n);
   });
+
+/**
+ * SPA-safe navigation without access to the Effect runtime.
+ * Uses pushState + synthetic popstate so BrowserHistoryLive picks up the change.
+ */
+export function navigateTo(url: string): void {
+  window.history.pushState(null, "", url);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
