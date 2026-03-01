@@ -1,6 +1,6 @@
 {
   "name": "fibrae",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Effect-first JSX renderer with automatic reactivity",
   "license": "MIT",
   "repository": {
