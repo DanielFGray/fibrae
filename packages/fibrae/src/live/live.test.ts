@@ -257,6 +257,31 @@ describe("serve", () => {
     expect(allText).toContain("retry: 5000")
     expect(allText).toContain("event: r")
   })
+
+  test("accepts a live atom instead of channel", async () => {
+    const liveAtom = live("count", { schema: Schema.Number })
+
+    const response = await Effect.runPromise(
+      Effect.gen(function* () {
+        const ref = yield* Ref.make(0)
+        const source = Ref.getAndUpdate(ref, (n) => n + 1)
+        return yield* serve(liveAtom, {
+          source,
+          interval: "50 millis",
+          equals: false,
+          heartbeatInterval: false,
+        })
+      }),
+    )
+
+    const body = bodyToReadable(response)
+    const events = await readEvents(body, 3)
+
+    expect(events.length).toBe(3)
+    expect(events[0]).toContain("event: count")
+    expect(events[0]).toContain("data: 0")
+    expect(events[1]).toContain("data: 1")
+  })
 })
 
 // =============================================================================
@@ -302,6 +327,41 @@ describe("serveGroup", () => {
     expect(allText).toContain("event: strs")
     // All events should have id fields
     expect(allText).toContain("id:")
+  })
+
+  test("accepts live atoms instead of channels", async () => {
+    const numAtom = live("nums", { schema: Schema.Number })
+    const strAtom = live("strs", { schema: Schema.String })
+
+    const response = await Effect.runPromise(
+      Effect.gen(function* () {
+        const numRef = yield* Ref.make(0)
+        const strRef = yield* Ref.make("a")
+
+        return yield* serveGroup({
+          channels: [
+            {
+              channel: numAtom,
+              source: Ref.getAndUpdate(numRef, (n) => n + 1),
+              interval: "50 millis",
+            },
+            {
+              channel: strAtom,
+              source: Ref.getAndUpdate(strRef, (s) => s + "a"),
+              interval: "50 millis",
+            },
+          ],
+          heartbeatInterval: false,
+        })
+      }),
+    )
+
+    const body = bodyToReadable(response)
+    const events = await readEvents(body, 4)
+
+    const allText = events.join("")
+    expect(allText).toContain("event: nums")
+    expect(allText).toContain("event: strs")
   })
 
   test("serveGroup emits retry directive when configured", async () => {
