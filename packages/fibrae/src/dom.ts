@@ -55,10 +55,40 @@ export const isEvent = (key: string) => key.startsWith("on");
 export const isProperty = (key: string) =>
   key !== "children" && key !== "ref" && key !== "key" && !isEvent(key);
 
+const unitlessProperties = new Set([
+  "animationIterationCount", "boxFlex", "boxFlexGroup", "boxOrdinalGroup",
+  "columnCount", "fillOpacity", "flex", "flexGrow", "flexPositive",
+  "flexShrink", "flexNegative", "flexOrder", "fontWeight", "gridColumn",
+  "gridRow", "lineClamp", "lineHeight", "opacity", "order", "orphans",
+  "tabSize", "widows", "zIndex", "zoom",
+]);
+
 /**
  * Set a DOM property using the appropriate method
  */
 export const setDomProperty = (el: HTMLElement, name: string, value: unknown): void => {
+  if (name === "style") {
+    if (value == null) {
+      el.removeAttribute("style");
+    } else if (typeof value === "string") {
+      el.style.cssText = value;
+    } else if (typeof value === "object") {
+      const style = value as Record<string, string | number>;
+      for (const key of Object.keys(style)) {
+        const val = style[key];
+        if (val == null) {
+          el.style.removeProperty(key);
+        } else {
+          el.style.setProperty(
+            key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`),
+            typeof val === "number" && val !== 0 && !unitlessProperties.has(key) ? `${val}px` : String(val),
+          );
+        }
+      }
+    }
+    return;
+  }
+
   const method =
     propertyUpdateMap[name] ||
     (name.startsWith("data-") || name.startsWith("aria-") ? "attribute" : "attribute");

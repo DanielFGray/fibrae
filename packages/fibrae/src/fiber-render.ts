@@ -1296,6 +1296,16 @@ const commitWork = (
     if (Option.isSome(fiber.child)) {
       yield* commitWork(fiber.child.value, runtime);
     }
+
+    // After children are committed, apply deferred properties.
+    // <select> value must be set after <option> children exist in the DOM.
+    if (Option.isSome(fiber.dom)) {
+      const node = fiber.dom.value;
+      if (node instanceof HTMLSelectElement && "value" in fiber.props) {
+        node.value = String(fiber.props.value);
+      }
+    }
+
     if (Option.isSome(fiber.sibling)) {
       yield* commitWork(fiber.sibling.value, runtime);
     }
@@ -1496,8 +1506,8 @@ const hydrateChildren = (
 
     for (const vElement of vElements) {
       if (Option.isNone(cursor)) {
-        // No more DOM nodes but we have more vElements - mismatch
-        // For now, just skip (could throw HydrationMismatch in strict mode)
+        // No more DOM nodes — remaining vElements were not in SSR output.
+        // Skip them during hydration; they'll be picked up on first re-render.
         break;
       }
 
@@ -1553,6 +1563,98 @@ const hydrateElement = (
         Option.some(domNode),
         runtime,
       );
+    } else if (vElement.type === "SUSPENSE") {
+      // Suspense boundary - DOM has comment markers from SSR
+      // Initialize suspense config on the fiber
+      const fallback = vElement.props.fallback as VElement;
+      const threshold = (vElement.props.threshold as number) ?? 100;
+      fiber.suspense = Option.some({
+        fallback,
+        threshold,
+        showingFallback: false,
+        parkedFiber: Option.none(),
+        parkedComplete: Option.none(),
+      });
+
+      const children = (vElement.props.children || []) as VElement[];
+
+      if (
+        domNode.nodeType === Node.COMMENT_NODE &&
+        (domNode as Comment).data.includes("fibrae:sus:resolved")
+      ) {
+        // Resolved: hydrate children against DOM nodes between markers
+        // Use hydrateChildren for proper fiber linking, but skip comment markers
+        const firstContentNode = getNextHydratableSibling(domNode);
+
+        // hydrateChildren links fibers as siblings and sets fiber.child
+        const afterChildren = yield* hydrateChildren(
+          fiber,
+          children,
+          firstContentNode,
+          runtime,
+        );
+
+        // Skip past closing marker
+        if (Option.isSome(afterChildren)) {
+          const maybeClosing = afterChildren.value;
+          if (
+            maybeClosing.nodeType === Node.COMMENT_NODE &&
+            (maybeClosing as Comment).data.includes("/fibrae:sus")
+          ) {
+            nextCursor = getNextHydratableSibling(maybeClosing);
+          } else {
+            nextCursor = afterChildren;
+          }
+        } else {
+          nextCursor = Option.none();
+        }
+      } else if (
+        domNode.nodeType === Node.COMMENT_NODE &&
+        (domNode as Comment).data.includes("fibrae:sus:fallback")
+      ) {
+        // Fallback: remove fallback DOM and render Suspense fresh
+        const parent = domNode.parentNode as HTMLElement;
+
+        // Collect nodes between markers
+        const nodesToRemove: Node[] = [domNode];
+        let scan: Node | null = domNode.nextSibling;
+        let closingMarker: Node | null = null;
+        while (scan) {
+          nodesToRemove.push(scan);
+          if (
+            scan.nodeType === Node.COMMENT_NODE &&
+            (scan as Comment).data.includes("/fibrae:sus")
+          ) {
+            closingMarker = scan;
+            break;
+          }
+          scan = scan.nextSibling;
+        }
+
+        // Cursor after the closing marker
+        nextCursor = closingMarker
+          ? getNextHydratableSibling(closingMarker)
+          : Option.none();
+
+        // Remove fallback DOM
+        for (const node of nodesToRemove) {
+          parent.removeChild(node);
+        }
+
+        // Mark as showing fallback initially, then reconcile children
+        // (the normal render path will handle the Suspense race)
+        const suspenseConfig = Option.getOrThrow(fiber.suspense);
+        suspenseConfig.showingFallback = false;
+        yield* reconcileChildren(fiber, children);
+      } else {
+        // No Suspense markers — treat as normal render
+        nextCursor = yield* hydrateChildren(
+          fiber,
+          children,
+          Option.some(domNode),
+          runtime,
+        );
+      }
     } else {
       // Host element - adopt DOM node and hydrate children
       const el = domNode as HTMLElement;
