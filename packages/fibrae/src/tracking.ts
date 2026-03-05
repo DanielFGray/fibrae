@@ -5,6 +5,7 @@ import * as Scope from "effect/Scope";
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import { type VElement, isStream } from "./shared.js";
 import { FibraeRuntime } from "./runtime.js";
+import { isLiveAtom, type LiveAtom } from "./live/atom.js";
 
 // =============================================================================
 // Stream Normalization
@@ -33,12 +34,17 @@ export const normalizeToStream = <E>(
 export const makeTrackingRegistry = (
   realRegistry: AtomRegistry.Registry,
   accessedAtoms: Set<Atom.Atom<unknown>>,
+  accessedLiveAtoms?: Set<LiveAtom<any>>,
 ): AtomRegistry.Registry => {
   return new Proxy(realRegistry as object, {
     get(target, prop, receiver) {
       if (prop === "get") {
         return (atom: Atom.Atom<unknown>) => {
           accessedAtoms.add(atom);
+          // Also track live atoms if the set was provided
+          if (accessedLiveAtoms && isLiveAtom(atom)) {
+            accessedLiveAtoms.add(atom);
+          }
           return realRegistry.get(atom);
         };
       }

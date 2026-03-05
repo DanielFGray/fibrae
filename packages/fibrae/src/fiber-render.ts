@@ -39,6 +39,10 @@ import {
 import { FibraeRuntime, type FiberState, runForkWithRuntime } from "./runtime.js";
 import { setDomProperty, attachEventListeners } from "./dom.js";
 import { normalizeToStream, makeTrackingRegistry } from "./tracking.js";
+import { isLiveAtom, type LiveAtom } from "./live/atom.js";
+import { LiveConfig } from "./live/config.js";
+import { sseStream } from "./live/sse-stream.js";
+import { Result } from "@effect-atom/atom";
 
 // =============================================================================
 // Stream Subscription Helper
@@ -547,7 +551,8 @@ const updateFunctionComponent = (
 
     // Set up atom tracking
     const accessedAtoms = new Set<Atom.Atom<any>>();
-    const trackingRegistry = makeTrackingRegistry(runtime.registry, accessedAtoms);
+    const accessedLiveAtoms = new Set<LiveAtom<any>>();
+    const trackingRegistry = makeTrackingRegistry(runtime.registry, accessedAtoms, accessedLiveAtoms);
     fiber.accessedAtoms = Option.some(accessedAtoms);
 
     // Build context with tracking registry AND ComponentScope
@@ -651,6 +656,16 @@ const updateFunctionComponent = (
 
     // Subscribe to atom changes
     yield* subscribeFiberAtoms(fiber, accessedAtoms, runtime);
+
+    // Activate SSE connections for any live atoms
+    if (accessedLiveAtoms.size > 0) {
+      yield* activateLiveAtoms(
+        accessedLiveAtoms,
+        currentContext,
+        runtime,
+        componentScopeService.scope,
+      );
+    }
   });
 
 // =============================================================================
@@ -731,6 +746,63 @@ const subscribeFiberAtoms = (
       { discard: true, concurrency: "unbounded" },
     );
   });
+
+// =============================================================================
+// Live Atom SSE Activation
+// =============================================================================
+
+// Module-level set to track which live atoms already have active SSE connections
+const activeLiveConnections = new Set<LiveAtom<any>>();
+
+const activateLiveAtoms = (
+  liveAtoms: Set<LiveAtom<any>>,
+  currentContext: Context.Context<any>,
+  runtime: FibraeRuntime,
+  scope: Scope.Scope.Closeable,
+): Effect.Effect<void> => {
+  // Skip on server
+  if (typeof window === "undefined") return Effect.void;
+
+  // Try to get LiveConfig from context
+  const configOption = Context.getOption(currentContext, LiveConfig);
+  if (Option.isNone(configOption)) return Effect.void;
+
+  const config = configOption.value;
+
+  return Effect.forEach(
+    liveAtoms,
+    (liveAtom) => {
+      // Don't activate twice
+      if (activeLiveConnections.has(liveAtom)) return Effect.void;
+      activeLiveConnections.add(liveAtom);
+
+      const url = LiveConfig.resolve(config, liveAtom._live.event);
+      const stream = sseStream({
+        url,
+        event: liveAtom._live.event,
+        schema: liveAtom._live.schema,
+        withCredentials: config.withCredentials,
+      });
+
+      // Subscribe: SSE values -> atom updates (Result.success)
+      const subscription = Stream.runForEach(stream, (value: any) =>
+        Effect.sync(() => runtime.registry.set(liveAtom, Result.success(value))),
+      );
+
+      // Register cleanup: remove from active connections when scope closes
+      return Effect.gen(function* () {
+        yield* Scope.addFinalizer(
+          scope,
+          Effect.sync(() => {
+            activeLiveConnections.delete(liveAtom);
+          }),
+        );
+        yield* Effect.forkIn(subscription, scope);
+      });
+    },
+    { discard: true },
+  );
+};
 
 // =============================================================================
 // Update Host Component
@@ -1716,7 +1788,8 @@ const hydrateFunctionComponent = (
 
     // Set up atom tracking
     const accessedAtoms = new Set<Atom.Atom<any>>();
-    const trackingRegistry = makeTrackingRegistry(runtime.registry, accessedAtoms);
+    const accessedLiveAtoms = new Set<LiveAtom<any>>();
+    const trackingRegistry = makeTrackingRegistry(runtime.registry, accessedAtoms, accessedLiveAtoms);
     fiber.accessedAtoms = Option.some(accessedAtoms);
 
     // Build context with tracking registry AND ComponentScope
@@ -1766,6 +1839,16 @@ const hydrateFunctionComponent = (
 
     // Subscribe to atom changes
     yield* subscribeFiberAtoms(fiber, accessedAtoms, runtime);
+
+    // Activate SSE connections for any live atoms
+    if (accessedLiveAtoms.size > 0) {
+      yield* activateLiveAtoms(
+        accessedLiveAtoms,
+        currentContext,
+        runtime,
+        componentScopeService.scope,
+      );
+    }
 
     return nextCursor;
   });
