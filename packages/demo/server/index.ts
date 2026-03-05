@@ -14,6 +14,7 @@ import { BunRuntime, BunHttpServer, BunFileSystem, BunPath } from "@effect/platf
 import { h } from "fibrae";
 import { renderToString, renderToStringWith, SSRAtomRegistryLayer } from "fibrae/server";
 import { Router } from "fibrae/router";
+import * as LiveSync from "fibrae/live";
 import {
   CounterApp,
   TodoApp,
@@ -21,6 +22,13 @@ import {
   SlowSuspenseApp,
   setInitialTodos,
 } from "../src/ssr-app.js";
+import { LiveApp, ClockChannel } from "../src/ssr-live-app.js";
+import {
+  LiveTestApp,
+  SingleClockAtom,
+  MultiClockAtom,
+  MultiCounterAtom,
+} from "../src/ssr-live-test-app.js";
 import { SSRRouter, App, createSSRRouterHandlers } from "../src/ssr-router-app.js";
 import { AppRouter, AppHandlersServerLive } from "../src/app/index.js";
 import { Api, ApiClientLive } from "../src/api/index.js";
@@ -204,6 +212,50 @@ const ssrNotesHandler = (ssrPathname: string) =>
   );
 
 // =============================================================================
+// LiveSync SSE Handler
+// =============================================================================
+
+const liveClockHandler = LiveSync.serve(ClockChannel, {
+  source: Effect.sync(() => new Date().toISOString()),
+  interval: "1 second",
+});
+
+const livePageHandler = Effect.gen(function* () {
+  const { html, dehydratedState } = yield* renderToString(h(LiveApp));
+  return HttpServerResponse.html(buildPage(html, dehydratedState, "ssr-hydrate-live.tsx"));
+});
+
+// LiveSync test endpoints (exercising connect, connectGroup, id, retry)
+const liveTestClockHandler = LiveSync.serve(SingleClockAtom, {
+  source: Effect.sync(() => new Date().toISOString()),
+  interval: "1 second",
+  retryInterval: "5 seconds",
+});
+
+let testCounter = 0;
+const liveTestMultiHandler = LiveSync.serveGroup({
+  channels: [
+    {
+      channel: MultiClockAtom,
+      source: Effect.sync(() => new Date().toISOString()),
+      interval: "1 second",
+    },
+    {
+      channel: MultiCounterAtom,
+      source: Effect.sync(() => testCounter++),
+      interval: "1 second",
+      equals: false,
+    },
+  ],
+  retryInterval: "3 seconds",
+});
+
+const liveTestPageHandler = Effect.gen(function* () {
+  const { html, dehydratedState } = yield* renderToString(h(LiveTestApp));
+  return HttpServerResponse.html(buildPage(html, dehydratedState, "ssr-hydrate-live-test.tsx"));
+});
+
+// =============================================================================
 // Todo API Handlers (with Schema validation)
 // =============================================================================
 
@@ -275,6 +327,13 @@ const router = HttpRouter.empty.pipe(
   HttpRouter.get("/ssr/suspense", suspenseHandler),
   // Slow Suspense scenario (fallback)
   HttpRouter.get("/ssr/suspense-slow", slowSuspenseHandler),
+  // LiveSync demo
+  HttpRouter.get("/ssr/live", livePageHandler),
+  HttpRouter.get("/api/live/clock", liveClockHandler),
+  // LiveSync integration test page
+  HttpRouter.get("/ssr/live-test", liveTestPageHandler),
+  HttpRouter.get("/api/live/test-clock", liveTestClockHandler),
+  HttpRouter.get("/api/live/test-multi", liveTestMultiHandler),
   // SSR Router scenarios - match all /ssr/router/* paths
   HttpRouter.get("/ssr/router", ssrRouterHandler("/")),
   HttpRouter.get("/ssr/router/posts", ssrRouterHandler("/posts")),

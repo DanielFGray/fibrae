@@ -39,7 +39,7 @@ import {
 import { FibraeRuntime, type FiberState, runForkWithRuntime } from "./runtime.js";
 import { setDomProperty, attachEventListeners } from "./dom.js";
 import { normalizeToStream, makeTrackingRegistry } from "./tracking.js";
-import { isLiveAtom, type LiveAtom } from "./live/atom.js";
+import { type LiveAtom } from "./live/atom.js";
 import { LiveConfig } from "./live/config.js";
 import { sseStream } from "./live/sse-stream.js";
 import { Result } from "@effect-atom/atom";
@@ -758,7 +758,7 @@ const activateLiveAtoms = (
   liveAtoms: Set<LiveAtom<any>>,
   currentContext: Context.Context<any>,
   runtime: FibraeRuntime,
-  scope: Scope.Scope.Closeable,
+  scope: Scope.Scope,
 ): Effect.Effect<void> => {
   // Skip on server
   if (typeof window === "undefined") return Effect.void;
