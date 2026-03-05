@@ -11,6 +11,7 @@ import { Atom } from "@effect-atom/atom"
 import { encodeSSE, encodeComment, encodeRetry, SSE_HEADERS } from "./codec.js"
 import { channel } from "./types.js"
 import { serve, serveGroup } from "./server.js"
+import { sseStream } from "./sse-stream.js"
 
 const decoder = new TextDecoder()
 
@@ -356,5 +357,15 @@ describe("LiveConfig", () => {
       channels: { clock: "/special/clock" },
     })
     expect(LiveConfig.resolve(config, "counter")).toBe("/api/live")
+  })
+})
+
+// =============================================================================
+// sseStream
+// =============================================================================
+
+describe("sseStream", () => {
+  test("module exports sseStream function", () => {
+    expect(typeof sseStream).toBe("function")
   })
 })
