@@ -20,6 +20,7 @@ import * as Deferred from "effect/Deferred";
 import * as Context from "effect/Context";
 import * as FiberRef from "effect/FiberRef";
 import * as Cause from "effect/Cause";
+import * as Schema from "effect/Schema";
 
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import {
@@ -769,36 +770,77 @@ const activateLiveAtoms = (
 
   const config = configOption.value;
 
+  // Filter out already-connected atoms and group by resolved URL
+  const newAtoms: LiveAtom<any>[] = [];
+  for (const atom of liveAtoms) {
+    if (!activeLiveConnections.has(atom)) {
+      newAtoms.push(atom);
+      activeLiveConnections.add(atom);
+    }
+  }
+  if (newAtoms.length === 0) return Effect.void;
+
+  const byUrl = new Map<string, LiveAtom<any>[]>();
+  for (const atom of newAtoms) {
+    const url = LiveConfig.resolve(config, atom._live.event);
+    const group = byUrl.get(url) ?? [];
+    group.push(atom);
+    byUrl.set(url, group);
+  }
+
   return Effect.forEach(
-    liveAtoms,
-    (liveAtom) => {
-      // Don't activate twice
-      if (activeLiveConnections.has(liveAtom)) return Effect.void;
-      activeLiveConnections.add(liveAtom);
+    byUrl,
+    ([url, atoms]) => {
+      if (atoms.length === 1) {
+        // Single atom — use sseStream helper
+        const atom = atoms[0];
+        const stream = sseStream({
+          url,
+          event: atom._live.event,
+          schema: atom._live.schema,
+          withCredentials: config.withCredentials,
+        });
 
-      const url = LiveConfig.resolve(config, liveAtom._live.event);
-      const stream = sseStream({
-        url,
-        event: liveAtom._live.event,
-        schema: liveAtom._live.schema,
-        withCredentials: config.withCredentials,
-      });
-
-      // Subscribe: SSE values -> atom updates (Result.success)
-      const subscription = Stream.runForEach(stream, (value: any) =>
-        Effect.sync(() => runtime.registry.set(liveAtom, Result.success(value))),
-      );
-
-      // Register cleanup: remove from active connections when scope closes
-      return Effect.gen(function* () {
-        yield* Scope.addFinalizer(
-          scope,
-          Effect.sync(() => {
-            activeLiveConnections.delete(liveAtom);
-          }),
+        const subscription = Stream.runForEach(stream, (value: any) =>
+          Effect.sync(() => runtime.registry.set(atom, Result.success(value))),
         );
-        yield* Effect.forkIn(subscription, scope);
-      });
+
+        return Effect.gen(function* () {
+          yield* Scope.addFinalizer(
+            scope,
+            Effect.sync(() => activeLiveConnections.delete(atom)),
+          );
+          yield* Effect.forkIn(subscription, scope);
+        });
+      } else {
+        // Multiple atoms sharing one URL — single EventSource, multiple listeners
+        return Effect.gen(function* () {
+          const es = new EventSource(url, {
+            withCredentials: config.withCredentials ?? false,
+          });
+
+          for (const atom of atoms) {
+            const decode = Schema.decodeUnknownSync(Schema.parseJson(atom._live.schema));
+            es.addEventListener(atom._live.event, (e: MessageEvent) => {
+              try {
+                runtime.registry.set(atom, Result.success(decode(e.data)));
+              } catch {
+                // Decode errors silently skipped
+              }
+            });
+          }
+
+          yield* Scope.addFinalizer(
+            scope,
+            Effect.sync(() => {
+              es.close();
+              for (const atom of atoms) {
+                activeLiveConnections.delete(atom);
+              }
+            }),
+          );
+        });
+      }
     },
     { discard: true },
   );
