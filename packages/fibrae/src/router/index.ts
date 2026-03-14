@@ -56,7 +56,6 @@ export type { LinkProps } from "./Link.js";
 export { createLink } from "./Link.js";
 
 // Re-export RouterOutlet component
-export type { RouterOutletProps } from "./RouterOutlet.js";
 export { RouterOutlet, OutletDepth } from "./RouterOutlet.js";
 
 // Re-export SSR integration types and functions

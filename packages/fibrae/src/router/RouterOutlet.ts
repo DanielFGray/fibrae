@@ -65,29 +65,6 @@ const ErrorBubble = (cause: Cause.Cause<unknown>): VElement => {
 export class OutletDepth extends Context.Tag("fibrae/OutletDepth")<OutletDepth, number>() {}
 
 // =============================================================================
-// Types
-// =============================================================================
-
-/**
- * Props for RouterOutlet component.
- *
- * @deprecated Props are no longer needed - SSR hydration is handled via RouterStateAtom.
- */
-export interface RouterOutletProps {
-  /**
-   * @deprecated Use RouterStateAtom hydration instead.
-   * Initial loader data from SSR - skips loader on first render.
-   */
-  readonly initialLoaderData?: unknown;
-
-  /**
-   * @deprecated Use RouterStateAtom hydration instead.
-   * Initial route name from SSR - used with initialLoaderData.
-   */
-  readonly initialRouteName?: string;
-}
-
-// =============================================================================
 // RouterOutlet Component
 // =============================================================================
 
@@ -105,9 +82,7 @@ export interface RouterOutletProps {
  * For SSR hydration, the RouterStateAtom is pre-populated by the server,
  * so the first render uses that data and skips the loader.
  */
-export function RouterOutlet(
-  _props: RouterOutletProps = {},
-): Stream.Stream<VElement, unknown, Navigator | RouterHandlers | AtomRegistry.AtomRegistry> {
+export function RouterOutlet(): Stream.Stream<VElement, unknown, Navigator | RouterHandlers | AtomRegistry.AtomRegistry> {
   // Track if this is the first render (for SSR hydration)
   let isFirstRender = true;
 
