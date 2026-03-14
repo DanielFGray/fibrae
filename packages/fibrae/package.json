@@ -42,7 +42,18 @@
     "./live": {
       "types": "./dist/live/index.d.ts",
       "import": "./dist/live/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli/index.d.ts",
+      "import": "./dist/cli/index.js"
+    },
+    "./vite": {
+      "types": "./dist/cli/vite-plugin.d.ts",
+      "import": "./dist/cli/vite-plugin.js"
     }
+  },
+  "bin": {
+    "fibrae": "./dist/cli/cli.js"
   },
   "scripts": {
     "dev:server": "vite dev",
@@ -53,16 +64,20 @@
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",
-    "typescript": "catalog:"
+    "@types/node": "^24.10.0",
+    "typescript": "catalog:",
+    "vite": "^8.0.0"
   },
   "peerDependencies": {
     "@effect-atom/atom": "catalog:",
+    "@effect/platform": "catalog:",
     "effect": "catalog:"
   },
   "optionalDependencies": {
     "@effect/platform-browser": "catalog:",
     "@effect/platform-bun": "catalog:",
-    "@effect/platform-node": "catalog:"
+    "@effect/platform-node": "catalog:",
+    "vite": "*"
   },
   "overrides": {
     "effect": "catalog:"

@@ -43,9 +43,6 @@
     "cypress": "^15.6.0",
     "effect-devtui": "^0.4.3",
     "typescript": "catalog:",
-    "vite": "npm:rolldown-vite@7.1.14"
-  },
-  "overrides": {
-    "vite": "npm:rolldown-vite@7.1.14"
+    "vite": "^8.0.0"
   }
 }
