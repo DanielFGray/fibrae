@@ -126,39 +126,66 @@ export const setDomProperty = (el: HTMLElement, name: string, value: unknown): v
 };
 
 /**
- * Attach event listeners to a DOM element.
- * Uses runForkWithRuntime to get the full application context.
- * When an event handler Effect fails, converts to EventHandlerError and calls onError callback.
+ * Create a DOM event wrapper that handles Effect return values.
+ *
+ * If the handler returns an Effect, it is forked with full app context.
+ * Submit events auto-preventDefault when handler returns an Effect.
+ * Effect failures are wrapped in EventHandlerError and forwarded to onError.
+ */
+export const createEventWrapper = (
+  handler: (event: Event) => unknown,
+  eventType: string,
+  runtime: FibraeRuntime,
+  onError?: (error: EventHandlerError) => Effect.Effect<unknown, never, unknown>,
+): EventListener =>
+  (event: Event) => {
+    const result = handler(event);
+    if (Effect.isEffect(result)) {
+      if (eventType === "submit") {
+        event.preventDefault();
+      }
+      const effectWithErrorHandling = result.pipe(
+        Effect.catchAllCause((cause) => {
+          const error = new EventHandlerError({
+            cause: Cause.squash(cause),
+            eventType,
+          });
+          return onError ? onError(error) : Effect.logError("Event handler error", error);
+        }),
+      );
+      runForkWithRuntime(runtime)(effectWithErrorHandling);
+    }
+  };
+
+/**
+ * Attach event listeners to a DOM element, tracking them in listenerStore.
+ *
+ * Uses createEventWrapper for Effect error handling and stores wrappers
+ * in listenerStore so updateDom can remove them on re-render.
  */
 export const attachEventListeners = (
   el: HTMLElement,
   props: Record<string, unknown>,
   runtime: FibraeRuntime,
   onError?: (error: EventHandlerError) => Effect.Effect<unknown, never, unknown>,
+  listenerStore?: WeakMap<HTMLElement, Record<string, EventListener>>,
 ): void => {
+  const store = listenerStore;
+  const stored = store?.get(el) ?? {};
+
   Object.entries(props)
     .filter(([key, handler]) => isEvent(key) && typeof handler === "function")
     .forEach(([key, handler]) => {
       const eventType = key.toLowerCase().substring(2);
-
-      el.addEventListener(eventType, (event: Event) => {
-        const result = (handler as (e: Event) => unknown)(event);
-
-        if (Effect.isEffect(result)) {
-          if (eventType === "submit") {
-            event.preventDefault();
-          }
-          const effectWithErrorHandling = result.pipe(
-            Effect.catchAllCause((cause) => {
-              const error = new EventHandlerError({
-                cause: Cause.squash(cause),
-                eventType,
-              });
-              return onError ? onError(error) : Effect.logError("Event handler error", error);
-            }),
-          );
-          runForkWithRuntime(runtime)(effectWithErrorHandling);
-        }
-      });
+      const wrapper = createEventWrapper(
+        handler as (e: Event) => unknown,
+        eventType,
+        runtime,
+        onError,
+      );
+      el.addEventListener(eventType, wrapper);
+      stored[eventType] = wrapper;
     });
+
+  store?.set(el, stored);
 };

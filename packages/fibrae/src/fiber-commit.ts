@@ -14,12 +14,11 @@ import * as Scope from "effect/Scope";
 import * as Ref from "effect/Ref";
 import * as Exit from "effect/Exit";
 import * as Deferred from "effect/Deferred";
-import * as Cause from "effect/Cause";
 
 import type { Fiber } from "./shared.js";
-import { isEvent, isProperty, EventHandlerError } from "./shared.js";
-import { FibraeRuntime, runForkWithRuntime } from "./runtime.js";
-import { setDomProperty } from "./dom.js";
+import { isEvent, isProperty } from "./shared.js";
+import { FibraeRuntime } from "./runtime.js";
+import { setDomProperty, createEventWrapper } from "./dom.js";
 import { findDomParent } from "./fiber-tree.js";
 import { handleFiberError } from "./fiber-boundary.js";
 
@@ -132,28 +131,12 @@ export const updateDom = (
       .forEach((name) => {
         const eventType = name.toLowerCase().substring(2);
         const handler = nextProps[name] as (event: Event) => unknown;
-
-        const wrapper: EventListener = (event: Event) => {
-          const result = handler(event);
-          if (Effect.isEffect(result)) {
-            // Auto-preventDefault for submit events when handler returns Effect.
-            // The Effect is forked async, so native form submission would fire first.
-            if (eventType === "submit") {
-              event.preventDefault();
-            }
-            const effectWithErrorHandling = result.pipe(
-              Effect.catchAllCause((cause) => {
-                // Convert to EventHandlerError with the event type
-                const error = new EventHandlerError({
-                  cause: Cause.squash(cause),
-                  eventType,
-                });
-                return ownerFiber ? handleFiberError(ownerFiber, error) : Effect.void;
-              }),
-            );
-            runForkWithRuntime(runtime)(effectWithErrorHandling);
-          }
-        };
+        const wrapper = createEventWrapper(
+          handler,
+          eventType,
+          runtime,
+          ownerFiber ? (error) => handleFiberError(ownerFiber, error) : undefined,
+        );
 
         const existing = stored[eventType];
         if (existing) {

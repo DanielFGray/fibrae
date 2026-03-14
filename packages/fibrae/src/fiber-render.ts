@@ -464,13 +464,14 @@ const hydrateElement = (
         fiber.renderContext = fiber.parent.value.renderContext;
       }
 
-      // Attach event listeners - uses runForkWithRuntime internally for full context
-      // Pass error callback to trigger ErrorBoundary on event handler failures
+      // Attach event listeners with listenerStore tracking for proper cleanup on re-render
+      const stateSnapshot = yield* Ref.get(runtime.fiberState);
       attachEventListeners(
         el,
         vElement.props as Record<string, unknown>,
         runtime,
         (cause) => handleFiberError(fiber, cause),
+        stateSnapshot.listenerStore,
       );
 
       // Handle ref
