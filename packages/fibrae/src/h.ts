@@ -15,6 +15,7 @@ export const createTextElement = (text: string): VElement => ({
   },
 });
 
+
 /**
  * Create a virtual element (JSX factory)
  */

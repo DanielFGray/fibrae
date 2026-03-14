@@ -44,9 +44,9 @@ export function PostForm(props: PostFormProps): Effect.Effect<VElement, never, A
   return Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;
 
-    const title = registry.get(PostFormTitleAtom);
-    const content = registry.get(PostFormContentAtom);
-    const submitResult = registry.get(PostFormResultAtom);
+    const title = yield* Atom.get(PostFormTitleAtom);
+    const content = yield* Atom.get(PostFormContentAtom);
+    const submitResult = yield* Atom.get(PostFormResultAtom);
     const isSubmitting = Result.isWaiting(submitResult);
 
     const handleTitleChange = (e: Event) => {

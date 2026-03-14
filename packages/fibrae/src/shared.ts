@@ -171,10 +171,10 @@ export interface Fiber {
   sibling: Option.Option<Fiber>;
   alternate: Option.Option<Fiber>;
   effectTag: Option.Option<"UPDATE" | "PLACEMENT" | "DELETION">;
-  componentScope: Option.Option<Scope.Scope>;
+  componentScope: Option.Option<Scope.Scope.Closeable>;
   /** Deferred that resolves after this component's DOM subtree commits */
   mountedDeferred: Option.Option<Deferred.Deferred<void>>;
-  accessedAtoms: Option.Option<Set<BaseAtom.Atom<any>>>;
+  accessedAtoms: Option.Option<Set<BaseAtom.Atom<unknown>>>;
   latestStreamValue: Option.Option<VElement>;
   childFirstCommitDeferred: Option.Option<Deferred.Deferred<void>>;
   fiberRef: Option.Option<FiberRef>;
@@ -183,7 +183,7 @@ export interface Fiber {
   boundary: Option.Option<BoundaryConfig>;
   suspense: Option.Option<SuspenseConfig>;
   /** Context captured during render phase, used for event handlers in commit phase */
-  renderContext: Option.Option<Context.Context<unknown>>;
+  renderContext: Option.Option<Context.Context<never>>;
   /** True if this fiber is parked (suspended) - scope should not be closed on deletion */
   isParked: boolean;
   /** True when fiber is being restored from parked state - skip component re-execution */
@@ -199,7 +199,7 @@ export const isEvent = (key: string) => key.startsWith("on");
  * Helper to check if a key is a regular property (not children, ref, key, or event)
  */
 export const isProperty = (key: string) =>
-  key !== "children" && key !== "ref" && key !== "key" && !isEvent(key);
+  key !== "children" && key !== "ref" && key !== "key" && key !== "dangerouslySetInnerHTML" && !isEvent(key);
 
 /**
  * Check if an element type is a primitive (string) or component (function)
@@ -263,12 +263,21 @@ export class HydrationMismatch extends Data.TaggedError("HydrationMismatch")<{
  * );
  * ```
  */
+/** Format a cause for inclusion in error messages. */
+const formatCause = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
+
 export class RenderError extends Data.TaggedError("RenderError")<{
   /** The underlying error that caused the render failure */
   readonly cause: unknown;
   /** Name of the component that failed (if available) */
   readonly componentName?: string;
-}> {}
+}> {
+  get message() {
+    const name = this.componentName ? ` in ${this.componentName}` : "";
+    return `RenderError${name}: ${formatCause(this.cause)}`;
+  }
+}
 
 /**
  * Error from a Stream component (before or after first emission).
@@ -282,7 +291,11 @@ export class StreamError extends Data.TaggedError("StreamError")<{
   readonly cause: unknown;
   /** When the error occurred relative to first emission */
   readonly phase: "before-first-emission" | "after-first-emission";
-}> {}
+}> {
+  get message() {
+    return `StreamError (${this.phase}): ${formatCause(this.cause)}`;
+  }
+}
 
 /**
  * Error from an event handler Effect.
@@ -294,7 +307,11 @@ export class EventHandlerError extends Data.TaggedError("EventHandlerError")<{
   readonly cause: unknown;
   /** The DOM event type that triggered this handler (e.g., "click", "change") */
   readonly eventType: string;
-}> {}
+}> {
+  get message() {
+    return `EventHandlerError (${this.eventType}): ${formatCause(this.cause)}`;
+  }
+}
 
 /**
  * Union of all component error types.

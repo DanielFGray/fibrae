@@ -131,15 +131,11 @@ const renderAttribute = (name: string, value: unknown): string => {
 /**
  * Render all props as HTML attributes
  */
-const renderAttributes = (props: Record<string, unknown>): string => {
-  let attrs = "";
-  for (const [key, value] of Object.entries(props)) {
-    if (isProperty(key)) {
-      attrs += renderAttribute(propToAttr(key), value);
-    }
-  }
-  return attrs;
-};
+const renderAttributes = (props: Record<string, unknown>): string =>
+  Object.entries(props)
+    .filter(([key]) => isProperty(key))
+    .map(([key, value]) => renderAttribute(propToAttr(key), value))
+    .join("");
 
 // =============================================================================
 // Void Elements (self-closing)
@@ -224,13 +220,15 @@ const renderVElementToString = (
       // Text node - escape and return
       return escapeHtml(String(vElement.props.nodeValue ?? ""));
     } else if (type === "FRAGMENT") {
-      // Fragment - render children directly
-      const children = vElement.props.children ?? [];
-      let html = "";
-      for (const child of children) {
-        html += yield* renderVElementToString(child);
-      }
-      return html;
+      // Fragment - render children directly, or raw HTML if dangerouslySetInnerHTML is set
+      const rawHtml = vElement.props.dangerouslySetInnerHTML;
+      if (rawHtml != null) return String(rawHtml);
+
+      return yield* Effect.reduce(
+        vElement.props.children ?? [],
+        "",
+        (acc, child) => renderVElementToString(child).pipe(Effect.map((h) => acc + h)),
+      );
     } else if (type === "SUSPENSE") {
       // Suspense boundary - race child rendering against timeout
       // Phase 5: If children complete first → resolved marker
@@ -244,13 +242,12 @@ const renderVElementToString = (
 
       // Fork: render children to string
       yield* Effect.fork(
-        Effect.gen(function* () {
-          let childrenHtml = "";
-          for (const child of children) {
-            childrenHtml += yield* renderVElementToString(child);
-          }
-          yield* Deferred.succeed(childrenComplete, childrenHtml);
-        }).pipe(Effect.catchAll((e) => Deferred.fail(childrenComplete, e))),
+        Effect.reduce(children, "", (acc, child) =>
+          renderVElementToString(child).pipe(Effect.map((h) => acc + h)),
+        ).pipe(
+          Effect.flatMap((html) => Deferred.succeed(childrenComplete, html)),
+          Effect.catchAll((e) => Deferred.fail(childrenComplete, e)),
+        ),
       );
 
       // Race: children completing vs timeout
@@ -281,11 +278,14 @@ const renderVElementToString = (
         return `<${type}${attrs}${keyAttr} />`;
       }
 
-      const children = vElement.props.children ?? [];
-      let childrenHtml = "";
-      for (const child of children) {
-        childrenHtml += yield* renderVElementToString(child);
-      }
+      const rawHtml = vElement.props.dangerouslySetInnerHTML;
+      const childrenHtml = rawHtml != null
+        ? String(rawHtml)
+        : yield* Effect.reduce(
+            vElement.props.children ?? [],
+            "",
+            (acc, child) => renderVElementToString(child).pipe(Effect.map((h) => acc + h)),
+          );
 
       return `<${type}${attrs}${keyAttr}>${childrenHtml}</${type}>`;
     }

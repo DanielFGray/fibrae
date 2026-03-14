@@ -9,7 +9,6 @@
  */
 
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import type { VElement } from "fibrae";
 import { AtomRegistry, Suspense } from "fibrae";
 import { RouterBuilder } from "fibrae/router";
@@ -141,5 +140,5 @@ export const AppHandlersClientLive = createAppHandlers(false);
 /**
  * Combined layer with API client dependency
  */
-export const AppHandlersLive = (isServer: boolean): Layer.Layer<RouterBuilder.RouterHandlers, never, PostsClient> =>
+export const AppHandlersLive = (isServer: boolean) =>
   createAppHandlers(isServer);

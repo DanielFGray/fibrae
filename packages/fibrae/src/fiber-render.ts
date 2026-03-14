@@ -21,6 +21,7 @@ import * as Context from "effect/Context";
 import * as FiberRef from "effect/FiberRef";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
+import * as RcMap from "effect/RcMap";
 
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import {
@@ -42,7 +43,6 @@ import { setDomProperty, attachEventListeners } from "./dom.js";
 import { normalizeToStream, makeTrackingRegistry } from "./tracking.js";
 import { type LiveAtom } from "./live/atom.js";
 import { LiveConfig } from "./live/config.js";
-import { sseStream } from "./live/sse-stream.js";
 import { Result } from "@effect-atom/atom";
 
 // =============================================================================
@@ -170,10 +170,12 @@ const fiberIsVirtualElement = (fiber: Fiber): boolean =>
  * Get a fiber's required componentScope or die with a message.
  */
 const getComponentScopeOrDie = (fiber: Fiber, msg: string) =>
-  Option.match(fiber.componentScope, {
-    onNone: () => Effect.die(msg),
-    onSome: (s) => Effect.succeed(s),
-  });
+  fiber.componentScope.pipe(
+    Option.match({
+      onNone: () => Effect.die(msg),
+      onSome: Effect.succeed,
+    }),
+  );
 
 /**
  * Get the full ComponentScope service value (scope + mounted) for a fiber.
@@ -181,110 +183,79 @@ const getComponentScopeOrDie = (fiber: Fiber, msg: string) =>
 const getComponentScopeService = (fiber: Fiber, msg: string) =>
   Effect.gen(function* () {
     const scope = yield* getComponentScopeOrDie(fiber, msg);
-    const mounted = yield* Option.match(fiber.mountedDeferred, {
-      onNone: () => Effect.die(`${msg} (missing mountedDeferred)`),
-      onSome: (d) => Effect.succeed(d),
-    });
+    const mounted = yield* fiber.mountedDeferred.pipe(
+      Option.match({
+        onNone: () => Effect.die(`${msg} (missing mountedDeferred)`),
+        onSome: Effect.succeed,
+      }),
+    );
     return { scope, mounted };
   });
 
 // =============================================================================
-// Queue Fiber for Re-render (batched updates)
+// Queue Fiber for Re-render (Mailbox-based batched updates)
 // =============================================================================
 
+/**
+ * Queue a fiber for re-render via the Mailbox.
+ *
+ * The Mailbox naturally batches: multiple synchronous offers accumulate
+ * before the consumer fiber's takeAll runs, giving us the same coalescing
+ * as the previous queueMicrotask + Set approach.
+ */
 const queueFiberForRerender = (fiber: Fiber) =>
   Effect.gen(function* () {
     const runtime = yield* FibraeRuntime;
-    const stateRef = runtime.fiberState;
-
-    const didSchedule = yield* Ref.modify(stateRef, (s: FiberState) => {
-      const alreadyQueued = s.renderQueue.has(fiber);
-      const newQueue = alreadyQueued ? s.renderQueue : new Set([...s.renderQueue, fiber]);
-      const shouldScheduleNow = !s.batchScheduled;
-      const next: FiberState = {
-        ...s,
-        renderQueue: newQueue,
-        batchScheduled: s.batchScheduled || shouldScheduleNow,
-      };
-      return [shouldScheduleNow, next] as const;
-    });
-
-    if (didSchedule) {
-      queueMicrotask(() => {
-        runForkWithRuntime(runtime)(processBatch());
-      });
-    }
+    yield* runtime.renderMailbox.offer(fiber);
   });
 
-// =============================================================================
-// Process Batch (handles queued re-renders)
-// =============================================================================
-
-const processBatch = (): Effect.Effect<void, never, FibraeRuntime> =>
+/**
+ * Consumer loop that processes batched re-render requests from the Mailbox.
+ *
+ * Runs as a long-lived fiber: waits for items via takeAll, then reconciles
+ * the full tree. Sequential processing guarantees no concurrent workLoops.
+ */
+const renderMailboxConsumer = (runtime: FibraeRuntime): Effect.Effect<void, never, FibraeRuntime> =>
   Effect.gen(function* () {
-    const runtime = yield* FibraeRuntime;
     const stateRef = runtime.fiberState;
-    const stateSnapshot = yield* Ref.get(stateRef);
 
-    const batch = Array.from(stateSnapshot.renderQueue);
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      // takeAll suspends until items are available, then returns all queued items
+      const [_fibers, done] = yield* runtime.renderMailbox.takeAll;
+      if (done) break;
 
-    // Clear the queue but keep batchScheduled = true to prevent concurrent batches
-    yield* Ref.update(stateRef, (s) => ({
-      ...s,
-      renderQueue: new Set<Fiber>(),
-      // DO NOT set batchScheduled = false here - keep it true during workLoop
-    }));
-
-    if (batch.length === 0) {
-      // No work to do - reset batchScheduled
-      yield* Ref.update(stateRef, (s) => ({ ...s, batchScheduled: false }));
-      return;
-    }
-
-    yield* Option.match(stateSnapshot.currentRoot, {
-      onNone: () => Effect.void,
-      onSome: (currentRoot) =>
-        Effect.gen(function* () {
-          yield* Ref.update(stateRef, (s) => ({
-            ...s,
-            wipRoot: Option.some(
-              createFiber(
-                currentRoot.type,
-                currentRoot.props,
-                Option.none(),
-                Option.some(currentRoot),
-                Option.none(),
+      const stateSnapshot = yield* Ref.get(stateRef);
+      yield* Option.match(stateSnapshot.currentRoot, {
+        onNone: () => Effect.void,
+        onSome: (currentRoot) =>
+          Effect.gen(function* () {
+            yield* Ref.update(stateRef, (s) => ({
+              ...s,
+              wipRoot: Option.some(
+                createFiber(
+                  currentRoot.type,
+                  currentRoot.props,
+                  Option.none(),
+                  Option.some(currentRoot),
+                  Option.none(),
+                ),
               ),
-            ),
-            deletions: [],
-          }));
+              deletions: [],
+            }));
 
-          // Copy dom from currentRoot to wipRoot
-          const newState = yield* Ref.get(stateRef);
-          Option.match(newState.wipRoot, {
-            onNone: () => {},
-            onSome: (wip) => {
-              wip.dom = currentRoot.dom;
-            },
-          });
+            // Copy dom from currentRoot to wipRoot
+            const newState = yield* Ref.get(stateRef);
+            newState.wipRoot.pipe(Option.map((wip) => { wip.dom = currentRoot.dom; }));
 
-          yield* Ref.update(stateRef, (s) => ({
-            ...s,
-            nextUnitOfWork: s.wipRoot,
-          }));
+            yield* Ref.update(stateRef, (s) => ({
+              ...s,
+              nextUnitOfWork: s.wipRoot,
+            }));
 
-          yield* workLoop(runtime);
-        }),
-    });
-
-    // After workLoop completes, check if more work was queued during processing
-    const afterState = yield* Ref.get(stateRef);
-    if (afterState.renderQueue.size > 0) {
-      // More work was queued during the batch - process it immediately
-      yield* processBatch();
-    } else {
-      // No more work - allow new batches to be scheduled
-      yield* Ref.update(stateRef, (s) => ({ ...s, batchScheduled: false }));
+            yield* workLoop(runtime);
+          }),
+      });
     }
   });
 
@@ -321,6 +292,21 @@ const linkFibersAsSiblings = (fibers: Fiber[], parent: Fiber): void => {
   for (let i = 1; i < fibers.length; i++) {
     fibers[i - 1].sibling = Option.some(fibers[i]);
   }
+};
+
+/**
+ * Walk up the fiber tree from the given fiber to find the next sibling
+ * (own sibling, or uncle, or great-uncle, etc.).
+ */
+const findNextSibling = (fiber: Fiber): Option.Option<Fiber> => {
+  let current: Option.Option<Fiber> = Option.some(fiber);
+  while (Option.isSome(current)) {
+    if (Option.isSome(current.value.sibling)) {
+      return current.value.sibling;
+    }
+    current = current.value.parent;
+  }
+  return Option.none();
 };
 
 /**
@@ -501,7 +487,7 @@ const updateFunctionComponent = (
 
     // Capture current context during render phase for event handlers in commit phase
     // This includes services like Navigator, RouterHandlers, etc.
-    const currentContext = (yield* FiberRef.get(FiberRef.currentContext)) as Context.Context<any>;
+    const currentContext = yield* FiberRef.get(FiberRef.currentContext);
     fiber.renderContext = Option.some(currentContext);
 
     // Check if we can reuse cached stream value from alternate
@@ -521,12 +507,7 @@ const updateFunctionComponent = (
       fiber.componentScope = alt.componentScope;
       alt.componentScope = Option.none(); // Transfer ownership
       fiber.fiberRef = alt.fiberRef;
-      Option.match(fiber.fiberRef, {
-        onNone: () => {},
-        onSome: (ref) => {
-          ref.current = fiber;
-        },
-      });
+      fiber.fiberRef.pipe(Option.map((ref) => { ref.current = fiber; }));
       fiber.isMultiEmissionStream = alt.isMultiEmissionStream;
 
       yield* reconcileChildren(fiber, [vElement]);
@@ -551,7 +532,7 @@ const updateFunctionComponent = (
     );
 
     // Set up atom tracking
-    const accessedAtoms = new Set<Atom.Atom<any>>();
+    const accessedAtoms = new Set<Atom.Atom<unknown>>();
     const accessedLiveAtoms = new Set<LiveAtom<any>>();
     const trackingRegistry = makeTrackingRegistry(runtime.registry, accessedAtoms, accessedLiveAtoms);
     fiber.accessedAtoms = Option.some(accessedAtoms);
@@ -572,7 +553,7 @@ const updateFunctionComponent = (
           return Effect.die("updateFunctionComponent called with non-function type");
         }
         const component = type as (
-          props: any,
+          props: Record<string, unknown>,
         ) => VElement | Effect.Effect<VElement> | Stream.Stream<VElement>;
         return Effect.sync(() => component(fiber.props));
       },
@@ -690,20 +671,10 @@ const performUnitOfWork = (
       return yield* handleFiberError(fiber, exited.cause);
     }
 
-    // Return next unit of work: child, then sibling, then uncle
-    if (Option.isSome(fiber.child)) {
-      return fiber.child;
-    }
-
-    let currentFiber: Option.Option<Fiber> = Option.some(fiber);
-    while (Option.isSome(currentFiber)) {
-      if (Option.isSome(currentFiber.value.sibling)) {
-        return currentFiber.value.sibling;
-      }
-      currentFiber = currentFiber.value.parent;
-    }
-
-    return Option.none<Fiber>();
+    // Return next unit of work: child → sibling → uncle (walk up to find sibling)
+    return fiber.child.pipe(
+      Option.orElse(() => findNextSibling(fiber)),
+    );
   });
 
 // =============================================================================
@@ -715,7 +686,7 @@ const resubscribeFiber = (fiber: Fiber) =>
     // Close old scope if exists
     yield* Option.match(fiber.componentScope, {
       onNone: () => Effect.void,
-      onSome: (scope) => Scope.close(scope as Scope.Scope.Closeable, Exit.void),
+      onSome: (scope) => Scope.close(scope, Exit.void),
     });
 
     // Create new scope and mounted deferred
@@ -727,7 +698,7 @@ const resubscribeFiber = (fiber: Fiber) =>
 
 const subscribeFiberAtoms = (
   fiber: Fiber,
-  accessedAtoms: Set<Atom.Atom<any>>,
+  accessedAtoms: Set<Atom.Atom<unknown>>,
   runtime: FibraeRuntime,
 ) =>
   Effect.gen(function* () {
@@ -736,15 +707,19 @@ const subscribeFiberAtoms = (
       "subscribeFiberAtoms requires an existing componentScope",
     );
 
+    // Use registry.subscribe directly — simpler and more efficient than
+    // toStream + drop(1) + runForEach. Cleanup via scope finalizers.
+    // unsafeOffer is synchronous, no need for runForkWithRuntime.
     yield* Effect.forEach(
       accessedAtoms,
-      (atom) => {
-        // Drop first emission (current value), subscribe to changes
-        const atomStream = AtomRegistry.toStream(runtime.registry, atom).pipe(Stream.drop(1));
-        const subscription = Stream.runForEach(atomStream, () => queueFiberForRerender(fiber));
-        return Effect.forkIn(subscription, scope);
-      },
-      { discard: true, concurrency: "unbounded" },
+      (atom) =>
+        Effect.gen(function* () {
+          const unsubscribe = runtime.registry.subscribe(atom, () => {
+            runtime.renderMailbox.unsafeOffer(fiber);
+          });
+          yield* Scope.addFinalizer(scope, Effect.sync(unsubscribe));
+        }),
+      { discard: true },
     );
   });
 
@@ -752,12 +727,16 @@ const subscribeFiberAtoms = (
 // Live Atom SSE Activation
 // =============================================================================
 
-// Module-level set to track which live atoms already have active SSE connections
-const activeLiveConnections = new Set<LiveAtom<any>>();
-
+/**
+ * Activate SSE connections for live atoms using the runtime's RcMap.
+ *
+ * EventSources are shared by URL via RcMap — ref-counted and automatically
+ * closed when the last consumer's scope closes. Each atom adds its own
+ * listener to the shared EventSource.
+ */
 const activateLiveAtoms = (
   liveAtoms: Set<LiveAtom<any>>,
-  currentContext: Context.Context<any>,
+  currentContext: Context.Context<never>,
   runtime: FibraeRuntime,
   scope: Scope.Scope,
 ): Effect.Effect<void> => {
@@ -770,80 +749,42 @@ const activateLiveAtoms = (
 
   const config = configOption.value;
 
-  // Filter out already-connected atoms and group by resolved URL
-  const newAtoms: LiveAtom<any>[] = [];
-  for (const atom of liveAtoms) {
-    if (!activeLiveConnections.has(atom)) {
-      newAtoms.push(atom);
-      activeLiveConnections.add(atom);
-    }
-  }
-  if (newAtoms.length === 0) return Effect.void;
+  return Effect.gen(function* () {
+    // Ensure withCredentials is set before any RcMap lookups create EventSources
+    yield* Ref.set(runtime.sseWithCredentials, config.withCredentials ?? false);
 
-  const byUrl = new Map<string, LiveAtom<any>[]>();
-  for (const atom of newAtoms) {
-    const url = LiveConfig.resolve(config, atom._live.event);
-    const group = byUrl.get(url) ?? [];
-    group.push(atom);
-    byUrl.set(url, group);
-  }
+    yield* Effect.forEach(
+      liveAtoms,
+      (atom) =>
+        Effect.gen(function* () {
+          const url = LiveConfig.resolve(config, atom._live.event);
+          const decode = Schema.decodeUnknownSync(Schema.parseJson(atom._live.schema));
 
-  return Effect.forEach(
-    byUrl,
-    ([url, atoms]) => {
-      if (atoms.length === 1) {
-        // Single atom — use sseStream helper
-        const atom = atoms[0];
-        const stream = sseStream({
-          url,
-          event: atom._live.event,
-          schema: atom._live.schema,
-          withCredentials: config.withCredentials,
-        });
+          // Get shared EventSource for this URL (ref-counted via RcMap).
+          // Scope.extend binds the reference to the component scope —
+          // when the component unmounts, the ref count decrements.
+          const es = yield* RcMap.get(runtime.sseConnections, url).pipe(
+            Scope.extend(scope),
+          );
 
-        const subscription = Stream.runForEach(stream, (value: any) =>
-          Effect.sync(() => runtime.registry.set(atom, Result.success(value))),
-        );
+          const handler = (e: MessageEvent) => {
+            try {
+              runtime.registry.set(atom, Result.success(decode(e.data)));
+            } catch {
+              // Decode errors silently skipped
+            }
+          };
+          es.addEventListener(atom._live.event, handler);
 
-        return Effect.gen(function* () {
+          // Clean up this atom's listener when the component unmounts
           yield* Scope.addFinalizer(
             scope,
-            Effect.sync(() => activeLiveConnections.delete(atom)),
+            Effect.sync(() => es.removeEventListener(atom._live.event, handler)),
           );
-          yield* Effect.forkIn(subscription, scope);
-        });
-      } else {
-        // Multiple atoms sharing one URL — single EventSource, multiple listeners
-        return Effect.gen(function* () {
-          const es = new EventSource(url, {
-            withCredentials: config.withCredentials ?? false,
-          });
-
-          for (const atom of atoms) {
-            const decode = Schema.decodeUnknownSync(Schema.parseJson(atom._live.schema));
-            es.addEventListener(atom._live.event, (e: MessageEvent) => {
-              try {
-                runtime.registry.set(atom, Result.success(decode(e.data)));
-              } catch {
-                // Decode errors silently skipped
-              }
-            });
-          }
-
-          yield* Scope.addFinalizer(
-            scope,
-            Effect.sync(() => {
-              es.close();
-              for (const atom of atoms) {
-                activeLiveConnections.delete(atom);
-              }
-            }),
-          );
-        });
-      }
-    },
-    { discard: true },
-  );
+        }),
+      { discard: true },
+    );
+  });
 };
 
 // =============================================================================
@@ -1004,14 +945,10 @@ const createDom = (fiber: Fiber, runtime: FibraeRuntime) =>
     yield* updateDom(dom, {}, fiber.props, fiber, runtime);
 
     // Handle ref
-    Option.match(Option.fromNullable(fiber.props.ref), {
-      onNone: () => {},
-      onSome: (ref) => {
-        if (typeof ref === "object" && "current" in ref) {
-          (ref as { current: unknown }).current = dom;
-        }
-      },
-    });
+    const ref = fiber.props.ref;
+    if (ref && typeof ref === "object" && "current" in ref) {
+      (ref as { current: unknown }).current = dom;
+    }
 
     return dom;
   });
@@ -1053,14 +990,14 @@ const updateDom = (
       .filter(isEvent)
       .filter((key) => !(key in nextProps) || isNew(prevProps, nextProps)(key));
 
-    for (const name of eventsToRemove) {
+    eventsToRemove.forEach((name) => {
       const eventType = name.toLowerCase().substring(2);
       const wrapper = stored[eventType];
       if (wrapper) {
         el.removeEventListener(eventType, wrapper);
         delete stored[eventType];
       }
-    }
+    });
 
     // Remove properties that were in prevProps but not in nextProps
     Object.keys(prevProps)
@@ -1071,6 +1008,13 @@ const updateDom = (
           setDomProperty(el, name, null);
         }
       });
+
+    // Handle dangerouslySetInnerHTML
+    if (nextProps.dangerouslySetInnerHTML != null) {
+      if (el instanceof HTMLElement && nextProps.dangerouslySetInnerHTML !== prevProps.dangerouslySetInnerHTML) {
+        el.innerHTML = String(nextProps.dangerouslySetInnerHTML);
+      }
+    }
 
     // Update changed properties
     Object.keys(nextProps)
@@ -1093,8 +1037,11 @@ const updateDom = (
         const wrapper: EventListener = (event: Event) => {
           const result = handler(event);
           if (Effect.isEffect(result)) {
-            // Use runForkWithRuntime to get the full application context
-            // This provides Navigator, FibraeRuntime, AtomRegistry, etc.
+            // Auto-preventDefault for submit events when handler returns Effect.
+            // The Effect is forked async, so native form submission would fire first.
+            if (eventType === "submit") {
+              event.preventDefault();
+            }
             const effectWithErrorHandling = result.pipe(
               Effect.catchAllCause((cause) => {
                 // Convert to EventHandlerError with the event type
@@ -1129,117 +1076,119 @@ const reconcileChildren = (wipFiber: Fiber, elements: VElement[]) =>
     const runtime = yield* FibraeRuntime;
     const stateRef = runtime.fiberState;
 
-    // Collect old children from alternate
-    const oldChildren: Fiber[] = [];
-    if (Option.isSome(wipFiber.alternate)) {
-      let current = wipFiber.alternate.value.child;
+    // Collect old children from alternate by walking the sibling chain
+    const collectSiblings = (start: Option.Option<Fiber>): Fiber[] => {
+      const result: Fiber[] = [];
+      let current = start;
       while (Option.isSome(current)) {
-        oldChildren.push(current.value);
+        result.push(current.value);
         current = current.value.sibling;
       }
-    }
+      return result;
+    };
+    const oldChildren = wipFiber.alternate.pipe(
+      Option.map((alt) => collectSiblings(alt.child)),
+      Option.getOrElse((): Fiber[] => []),
+    );
 
-    const getKey = (props: { [key: string]: unknown } | undefined): Option.Option<unknown> =>
-      Option.fromNullable(props ? (props as Record<string, unknown>).key : undefined);
+    const getKey = (props: Record<string, unknown> | undefined): Option.Option<unknown> =>
+      Option.fromNullable(props?.key);
 
     // Build maps for keyed and unkeyed old fibers
-    const oldByKey = new Map<unknown, Fiber>();
-    const oldUnkeyed: Fiber[] = [];
+    const { keyed: oldByKey, unkeyed: oldUnkeyed } = oldChildren.reduce(
+      (acc, f) => {
+        Option.match(getKey(f.props), {
+          onNone: () => acc.unkeyed.push(f),
+          onSome: (key) => acc.keyed.set(key, f),
+        });
+        return acc;
+      },
+      { keyed: new Map<unknown, Fiber>(), unkeyed: [] as Fiber[] },
+    );
 
-    for (const f of oldChildren) {
-      const keyOpt = getKey(f.props);
-      Option.match(keyOpt, {
-        onNone: () => oldUnkeyed.push(f),
-        onSome: (key) => oldByKey.set(key, f),
-      });
-    }
-
-    const newFibers: Fiber[] = [];
-
-    for (const element of elements) {
-      let matchedOldOpt: Option.Option<Fiber> = Option.none();
-      const keyOpt = getKey(element.props as { [key: string]: unknown } | undefined);
-
-      // Try to match by key first
-      matchedOldOpt = Option.match(keyOpt, {
-        onNone: () => Option.none(),
-        onSome: (key) => {
-          const maybe = Option.fromNullable(oldByKey.get(key));
-          Option.match(maybe, {
-            onNone: () => {},
-            onSome: () => oldByKey.delete(key),
-          });
-          return maybe;
-        },
-      });
+    // Match each element against old fibers by key, then by type
+    const matchOldFiber = (element: VElement): Option.Option<Fiber> => {
+      // Try keyed match first
+      const keyMatch = getKey(element.props).pipe(
+        Option.flatMap((key) => {
+          const found = Option.fromNullable(oldByKey.get(key));
+          found.pipe(Option.map(() => oldByKey.delete(key)));
+          return found;
+        }),
+      );
+      if (Option.isSome(keyMatch)) return keyMatch;
 
       // Fall back to type matching for unkeyed elements
-      if (Option.isNone(matchedOldOpt)) {
-        const idx = oldUnkeyed.findIndex((f) =>
-          Option.match(f.type, {
-            onNone: () => false,
-            onSome: (fType) => fType === element.type,
-          }),
-        );
-        if (idx >= 0) {
-          matchedOldOpt = Option.some(oldUnkeyed[idx]);
-          oldUnkeyed.splice(idx, 1);
-        }
+      const idx = oldUnkeyed.findIndex((f) =>
+        f.type.pipe(
+          Option.map((fType) => fType === element.type),
+          Option.getOrElse(() => false),
+        ),
+      );
+      if (idx >= 0) {
+        const matched = oldUnkeyed[idx];
+        oldUnkeyed.splice(idx, 1);
+        return Option.some(matched);
       }
+      return Option.none();
+    };
 
-      // Create new fiber based on match
-      const newFiber = yield* Option.match(matchedOldOpt, {
-        onNone: () =>
-          Effect.succeed(
-            createFiber(
-              Option.some(element.type),
-              element.props,
-              Option.some(wipFiber),
-              Option.none(),
-              Option.some("PLACEMENT" as const),
-            ),
-          ),
-        onSome: (matched) =>
-          Effect.gen(function* () {
-            const typeMatches = Option.match(matched.type, {
-              onNone: () => false,
-              onSome: (mType) => mType === element.type,
-            });
+    // Reconcile each element against its matched old fiber
+    const newFibers = yield* Effect.forEach(elements, (element) => {
+      const matchedOldOpt = matchOldFiber(element);
 
-            if (typeMatches) {
-              // UPDATE - reuse DOM, update props
-              const fiber = createFiber(
-                matched.type,
-                element.props,
-                Option.some(wipFiber),
-                matchedOldOpt,
-                Option.some("UPDATE" as const),
-              );
-              fiber.dom = matched.dom;
-              fiber.boundary = matched.boundary;
-              fiber.suspense = matched.suspense;
-              return fiber;
-            } else {
-              // Type changed - delete old, create new
-              matched.effectTag = Option.some("DELETION" as const);
-              yield* Ref.update(stateRef, (s: FiberState) => ({
-                ...s,
-                deletions: [...s.deletions, matched],
-              }));
-
-              return createFiber(
+      return matchedOldOpt.pipe(
+        Option.match({
+          onNone: () =>
+            Effect.succeed(
+              createFiber(
                 Option.some(element.type),
                 element.props,
                 Option.some(wipFiber),
                 Option.none(),
                 Option.some("PLACEMENT" as const),
+              ),
+            ),
+          onSome: (matched) =>
+            Effect.gen(function* () {
+              const typeMatches = matched.type.pipe(
+                Option.map((mType) => mType === element.type),
+                Option.getOrElse(() => false),
               );
-            }
-          }),
-      });
 
-      newFibers.push(newFiber);
-    }
+              if (typeMatches) {
+                // UPDATE - reuse DOM, update props
+                const fiber = createFiber(
+                  matched.type,
+                  element.props,
+                  Option.some(wipFiber),
+                  matchedOldOpt,
+                  Option.some("UPDATE" as const),
+                );
+                fiber.dom = matched.dom;
+                fiber.boundary = matched.boundary;
+                fiber.suspense = matched.suspense;
+                return fiber;
+              } else {
+                // Type changed - delete old, create new
+                matched.effectTag = Option.some("DELETION" as const);
+                yield* Ref.update(stateRef, (s: FiberState) => ({
+                  ...s,
+                  deletions: [...s.deletions, matched],
+                }));
+
+                return createFiber(
+                  Option.some(element.type),
+                  element.props,
+                  Option.some(wipFiber),
+                  Option.none(),
+                  Option.some("PLACEMENT" as const),
+                );
+              }
+            }),
+        }),
+      );
+    });
 
     // Mark leftover old fibers for deletion
     const leftovers = [...oldByKey.values(), ...oldUnkeyed];
@@ -1268,7 +1217,7 @@ const deleteFiber = (fiber: Fiber): Effect.Effect<void, never, never> =>
   Effect.gen(function* () {
     // Close component scope (unless fiber is parked - its scope must stay alive)
     if (!fiber.isParked && Option.isSome(fiber.componentScope)) {
-      yield* Scope.close(fiber.componentScope.value as Scope.Scope.Closeable, Exit.void);
+      yield* Scope.close(fiber.componentScope.value, Exit.void);
     }
 
     // Recursively delete children
@@ -1499,8 +1448,8 @@ export const renderFiber = (element: VElement, container: HTMLElement) =>
 
     yield* workLoop(runtime);
 
-    // Keep runtime alive
-    return yield* Effect.never;
+    // Process re-render requests from the Mailbox (runs forever)
+    return yield* renderMailboxConsumer(runtime);
   });
 
 // =============================================================================
@@ -1600,8 +1549,8 @@ export const hydrateFiber = (element: VElement, container: HTMLElement) =>
       deletions: [],
     }));
 
-    // Keep runtime alive
-    return yield* Effect.never;
+    // Process re-render requests from the Mailbox (runs forever)
+    return yield* renderMailboxConsumer(runtime);
   });
 
 /**
@@ -1615,27 +1564,22 @@ const hydrateChildren = (
   runtime: FibraeRuntime,
 ): Effect.Effect<Option.Option<Node>, unknown, FibraeRuntime> =>
   Effect.gen(function* () {
-    let cursor = startCursor;
-    const fibers: Fiber[] = [];
+    // Walk vElements and DOM cursor together using Effect.reduce
+    const { fibers, cursor } = yield* Effect.reduce(
+      vElements,
+      { fibers: [] as Fiber[], cursor: startCursor },
+      (acc, vElement) => {
+        if (Option.isNone(acc.cursor)) return Effect.succeed(acc);
+        return Effect.map(
+          hydrateElement(parentFiber, vElement, acc.cursor.value, runtime),
+          ({ fiber, nextCursor }) => ({
+            fibers: [...acc.fibers, fiber],
+            cursor: nextCursor,
+          }),
+        );
+      },
+    );
 
-    for (const vElement of vElements) {
-      if (Option.isNone(cursor)) {
-        // No more DOM nodes — remaining vElements were not in SSR output.
-        // Skip them during hydration; they'll be picked up on first re-render.
-        break;
-      }
-
-      const { fiber, nextCursor } = yield* hydrateElement(
-        parentFiber,
-        vElement,
-        cursor.value,
-        runtime,
-      );
-      fibers.push(fiber);
-      cursor = nextCursor;
-    }
-
-    // Link fibers
     linkFibersAsSiblings(fibers, parentFiber);
 
     return cursor;
@@ -1652,6 +1596,24 @@ const hydrateElement = (
   runtime: FibraeRuntime,
 ): Effect.Effect<{ fiber: Fiber; nextCursor: Option.Option<Node> }, unknown, FibraeRuntime> =>
   Effect.gen(function* () {
+    // Detect hydration mismatch: VElement type vs DOM node tag
+    if (typeof vElement.type === "string" && vElement.type !== "TEXT_ELEMENT" && vElement.type !== "FRAGMENT" && vElement.type !== "SUSPENSE" && vElement.type !== "BOUNDARY") {
+      if (domNode.nodeType === Node.ELEMENT_NODE) {
+        const expected = vElement.type.toUpperCase();
+        const actual = (domNode as Element).tagName;
+        if (expected !== actual) {
+          yield* Effect.logError(
+            `Hydration mismatch: expected <${vElement.type}> but found <${actual.toLowerCase()}>. ` +
+            `SSR and client component trees differ.`
+          );
+        }
+      } else if (domNode.nodeType === Node.TEXT_NODE) {
+        yield* Effect.logError(
+          `Hydration mismatch: expected <${vElement.type}> but found text node "${domNode.textContent?.substring(0, 30)}". ` +
+          `SSR and client component trees differ.`
+        );
+      }
+    }
     const fiber = createFiber(
       Option.some(vElement.type),
       vElement.props,
@@ -1729,21 +1691,19 @@ const hydrateElement = (
         // Fallback: remove fallback DOM and render Suspense fresh
         const parent = domNode.parentNode as HTMLElement;
 
-        // Collect nodes between markers
-        const nodesToRemove: Node[] = [domNode];
-        let scan: Node | null = domNode.nextSibling;
-        let closingMarker: Node | null = null;
-        while (scan) {
-          nodesToRemove.push(scan);
-          if (
-            scan.nodeType === Node.COMMENT_NODE &&
-            (scan as Comment).data.includes("/fibrae:sus")
-          ) {
-            closingMarker = scan;
-            break;
+        // Collect nodes between markers using a scan loop
+        const { nodesToRemove, closingMarker } = (() => {
+          const nodes: Node[] = [domNode];
+          let current: Node | null = domNode.nextSibling;
+          while (current) {
+            nodes.push(current);
+            if (current.nodeType === Node.COMMENT_NODE && (current as Comment).data.includes("/fibrae:sus")) {
+              return { nodesToRemove: nodes, closingMarker: current };
+            }
+            current = current.nextSibling;
           }
-          scan = scan.nextSibling;
-        }
+          return { nodesToRemove: nodes, closingMarker: null as Node | null };
+        })();
 
         // Cursor after the closing marker
         nextCursor = closingMarker
@@ -1751,9 +1711,7 @@ const hydrateElement = (
           : Option.none();
 
         // Remove fallback DOM
-        for (const node of nodesToRemove) {
-          parent.removeChild(node);
-        }
+        nodesToRemove.forEach((node) => parent.removeChild(node));
 
         // Mark as showing fallback initially, then reconcile children
         // (the normal render path will handle the Suspense race)
@@ -1817,7 +1775,7 @@ const hydrateFunctionComponent = (
 ): Effect.Effect<Option.Option<Node>, unknown, FibraeRuntime> =>
   Effect.gen(function* () {
     // Capture current context during render phase for event handlers in commit phase
-    const currentContext = (yield* FiberRef.get(FiberRef.currentContext)) as Context.Context<any>;
+    const currentContext = yield* FiberRef.get(FiberRef.currentContext);
     fiber.renderContext = Option.some(currentContext);
 
     // Create scope for this component FIRST so it's available in context
@@ -1829,7 +1787,7 @@ const hydrateFunctionComponent = (
     );
 
     // Set up atom tracking
-    const accessedAtoms = new Set<Atom.Atom<any>>();
+    const accessedAtoms = new Set<Atom.Atom<unknown>>();
     const accessedLiveAtoms = new Set<LiveAtom<any>>();
     const trackingRegistry = makeTrackingRegistry(runtime.registry, accessedAtoms, accessedLiveAtoms);
     fiber.accessedAtoms = Option.some(accessedAtoms);

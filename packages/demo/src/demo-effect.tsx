@@ -14,7 +14,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
-import { render, Atom, AtomRegistry } from "fibrae";
+import { render, Atom } from "fibrae";
 import {
   Route,
   Router,
@@ -95,7 +95,6 @@ const HomePage = () => (
 
 const CounterPage = () =>
   Effect.gen(function*() {
-    const registry = yield* AtomRegistry.AtomRegistry;
     const count = yield* Atom.get(counterAtom);
 
     return (
@@ -105,17 +104,17 @@ const CounterPage = () =>
         <div style="display: flex; gap: 0.5rem;">
           <button
             data-cy="counter-increment"
-            onClick={() => registry.update(counterAtom, (n: number) => n + 1)}
+            onClick={() => Atom.update(counterAtom, (n: number) => n + 1)}
           >
             +
           </button>
           <button
             data-cy="counter-decrement"
-            onClick={() => registry.update(counterAtom, (n: number) => n - 1)}
+            onClick={() => Atom.update(counterAtom, (n: number) => n - 1)}
           >
             -
           </button>
-          <button data-cy="counter-reset" onClick={() => registry.set(counterAtom, 0)}>
+          <button data-cy="counter-reset" onClick={() => Atom.set(counterAtom, 0)}>
             Reset
           </button>
         </div>
@@ -131,7 +130,6 @@ const TodoItem = ({
   onRemove: (id: number) => void;
 }) =>
   Effect.gen(function*() {
-    const registry = yield* AtomRegistry.AtomRegistry;
     const completedAtom = todoCompletedAtom(todo.id);
     const isCompleted = yield* Atom.get(completedAtom);
 
@@ -144,7 +142,7 @@ const TodoItem = ({
           data-cy="todo-checkbox"
           type="checkbox"
           checked={isCompleted}
-          onChange={() => registry.update(completedAtom, (v: boolean) => !v)}
+          onChange={() => Atom.update(completedAtom, (v: boolean) => !v)}
         />
         <span
           data-cy="todo-text"
@@ -163,17 +161,15 @@ let nextTodoId = 1;
 
 const TodosPage = () =>
   Effect.gen(function*() {
-    const registry = yield* AtomRegistry.AtomRegistry;
     const todoList = yield* Atom.get(todosAtom);
 
     const addTodo = (text: string) => {
       const id = nextTodoId++;
-      registry.update(todosAtom, (list) => [...list, { id, text }]);
+      return Atom.update(todosAtom, (list) => [...list, { id, text }]);
     };
 
-    const removeTodo = (id: number) => {
-      registry.update(todosAtom, (list) => list.filter((t) => t.id !== id));
-    };
+    const removeTodo = (id: number) =>
+      Atom.update(todosAtom, (list) => list.filter((t) => t.id !== id));
 
     return (
       <div class="page">
@@ -184,8 +180,9 @@ const TodosPage = () =>
             const form = e.currentTarget as HTMLFormElement;
             const input = form.elements.namedItem("todoInput") as HTMLInputElement;
             if (input.value.trim()) {
-              addTodo(input.value.trim());
+              const effect = addTodo(input.value.trim());
               form.reset();
+              return effect;
             }
           }}
         >

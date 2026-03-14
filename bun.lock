@@ -53,7 +53,7 @@
     },
     "packages/fibrae": {
       "name": "fibrae",
-      "version": "0.2.0",
+      "version": "0.2.3",
       "devDependencies": {
         "@effect/language-service": "catalog:",
         "typescript": "catalog:",
@@ -66,6 +66,24 @@
       "peerDependencies": {
         "@effect-atom/atom": "catalog:",
         "effect": "catalog:",
+      },
+    },
+    "packages/fibrae-cli": {
+      "name": "fibrae-cli",
+      "version": "0.0.1",
+      "bin": {
+        "fibrae": "./dist/cli.js",
+      },
+      "dependencies": {
+        "fibrae": "workspace:*",
+      },
+      "devDependencies": {
+        "typescript": "catalog:",
+        "vite": "npm:rolldown-vite@7.1.14",
+      },
+      "peerDependencies": {
+        "effect": "catalog:",
+        "vite": "*",
       },
     },
   },
@@ -646,6 +664,8 @@
     "fdir": ["fdir@6.5.0", "", { "peerDependencies": { "picomatch": "^3 || ^4" }, "optionalPeers": ["picomatch"] }, "sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg=="],
 
     "fibrae": ["fibrae@workspace:packages/fibrae"],
+
+    "fibrae-cli": ["fibrae-cli@workspace:packages/fibrae-cli"],
 
     "figures": ["figures@3.2.0", "", { "dependencies": { "escape-string-regexp": "^1.0.5" } }, "sha512-yaduQFRKLXYOGgEn6AZau90j3ggSOyiqXU0F9JZfeXYhNa+Jk4X+s45A2zg5jns87GAFa34BBm2kXw4XpNcbdg=="],
 

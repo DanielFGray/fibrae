@@ -6,6 +6,8 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Option from "effect/Option";
 import * as Context from "effect/Context";
+import * as Mailbox from "effect/Mailbox";
+import * as RcMap from "effect/RcMap";
 // These imports are needed for TypeScript declaration file emission
 import type * as EffectFiber from "effect/Fiber";
 import type * as Runtime from "effect/Runtime";
@@ -26,8 +28,6 @@ export interface FiberState {
   wipRoot: Option.Option<Fiber>;
   nextUnitOfWork: Option.Option<Fiber>;
   deletions: Fiber[];
-  renderQueue: Set<Fiber>;
-  batchScheduled: boolean;
   listenerStore: WeakMap<HTMLElement, Record<string, EventListener>>;
 }
 
@@ -36,8 +36,6 @@ export const makeFiberState = (): FiberState => ({
   wipRoot: Option.none(),
   nextUnitOfWork: Option.none(),
   deletions: [],
-  renderQueue: new Set(),
-  batchScheduled: false,
   listenerStore: new WeakMap(),
 });
 
@@ -57,12 +55,27 @@ export class FibraeRuntime extends Effect.Service<FibraeRuntime>()("FibraeRuntim
 
     // Store the full context in a Ref so it can be updated after all layers are built
     // Initially empty - will be set by render() after user layers are applied
-    const fullContextRef = yield* Ref.make<Context.Context<unknown>>(
-      Context.empty() as Context.Context<unknown>,
-    );
+    const fullContextRef = yield* Ref.make(Context.empty());
 
     // Each render tree gets its own fiber state
     const fiberState = yield* Ref.make(makeFiberState());
+
+    // Mailbox for batching re-render requests (replaces manual Set + queueMicrotask)
+    const renderMailbox = yield* Mailbox.make<Fiber>();
+
+    // Reference-counted SSE connections: shared EventSources keyed by URL.
+    // Automatically closes EventSource when last consumer releases.
+    const sseWithCredentials = yield* Ref.make(false);
+    const sseConnections = yield* RcMap.make({
+      lookup: (url: string) =>
+        Effect.gen(function* () {
+          const withCredentials = yield* Ref.get(sseWithCredentials);
+          return yield* Effect.acquireRelease(
+            Effect.sync(() => new EventSource(url, { withCredentials })),
+            (es) => Effect.sync(() => es.close()),
+          );
+        }),
+    });
 
     const AtomOps = {
       get: <A>(atom: Atom.Atom<A>): A => registry.get(atom),
@@ -92,6 +105,9 @@ export class FibraeRuntime extends Effect.Service<FibraeRuntime>()("FibraeRuntim
       AtomOps,
       fiberState,
       fullContextRef,
+      renderMailbox,
+      sseConnections,
+      sseWithCredentials,
     };
   }),
 }) {

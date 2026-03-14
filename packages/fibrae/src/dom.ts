@@ -53,7 +53,7 @@ export const propertyUpdateMap: Record<
 
 export const isEvent = (key: string) => key.startsWith("on");
 export const isProperty = (key: string) =>
-  key !== "children" && key !== "ref" && key !== "key" && !isEvent(key);
+  key !== "children" && key !== "ref" && key !== "key" && key !== "dangerouslySetInnerHTML" && !isEvent(key);
 
 const unitlessProperties = new Set([
   "animationIterationCount", "boxFlex", "boxFlexGroup", "boxOrdinalGroup",
@@ -136,31 +136,29 @@ export const attachEventListeners = (
   runtime: FibraeRuntime,
   onError?: (error: EventHandlerError) => Effect.Effect<unknown, never, unknown>,
 ): void => {
-  for (const [key, handler] of Object.entries(props)) {
-    if (isEvent(key) && typeof handler === "function") {
+  Object.entries(props)
+    .filter(([key, handler]) => isEvent(key) && typeof handler === "function")
+    .forEach(([key, handler]) => {
       const eventType = key.toLowerCase().substring(2);
 
       el.addEventListener(eventType, (event: Event) => {
         const result = (handler as (e: Event) => unknown)(event);
 
         if (Effect.isEffect(result)) {
-          // Use runForkWithRuntime to get the full application context
+          if (eventType === "submit") {
+            event.preventDefault();
+          }
           const effectWithErrorHandling = result.pipe(
             Effect.catchAllCause((cause) => {
-              // Convert to EventHandlerError with the event type
               const error = new EventHandlerError({
                 cause: Cause.squash(cause),
                 eventType,
               });
-              if (onError) {
-                return onError(error);
-              }
-              return Effect.logError("Event handler error", error);
+              return onError ? onError(error) : Effect.logError("Event handler error", error);
             }),
           );
           runForkWithRuntime(runtime)(effectWithErrorHandling);
         }
       });
-    }
-  }
+    });
 };

@@ -88,7 +88,7 @@ export interface HistoryService {
 /**
  * History service tag for Effect dependency injection.
  */
-export class History extends Context.Tag("fibrae/History")<History, HistoryService>() {}
+export class History extends Context.Tag("fibrae/History")<History, HistoryService>() { }
 
 // =============================================================================
 // Browser History Implementation
@@ -142,7 +142,7 @@ function parseLocation(path: string, state?: unknown): HistoryLocation {
 export const BrowserHistoryLive: Layer.Layer<History, never, AtomRegistry.AtomRegistry> =
   Layer.scoped(
     History,
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const registry = yield* AtomRegistry.AtomRegistry;
 
       // Create location atom with initial browser location
@@ -247,7 +247,7 @@ export function MemoryHistoryLive(
 ): Layer.Layer<History, never, AtomRegistry.AtomRegistry> {
   return Layer.scoped(
     History,
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const registry = yield* AtomRegistry.AtomRegistry;
 
       // Create location atom with initial location
@@ -328,7 +328,7 @@ export const getLocation: Effect.Effect<
   HistoryLocation,
   never,
   History | AtomRegistry.AtomRegistry
-> = Effect.gen(function* () {
+> = Effect.gen(function*() {
   const history = yield* History;
   return yield* Atom.get(history.location);
 });
@@ -340,7 +340,7 @@ export const push = (
   path: string,
   state?: unknown,
 ): Effect.Effect<void, never, History | AtomRegistry.AtomRegistry> =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const history = yield* History;
     yield* history.push(path, state);
   });
@@ -352,7 +352,7 @@ export const replace = (
   path: string,
   state?: unknown,
 ): Effect.Effect<void, never, History | AtomRegistry.AtomRegistry> =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const history = yield* History;
     yield* history.replace(path, state);
   });
@@ -361,7 +361,7 @@ export const replace = (
  * Go back in history.
  */
 /* is-tree-shakable-suppress */
-export const back: Effect.Effect<void, never, History> = Effect.gen(function* () {
+export const back: Effect.Effect<void, never, History> = Effect.gen(function*() {
   const history = yield* History;
   yield* history.back;
 });
@@ -370,7 +370,7 @@ export const back: Effect.Effect<void, never, History> = Effect.gen(function* ()
  * Go forward in history.
  */
 /* is-tree-shakable-suppress */
-export const forward: Effect.Effect<void, never, History> = Effect.gen(function* () {
+export const forward: Effect.Effect<void, never, History> = Effect.gen(function*() {
   const history = yield* History;
   yield* history.forward;
 });
@@ -379,16 +379,7 @@ export const forward: Effect.Effect<void, never, History> = Effect.gen(function*
  * Go n entries in history.
  */
 export const go = (n: number): Effect.Effect<void, never, History> =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const history = yield* History;
     yield* history.go(n);
   });
-
-/**
- * SPA-safe navigation without access to the Effect runtime.
- * Uses pushState + synthetic popstate so BrowserHistoryLive picks up the change.
- */
-export function navigateTo(url: string): void {
-  window.history.pushState(null, "", url);
-  window.dispatchEvent(new PopStateEvent("popstate"));
-}

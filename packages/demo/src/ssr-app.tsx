@@ -22,7 +22,7 @@ export const countAtom = Atom.make(0).pipe(
 export const Counter = () => {
   return Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;
-    const count = registry.get(countAtom);
+    const count = yield* Atom.get(countAtom);
 
     return (
       <div data-cy="ssr-counter">
@@ -110,12 +110,12 @@ export const TodoList = () =>
     const registry = yield* AtomRegistry.AtomRegistry;
 
     // Initialize atom with SSR todos on first render
-    const currentTodos = registry.get(todosAtom);
+    const currentTodos = yield* Atom.get(todosAtom);
     if (currentTodos.length === 0 && _initialTodos.length > 0) {
       registry.set(todosAtom, _initialTodos);
     }
 
-    const todos = registry.get(todosAtom);
+    const todos = yield* Atom.get(todosAtom);
 
     const addTodo = (text: string) =>
       Effect.sync(() => {
@@ -206,7 +206,7 @@ export const suspenseClickAtom = Atom.make(0).pipe(
 const ResolvedContent = () =>
   Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;
-    const clicks = registry.get(suspenseClickAtom);
+    const clicks = yield* Atom.get(suspenseClickAtom);
 
     return (
       <div data-cy="ssr-suspense-content">
@@ -256,7 +256,7 @@ export const slowSuspenseClickAtom = Atom.make(0).pipe(
 const SlowContent = () =>
   Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;
-    const clicks = registry.get(slowSuspenseClickAtom);
+    const clicks = yield* Atom.get(slowSuspenseClickAtom);
 
     return (
       <div data-cy="ssr-slow-content">

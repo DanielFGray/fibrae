@@ -17,8 +17,8 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import { History, type HistoryLocation } from "./History.js";
-import type { Route } from "./Route.js";
 import type { Router } from "./Router.js";
+import { parseSearchParams, buildSearchString, stripBasePath, findRouteByName, groupBasePath } from "./utils.js";
 
 // =============================================================================
 // Types
@@ -107,45 +107,7 @@ export class Navigator extends Context.Tag("fibrae/Navigator")<Navigator, Naviga
 /**
  * Parse search params from URL search string.
  */
-function parseSearchParams(search: string): Record<string, string> {
-  const params: Record<string, string> = {};
-  const searchParams = new URLSearchParams(search);
-  searchParams.forEach((value, key) => {
-    params[key] = value;
-  });
-  return params;
-}
-
-/**
- * Build search string from params object.
- */
-function buildSearchString(params: Record<string, unknown>): string {
-  const searchParams = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null) {
-      searchParams.set(key, String(value));
-    }
-  }
-  const str = searchParams.toString();
-  return str ? `?${str}` : "";
-}
-
-/**
- * Strip basePath prefix from pathname for route matching.
- */
-function stripBasePath(pathname: string, basePath: string): string {
-  if (!basePath || basePath === "/") {
-    return pathname;
-  }
-  // Normalize: remove trailing slash from basePath
-  const normalizedBase = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
-  if (pathname.startsWith(normalizedBase)) {
-    const stripped = pathname.slice(normalizedBase.length);
-    // Ensure we return "/" not "" for root
-    return stripped || "/";
-  }
-  return pathname;
-}
+// parseSearchParams, buildSearchString, stripBasePath imported from ./utils.js
 
 /**
  * Match current location against router and return CurrentRoute.
@@ -155,36 +117,17 @@ function matchLocation(
   location: HistoryLocation,
   basePath: string = "",
 ): Option.Option<CurrentRoute> {
-  const pathname = stripBasePath(location.pathname, basePath);
-  const match = router.matchRoute(pathname);
-  if (Option.isNone(match)) {
-    return Option.none();
-  }
-
-  return Option.some({
-    routeName: match.value.route.name,
-    params: match.value.params,
-    searchParams: parseSearchParams(location.search),
-    layouts: match.value.layouts.map((l) => l.name),
-  });
+  return router.matchRoute(stripBasePath(location.pathname, basePath)).pipe(
+    Option.map(({ route, params, layouts }) => ({
+      routeName: route.name,
+      params,
+      searchParams: parseSearchParams(location.search),
+      layouts: layouts.map((l) => l.name),
+    })),
+  );
 }
 
-/**
- * Find a route by name in the router.
- * Also checks routes inside layout groups.
- */
-function findRouteByName(router: Router, name: string): Option.Option<{ route: Route; basePath: string }> {
-  for (const group of router.groups) {
-    for (const route of group.routes) {
-      if (route.name === name) {
-        // For layout groups, include the basePath for URL building
-        const basePath = group._tag === "LayoutGroup" ? group.basePath : "";
-        return Option.some({ route, basePath });
-      }
-    }
-  }
-  return Option.none();
-}
+// findRouteByName imported from ./utils.js
 
 // =============================================================================
 // Navigator Layer
@@ -247,7 +190,8 @@ export function NavigatorLive(
               return;
             }
 
-            const { route, basePath: routeBasePath } = found.value;
+            const { route, group } = found.value;
+            const routeBasePath = groupBasePath(group);
 
             // Build URL from route and params
             const pathParams = navigateOptions.path ?? ({} as Record<string, unknown>);

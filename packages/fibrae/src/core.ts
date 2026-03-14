@@ -3,7 +3,6 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as FiberRef from "effect/FiberRef";
-import * as Context from "effect/Context";
 
 import { Registry as AtomRegistry, Hydration } from "@effect-atom/atom";
 import { type VElement } from "./shared.js";
@@ -22,9 +21,7 @@ const renderCore = (element: VElement, container: HTMLElement) =>
 
     // Capture the full context NOW (after all layers are built) and store it in runtime
     // This ensures user-provided services like Navigator are available for forked effects
-    const fullContext = (yield* FiberRef.get(
-      FiberRef.currentContext,
-    )) as Context.Context<unknown>;
+    const fullContext = yield* FiberRef.get(FiberRef.currentContext);
     yield* Ref.set(runtime.fullContextRef, fullContext);
 
     // Auto-discover and hydrate atoms from the HydrationState service
@@ -33,13 +30,13 @@ const renderCore = (element: VElement, container: HTMLElement) =>
       Hydration.hydrate(registry, hydrationState);
     }
 
-    // If container has element children, use hydration mode
-    // (skip whitespace-only text nodes that may exist in pre-rendered HTML)
-    const firstElementChild = container.firstElementChild;
-    if (firstElementChild) {
+    // If SSR produced unresolved BOUNDARY elements (Suspense couldn't resolve
+    // Effect components due to missing services), skip hydration and mount fresh.
+    const hasBoundaries = container.querySelector("BOUNDARY") !== null;
+    if (container.firstElementChild && !hasBoundaries) {
       return yield* hydrateFiber(element, container);
     } else {
-      // Fresh render - create new DOM using fiber-based reconciliation
+      container.innerHTML = "";
       return yield* renderFiber(element, container);
     }
   });

@@ -21,9 +21,10 @@ import * as Data from "effect/Data";
 import { Registry as AtomRegistry } from "@effect-atom/atom";
 import { History, MemoryHistoryLive, type HistoryLocation } from "./History.js";
 import { Navigator, NavigatorLive } from "./Navigator.js";
-import { RouterHandlers } from "./RouterBuilder.js";
+import { RouterHandlers, type HeadData } from "./RouterBuilder.js";
 import { RouterStateAtom } from "./RouterState.js";
 import type { VElement } from "../shared.js";
+import { parseSearchParams, stripBasePath } from "./utils.js";
 
 /**
  * Router error for route matching and navigation failures.
@@ -167,42 +168,33 @@ export function make<const Name extends string>(name: Name): Router<Name> {
       };
     },
     matchRoute(pathname: string): Option.Option<RouteMatch> {
-      // Try to match against each route in each group
-      for (const g of this.groups) {
+      const tryMatchGroup = (g: AnyGroup): Option.Option<RouteMatch> => {
         if (g._tag === "LayoutGroup") {
-          // For layout groups, check if pathname starts with basePath
-          const layoutGroup = g as LayoutGroup;
-          if (pathname.startsWith(layoutGroup.basePath)) {
-            // Get the remaining path after the base
-            const remainingPath = pathname.slice(layoutGroup.basePath.length) || "/";
+          if (!pathname.startsWith(g.basePath)) return Option.none();
+          const remainingPath = pathname.slice(g.basePath.length) || "/";
+          return tryMatchRoutes(g.routes, remainingPath, g.name, [g]);
+        }
+        return tryMatchRoutes(g.routes, pathname, g.name, []);
+      };
 
-            // Try to match child routes against remaining path
-            for (const route of layoutGroup.routes) {
-              const match = route.match(remainingPath);
-              if (Option.isSome(match)) {
-                return Option.some({
-                  groupName: layoutGroup.name,
-                  route,
-                  params: match.value,
-                  layouts: [layoutGroup],
-                });
-              }
-            }
-          }
-        } else {
-          // Regular route group - match directly
-          for (const route of g.routes) {
-            const match = route.match(pathname);
-            if (Option.isSome(match)) {
-              return Option.some({
-                groupName: g.name,
-                route,
-                params: match.value,
-                layouts: [],
-              });
-            }
+      const tryMatchRoutes = (
+        routes: readonly Route[],
+        path: string,
+        groupName: string,
+        layouts: readonly LayoutGroup[],
+      ): Option.Option<RouteMatch> => {
+        for (const route of routes) {
+          const match = route.match(path);
+          if (Option.isSome(match)) {
+            return Option.some({ groupName, route, params: match.value, layouts });
           }
         }
+        return Option.none();
+      };
+
+      for (const g of this.groups) {
+        const result = tryMatchGroup(g);
+        if (Option.isSome(result)) return result;
       }
       return Option.none();
     },
@@ -273,40 +265,8 @@ export interface SSRRouteResult {
  */
 export class CurrentRouteElement extends Context.Tag("fibrae/CurrentRouteElement")<
   CurrentRouteElement,
-  { readonly element: VElement; readonly state: DehydratedRouterState }
+  { readonly element: VElement; readonly state: DehydratedRouterState; readonly head: Option.Option<HeadData> }
 >() {}
-
-/**
- * Parse search params from URL search string.
- */
-function parseSearchParams(search: string): Record<string, string> {
-  const params: Record<string, string> = {};
-  const searchString = search.startsWith("?") ? search.slice(1) : search;
-  if (!searchString) return params;
-
-  const searchParams = new URLSearchParams(searchString);
-  searchParams.forEach((value, key) => {
-    params[key] = value;
-  });
-  return params;
-}
-
-/**
- * Strip basePath prefix from pathname for route matching.
- */
-function stripBasePath(pathname: string, basePath: string): string {
-  if (!basePath || basePath === "/") {
-    return pathname;
-  }
-  // Normalize: remove trailing slash from basePath
-  const normalizedBase = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
-  if (pathname.startsWith(normalizedBase)) {
-    const stripped = pathname.slice(normalizedBase.length);
-    // Ensure we return "/" not "" for root
-    return stripped || "/";
-  }
-  return pathname;
-}
 
 /**
  * Create a server-side layer for SSR rendering.
@@ -390,10 +350,16 @@ export function serverLayer(
         loaderData,
       };
 
+      // Execute head() if defined
+      const head = yield* Option.match(handler.value.head, {
+        onNone: () => Effect.succeedNone,
+        onSome: (fn) => fn({ loaderData, params, searchParams }).pipe(Effect.asSome),
+      });
+
       // Set RouterStateAtom so it gets included in dehydrated state
       registry.set(RouterStateAtom, Option.some(state));
 
-      return { element, state };
+      return { element, state, head };
     }),
   );
 
@@ -554,7 +520,17 @@ export function browserLayer(
           loaderData: state.loaderData,
         };
 
-        return { element, state: dehydratedState };
+        // Execute head on client too (for title updates etc.)
+        const head = yield* Option.match(handler.value.head, {
+          onNone: () => Effect.succeedNone,
+          onSome: (fn) => fn({
+            loaderData: state.loaderData,
+            params: state.params,
+            searchParams: state.searchParams,
+          }).pipe(Effect.asSome),
+        });
+
+        return { element, state: dehydratedState, head };
       }
 
       // Non-hydration mode: match and run loader
@@ -591,10 +567,15 @@ export function browserLayer(
         loaderData,
       };
 
+      const head = yield* Option.match(handler.value.head, {
+        onNone: () => Effect.succeedNone,
+        onSome: (fn) => fn({ loaderData, params, searchParams }).pipe(Effect.asSome),
+      });
+
       // Set RouterStateAtom for DI access
       registry.set(RouterStateAtom, Option.some(state));
 
-      return { element, state };
+      return { element, state, head };
     }),
   );
 

@@ -35,7 +35,6 @@ const isSearchingAtom = Atom.make(false);
 const Counter = ({ label }: { label: string }) =>
   Effect.gen(function* () {
     const value = yield* Atom.get(counterAtom(label));
-    const registry = yield* AtomRegistry.AtomRegistry;
 
     return (
       <div data-cy="example-counter">
@@ -43,17 +42,17 @@ const Counter = ({ label }: { label: string }) =>
         <p data-cy="counter-value">Count: {value}</p>
         <button
           data-cy="counter-increment"
-          onClick={() => registry.update(counterAtom(label), (n: number) => n + 1)}
+          onClick={() => Atom.update(counterAtom(label), (n: number) => n + 1)}
         >
           +
         </button>
         <button
           data-cy="counter-decrement"
-          onClick={() => registry.update(counterAtom(label), (n: number) => n - 1)}
+          onClick={() => Atom.update(counterAtom(label), (n: number) => n - 1)}
         >
           -
         </button>
-        <button data-cy="counter-reset" onClick={() => registry.set(counterAtom(label), 0)}>
+        <button data-cy="counter-reset" onClick={() => Atom.set(counterAtom(label), 0)}>
           Reset
         </button>
       </div>

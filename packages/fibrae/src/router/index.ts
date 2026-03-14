@@ -35,13 +35,17 @@ export type {
   GroupHandlers,
   LayoutGroupHandlers,
   LayoutHandler,
+  PrerenderRoute,
+  HeadData,
+  HeadContext,
+  MetaDescriptor,
 } from "./RouterBuilder.js";
 
-export { RouterHandlers } from "./RouterBuilder.js";
+export { RouterHandlers, getPrerenderRoutes } from "./RouterBuilder.js";
 
 // Re-export History types and service tag
 export type { HistoryLocation, HistoryService } from "./History.js";
-export { History as HistoryTag, BrowserHistoryLive, MemoryHistoryLive, navigateTo } from "./History.js";
+export { History as HistoryTag, BrowserHistoryLive, MemoryHistoryLive } from "./History.js";
 
 // Re-export Navigator types and service tag
 export type { CurrentRoute, NavigateOptions, NavigatorService } from "./Navigator.js";

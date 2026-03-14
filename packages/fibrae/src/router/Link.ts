@@ -15,9 +15,9 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import { Navigator } from "./Navigator.js";
-import type { Route } from "./Route.js";
 import type { Router } from "./Router.js";
 import type { VElement, VChild } from "../shared.js";
+import { findRouteByName, groupBasePath, buildSearchString } from "./utils.js";
 // Note: We don't use h() here because props.children is already normalized
 // by the JSX runtime. Using h() would double-process the children.
 
@@ -52,34 +52,6 @@ export interface LinkProps {
 // =============================================================================
 
 /**
- * Find a route by name in the router.
- */
-function findRouteByName(router: Router, name: string): Option.Option<Route> {
-  for (const group of router.groups) {
-    for (const route of group.routes) {
-      if (route.name === name) {
-        return Option.some(route);
-      }
-    }
-  }
-  return Option.none();
-}
-
-/**
- * Build search string from params object.
- */
-function buildSearchString(params: Record<string, unknown>): string {
-  const searchParams = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null) {
-      searchParams.set(key, String(value));
-    }
-  }
-  const str = searchParams.toString();
-  return str ? `?${str}` : "";
-}
-
-/**
  * Build the href for a route with params.
  */
 function buildHref(
@@ -89,14 +61,14 @@ function buildHref(
   search?: Record<string, unknown>,
   basePath: string = "",
 ): string {
-  const route = findRouteByName(router, routeName);
-  if (Option.isNone(route)) {
-    return "#";
-  }
-
-  const pathname = route.value.interpolate(params ?? {});
-  const searchString = search ? buildSearchString(search) : "";
-  return `${basePath}${pathname}${searchString}`;
+  return findRouteByName(router, routeName).pipe(
+    Option.map(({ route, group }) => {
+      const pathname = route.interpolate(params ?? {});
+      const searchString = search ? buildSearchString(search) : "";
+      return `${basePath}${groupBasePath(group)}${pathname}${searchString}`;
+    }),
+    Option.getOrElse(() => "#"),
+  );
 }
 
 // =============================================================================

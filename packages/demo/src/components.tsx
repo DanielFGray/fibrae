@@ -15,7 +15,7 @@ export const Counter = ({ label }: { label: string }) =>
   Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;
     const count = counterAtom(label); // Get cached atom for this label
-    const value = registry.get(count);
+    const value = yield* Atom.get(count);
 
     return (
       <div

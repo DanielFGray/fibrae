@@ -9,7 +9,7 @@ const countAtom = Atom.make(0);
 const Counter = () =>
   Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;
-    const count = registry.get(countAtom);
+    const count = yield* Atom.get(countAtom);
 
     return (
       <div>

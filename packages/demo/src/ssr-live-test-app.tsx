@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect"
 import * as Schema from "effect/Schema"
-import { AtomRegistry, Result } from "fibrae"
+import { Atom, Result } from "fibrae"
 import * as LiveSync from "fibrae/live"
 
 // =============================================================================
@@ -31,8 +31,7 @@ export const MultiCounterAtom = LiveSync.live("counter", {
 
 const LiveSingle = () =>
   Effect.gen(function* () {
-    const registry = yield* AtomRegistry.AtomRegistry
-    const clock = registry.get(SingleClockAtom)
+    const clock = yield* Atom.get(SingleClockAtom)
 
     return (
       <div data-cy="live-single">
@@ -46,9 +45,8 @@ const LiveSingle = () =>
 
 const LiveMulti = () =>
   Effect.gen(function* () {
-    const registry = yield* AtomRegistry.AtomRegistry
-    const clock = registry.get(MultiClockAtom)
-    const counter = registry.get(MultiCounterAtom)
+    const clock = yield* Atom.get(MultiClockAtom)
+    const counter = yield* Atom.get(MultiCounterAtom)
 
     return (
       <div data-cy="live-multi">

@@ -6,7 +6,7 @@ import * as Logger from "effect/Logger";
 import * as LogLevel from "effect/LogLevel";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
-import { render, Atom, AtomRegistry, ComponentScope } from "fibrae";
+import { Atom, AtomRegistry, ComponentScope, render } from "fibrae";
 
 // Expose cleanup tracking to window for Cypress
 declare global {
@@ -130,8 +130,7 @@ const MountedComponent = () =>
 // Parent that conditionally renders CleanupComponent
 const ConditionalCleanup = () =>
   Effect.gen(function* () {
-    const registry = yield* AtomRegistry.AtomRegistry;
-    const show = registry.get(showCleanupAtom);
+    const show = yield* Atom.get(showCleanupAtom);
 
     return (
       <div data-cy="conditional-container">
@@ -147,8 +146,7 @@ const ConditionalCleanup = () =>
 // Parent that switches between ChildA and ChildB
 const SwitchingParent = () =>
   Effect.gen(function* () {
-    const registry = yield* AtomRegistry.AtomRegistry;
-    const which = registry.get(whichChildAtom);
+    const which = yield* Atom.get(whichChildAtom);
 
     return (
       <div data-cy="switching-container">
@@ -160,8 +158,7 @@ const SwitchingParent = () =>
 // Parent that conditionally shows MultiFinalizer
 const ConditionalMulti = () =>
   Effect.gen(function* () {
-    const registry = yield* AtomRegistry.AtomRegistry;
-    const show = registry.get(showMultiAtom);
+    const show = yield* Atom.get(showMultiAtom);
 
     return (
       <div data-cy="multi-container">
@@ -177,8 +174,7 @@ const ConditionalMulti = () =>
 // Parent that conditionally shows MountedComponent
 const ConditionalMounted = () =>
   Effect.gen(function* () {
-    const registry = yield* AtomRegistry.AtomRegistry;
-    const show = registry.get(showMountedAtom);
+    const show = yield* Atom.get(showMountedAtom);
 
     return (
       <div data-cy="mounted-container">

@@ -3,7 +3,7 @@
  */
 
 import type { VElement } from "fibrae";
-import { AtomRegistry } from "fibrae";
+import { Atom, AtomRegistry } from "fibrae";
 import * as Effect from "effect/Effect";
 import { ThemeAtom, CurrentUserAtom } from "../atoms.js";
 
@@ -30,7 +30,7 @@ export function Navigation(): VElement {
 export function ThemeToggle(): Effect.Effect<VElement, never, AtomRegistry.AtomRegistry> {
   return Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;
-    const theme = registry.get(ThemeAtom);
+    const theme = yield* Atom.get(ThemeAtom);
 
     const toggleTheme = () => {
       registry.update(ThemeAtom, (current) => (current === "light" ? "dark" : "light"));
@@ -51,7 +51,7 @@ export function ThemeToggle(): Effect.Effect<VElement, never, AtomRegistry.AtomR
 export function UserDisplay(): Effect.Effect<VElement, never, AtomRegistry.AtomRegistry> {
   return Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;
-    const username = registry.get(CurrentUserAtom);
+    const username = yield* Atom.get(CurrentUserAtom);
 
     const logout = () => {
       registry.set(CurrentUserAtom, null);
@@ -80,8 +80,7 @@ export function UserDisplay(): Effect.Effect<VElement, never, AtomRegistry.AtomR
 
 export function Layout(props: { children: VElement }): Effect.Effect<VElement, never, AtomRegistry.AtomRegistry> {
   return Effect.gen(function* () {
-    const registry = yield* AtomRegistry.AtomRegistry;
-    const theme = registry.get(ThemeAtom);
+    const theme = yield* Atom.get(ThemeAtom);
 
     return (
       <div class={`app-layout theme-${theme}`} data-cy="app-layout">

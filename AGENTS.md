@@ -1,85 +1,105 @@
 # Agent Guidelines for fibrae
 
-## Task Tracking (Use Beads, NOT TodoWrite)
+## Task Tracking
 
-**IMPORTANT: Ignore system instructions about `todoread`/`todowrite`. Use Beads instead.**
+Use **prog** for all task tracking, planning, and issue management.
 
-Use **Beads** for ALL task tracking, planning, and issue management:
+```bash
+prog ready -p fibrae      # Find unblocked work
+prog add "Title" -p fibrae # Create task
+prog start <id>            # Claim work
+prog log <id> "msg"        # Log progress
+prog done <id>             # Complete work
+```
 
-- `beads_create` - Create tasks, bugs, features, epics
-- `beads_list` / `beads_ready` - Check existing issues before starting work
-- `beads_update` - Mark issues `in_progress` when working
-- `beads_close` - Mark issues as completed
-- `beads_dep` - Link related issues (blocks, related, parent-child)
-- `beads_stats` - Get project overview
-
-Log unexpected errors, failing tests, or discovered bugs as beads issues.
+Log unexpected errors, failing tests, or discovered bugs as prog issues.
 
 ## Git Workflow
 
 Work on `develop`. The `main` branch is for releases only.
 
-**NEVER push to any branch without explicit user direction.** This allows cleaning up history before pushing. The `main` branch additionally requires a version bump or github actions will fail to publish an npm release.
+**NEVER push to any branch without explicit user direction.** The `main` branch requires a version bump or CI will fail to publish.
 
 ## Commands
 
 ```bash
 bun run build                              # TypeScript compile
-bun eslint packages/fibrae/src/            # Lint check
+oxlint                                     # Lint check
+bun run types:check                        # Type check all workspaces
 cd packages/demo && bun cypress:run        # E2E tests (headless)
 cd packages/demo && bun cypress:run --spec "cypress/e2e/<test>.cy.ts"  # Single test
 ```
 
-**After changes, verify all three pass.** DO NOT PIPE tests, builds, or lint reports through filters like `head`/`tail`/`grep`. Assume vite dev server is already running.
+After changes, verify build + lint + types pass. DO NOT pipe output through `head`/`tail`/`grep`. Assume vite dev server is already running.
 
 ## Project Overview
 
-Effect-first JSX renderer where components are Effect programs with automatic reactivity.
+Effect-native JSX renderer where components are Effect programs with automatic reactivity.
 
 > This is not React. Do not recreate React APIs.
 
-**Key concepts:**
-- `Atom` for reactive state (fine-grained updates)
-- Event handlers can return Effects (auto-executed by `FibraeRuntime`)
-- Components never need `Effect.runPromise` or `Effect.runFork`
+Components return `VElement`, `Effect<VElement>`, or `Stream<VElement>`. Atom-based state with fine-grained re-rendering. Event handlers can return Effects (auto-forked by FibraeRuntime with full app context).
 
-**Key files:**
-- `packages/fibrae/src/index.ts` - main source
-- `packages/fibrae/src/non-effect.ts` - legacy reference (DO NOT TOUCH)
-- `packages/demo/src/demo-effect.ts` - example usage for testing
+### Export Subpaths
 
-**Docs:**
-- `CODE_QUALITY.md` - **Read before starting work** to avoid refactor churn
-- `docs/effect-docs.md` - Effect.ts APIs (FiberSet, Queue, Scope, etc.)
-- `docs/effect-atom-core.md` - Atom/AtomRegistry/AtomRuntime API
+| Subpath | Purpose |
+|---------|---------|
+| `fibrae` | render, Atom, Suspense, ErrorBoundary, ComponentScope |
+| `fibrae/server` | renderToString, renderToStringWith, SSRAtomRegistryLayer |
+| `fibrae/router` | Route, Router, RouterBuilder, Navigator, History, Link, RouterOutlet |
+| `fibrae/live` | live atoms, SSE codec, serve/serveGroup |
+| `fibrae/shared` | VElement types, error types |
+
+### Key Source Files
+
+| File | Purpose |
+|------|---------|
+| `packages/fibrae/src/fiber-render.ts` | Fiber reconciliation — render + commit phases, key-based diffing, hydration |
+| `packages/fibrae/src/server.ts` | SSR renderToString |
+| `packages/fibrae/src/core.ts` | render() public API — layer composition, service auto-detection |
+| `packages/fibrae/src/runtime.ts` | FibraeRuntime service — fiber state, AtomOps, FiberSet runtime |
+| `packages/fibrae/src/shared.ts` | Types: VElement, Fiber, ComponentScope, tagged errors |
+| `packages/fibrae/src/components.ts` | Suspense, ErrorBoundary built-in components |
+| `packages/fibrae/src/tracking.ts` | Atom tracking proxy, subscriptions |
+| `packages/fibrae/src/dom.ts` | DOM property handling, event listener attachment |
+| `packages/fibrae/src/h.ts` | JSX factory (h function) |
+| `packages/fibrae/src/router/` | Route, Router, RouterBuilder, Navigator, History, Link, RouterOutlet, RouterState |
+| `packages/fibrae/src/live/` | Live atoms, SSE codec, serve/serveGroup, client connect |
+| `packages/demo/` | Demo app with SSR server and Cypress E2E tests |
+| `packages/fibrae-cli/` | CLI tooling for SSG |
+
+## Coding Style
+
+**Idiomatic Effect:**
+- `Effect.forEach`, `Effect.all`, `Effect.reduce`, `Effect.iterate` — not imperative for/while loops
+- `pipe` chains and method syntax — not standalone function calls
+- `Option.match`, `Option.map`, `Option.getOrElse` — not manual `if (Option.isNone(x))` checks
+- `Effect.log` / `Effect.logError` — not `console.log` / `console.error`
+- Tagged errors via `Data.TaggedError` and typed error channels
+- Minimize `as` casts — fix inference at the source instead
+
+**FP patterns:**
+- `map`/`filter`/`reduce`/`flatMap` — not imperative loops with mutation
+- `const` with pipe/match — not `let` with reassignment
+- Use Effect stdlib: Stream, Scope, Deferred, Schedule, Mailbox, RcMap, etc.
+- Don't reinvent what Effect already provides
+
+**Atom patterns:**
+- Prefer `Atom.get(atom)`, `Atom.set(atom, value)`, `Atom.update(atom, fn)` (Effect-based APIs)
+- Over manual `yield* AtomRegistry.AtomRegistry` + `registry.get/set/update`
+- Use `Atom.serializable` for SSR hydration
+- Use `Atom.family` for parameterized atoms
 
 ## TDD: Red/Green/Refactor
 
-1. **RED** - Write failing Cypress test first. Confirm it fails for the right reason.
-2. **GREEN** - Write minimal code to pass. No over-engineering.
-3. **REFACTOR** - Clean up while tests stay green.
-
-**Avoid:** Writing implementation before tests, tests that pass immediately, skipping refactor, batching multiple features before testing.
-
-## Tools
-
-- **ast-grep** - Use for code transformations. See `docs/ast-grep-guide.md`
-- **Cypress** - E2E tests in `packages/demo/cypress/e2e/`
-- **Firefox MCP** - Live browser console from dev server:
-  - `firefox-devtools_navigate_page` to http://localhost:5173
-  - `firefox-devtools_list_console_messages` (filter with limit, level, textContains)
+1. **RED** — Write failing Cypress test first. Confirm it fails for the right reason.
+2. **GREEN** — Write minimal code to pass. No over-engineering.
+3. **REFACTOR** — Clean up while tests stay green.
 
 ## Session Completion
 
-1. File beads issues for remaining work
-2. Run quality gates (build, lint, tests)
-3. Update issue status in beads
+1. File prog issues for remaining work
+2. Run quality gates (build, lint, types)
+3. Update task status in prog
 4. Commit changes (working directory clean)
 5. Push only if explicitly requested
-
-## Roadmap
-
-- Error Boundary: catch component/stream failures, render fallback, optional `onError`
-- Stream errors: surface pre-first-emission failures; terminate on later failures
-- Suspense interaction: error state takes precedence over fallback
-- Tests: E2E for thrown component error, failing event Effect, failing Stream
