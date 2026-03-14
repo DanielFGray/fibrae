@@ -34,7 +34,9 @@
     "types:watch:demo": "cd packages/demo; run-s types:watch",
     "types:watch": "run-p types:watch:core types:watch:demo",
     "ssr:demo": "bun --filter fibrae build && bun --filter demo ssr",
-    "lint": "oxlint"
+    "lint": "oxlint",
+    "size": "size-limit",
+    "size:check": "size-limit --limit"
   },
   "dependencies": {
     "@effect-atom/atom": "0.5.2",
@@ -46,11 +48,41 @@
     "npm-run-all": "^4.1.5"
   },
   "devDependencies": {
+    "@size-limit/esbuild": "^12.0.1",
+    "@size-limit/file": "^12.0.1",
     "cypress": "^15.10.0",
     "jiti": "^2.6.1",
-    "oxlint": "^1.50.0"
+    "oxlint": "^1.50.0",
+    "size-limit": "^12.0.1"
   },
   "overrides": {
     "effect": "catalog:"
-  }
+  },
+  "size-limit": [
+    {
+      "name": "fibrae",
+      "import": { "packages/fibrae/dist/index.js": "{ render, h, Suspense, ErrorBoundary }" },
+      "limit": "10 kB",
+      "ignore": ["effect", "effect/*", "@effect/*", "@effect-atom/*"]
+    },
+    {
+      "name": "fibrae + router",
+      "import": {
+        "packages/fibrae/dist/index.js": "{ render, h, Suspense, ErrorBoundary }",
+        "packages/fibrae/dist/router/index.js": "{ Router, RouterBuilder, createLink }"
+      },
+      "limit": "15 kB",
+      "ignore": ["effect", "effect/*", "@effect/*", "@effect-atom/*"]
+    },
+    {
+      "name": "fibrae + router + live",
+      "import": {
+        "packages/fibrae/dist/index.js": "{ render, h, Suspense, ErrorBoundary }",
+        "packages/fibrae/dist/router/index.js": "{ Router, RouterBuilder, createLink }",
+        "packages/fibrae/dist/live/index.js": "{ live, LiveConfig }"
+      },
+      "limit": "18 kB",
+      "ignore": ["effect", "effect/*", "@effect/*", "@effect-atom/*"]
+    }
+  ]
 }
