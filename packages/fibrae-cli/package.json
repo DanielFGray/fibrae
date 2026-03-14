@@ -1,0 +1,39 @@
+{
+  "name": "fibrae-cli",
+  "version": "0.0.1",
+  "description": "Static site generation CLI for fibrae",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "fibrae": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./vite": {
+      "types": "./dist/vite-plugin.d.ts",
+      "import": "./dist/vite-plugin.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p .",
+    "build:watch": "tsc --watch -p .",
+    "types:check": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "fibrae": "workspace:*"
+  },
+  "peerDependencies": {
+    "effect": "catalog:",
+    "vite": "*"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vite": "npm:rolldown-vite@7.1.14"
+  }
+}

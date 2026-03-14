@@ -1,0 +1,156 @@
+/**
+ * Vite plugin for fibrae static site generation.
+ *
+ * Hooks into Vite's build pipeline to pre-render routes after the client build.
+ * In dev mode, provides on-demand SSR middleware.
+ */
+import type { Plugin, ResolvedConfig, ViteDevServer } from "vite";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Layer from "effect/Layer";
+import { Router, RouterHandlers } from "fibrae/router";
+import { renderToStringWith, SSRAtomRegistryLayer } from "fibrae/server";
+import type { VElement } from "fibrae/shared";
+import { buildPage } from "./html.js";
+import type { FibraeConfig } from "./config.js";
+
+/**
+ * Render a single page for the dev server.
+ */
+const renderDevPage = (opts: {
+  router: Router.Router;
+  handlersLayer: Layer.Layer<RouterHandlers>;
+  App?: () => VElement;
+  appShell?: (element: VElement) => VElement;
+  pathname: string;
+  basePath: string;
+  clientScript: string;
+  title?: string;
+  headTags?: import("fibrae/router").HeadData;
+}): Effect.Effect<string, unknown> =>
+  Effect.gen(function* () {
+    const serverLayer = Router.serverLayer({
+      router: opts.router,
+      pathname: opts.pathname,
+      search: "",
+      basePath: opts.basePath,
+    });
+
+    const fullLayer = Layer.provideMerge(
+      serverLayer,
+      Layer.merge(opts.handlersLayer, SSRAtomRegistryLayer),
+    );
+
+    const { html, dehydratedState, head } = yield* Effect.gen(function* () {
+      const { head } = yield* Router.CurrentRouteElement;
+      const renderResult = opts.App
+        ? yield* renderToStringWith<never>(opts.App())
+        : yield* Effect.gen(function* () {
+            const { element } = yield* Router.CurrentRouteElement;
+            const app = opts.appShell ? opts.appShell(element) : element;
+            return yield* renderToStringWith<never>(app);
+          });
+      return { ...renderResult, head };
+    }).pipe(Effect.provide(fullLayer));
+
+    return yield* buildPage({
+      html,
+      dehydratedState: dehydratedState as unknown[],
+      clientScript: opts.clientScript,
+      title: opts.title,
+      head,
+      headTags: opts.headTags,
+    });
+  });
+
+export const fibrae = (config: FibraeConfig): Plugin => {
+  let _resolvedConfig: ResolvedConfig;
+
+  return {
+    name: "fibrae-ssg",
+
+    configResolved(resolved) {
+      _resolvedConfig = resolved;
+    },
+
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use(async (req, res, next) => {
+        const url = req.url;
+        if (!url || url.startsWith("/@") || url.includes(".")) {
+          return next();
+        }
+
+        try {
+          const appModule = await server.ssrLoadModule(config.entry);
+          const { router, handlersLayer, appShell, App } = appModule;
+
+          if (!router || !handlersLayer) {
+            return next();
+          }
+
+          // Only SSR routes the router knows about; pass everything else through
+          if (Option.isNone(router.matchRoute(url))) {
+            return next();
+          }
+
+          const result = await Effect.runPromise(
+            renderDevPage({
+              router,
+              handlersLayer,
+              App,
+              appShell,
+              pathname: url,
+              basePath: config.basePath ?? "",
+              clientScript: config.client,
+              title: config.title,
+              headTags: config.headTags,
+            }),
+          );
+
+          res.setHeader("Content-Type", "text/html");
+          res.end(result);
+        } catch {
+          next();
+        }
+      });
+    },
+
+    async closeBundle() {
+      if (_resolvedConfig.command !== "build") return;
+
+      const outDir = config.outDir ?? _resolvedConfig.build.outDir ?? "dist";
+
+      try {
+        const entryPath = new URL(config.entry, `file://${process.cwd()}/`).pathname;
+        const appModule = await import(entryPath);
+        const { router, handlersLayer, appShell } = appModule;
+
+        if (!router || !handlersLayer) {
+          console.warn("[fibrae-ssg] Entry module missing router or handlersLayer exports. Skipping SSG.");
+          return;
+        }
+
+        const { build: ssgBuild } = await import("./build.js");
+
+        const clientScript = config.client
+          ? `/${config.client.replace(/\.tsx?$/, ".js")}`
+          : undefined;
+
+        await Effect.runPromise(
+          ssgBuild({
+            router,
+            handlersLayer,
+            appShell: appShell ?? ((el: VElement) => el),
+            outDir,
+            basePath: config.basePath ?? "",
+            clientScript,
+            title: config.title,
+            headTags: config.headTags,
+          }),
+        );
+      } catch (e) {
+        console.error("[fibrae-ssg] Pre-render failed:", e);
+      }
+    },
+  };
+};
