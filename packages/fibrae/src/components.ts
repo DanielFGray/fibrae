@@ -1,6 +1,5 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import * as Stream from "effect/Stream";
 
 import { type ComponentError, type VElement } from "./shared.js";
 
@@ -70,7 +69,7 @@ export const Suspense = (props: {
 };
 
 // =============================================================================
-// Effect-Native Error Boundary
+// Error Boundary
 // =============================================================================
 
 // Counter for generating unique boundary IDs
@@ -83,71 +82,53 @@ const normalizeChildren = (children: VElement | VElement[]): VElement[] =>
   Array.isArray(children) ? children : [children];
 
 /**
- * Creates an Effect-native error boundary around children.
+ * Error boundary component — catches errors in its subtree and shows a fallback.
  *
- * Returns a `Stream<VElement, ComponentError, never>` that can be piped with
- * `Stream.catchTags` for fully typed error handling.
+ * Supports recovery: when children re-emit (e.g. route change), the boundary
+ * resets and shows the new content. Children are "parked" during error state
+ * (subscriptions stay alive), similar to how Suspense works.
  *
  * @example
  * ```tsx
- * // Create a boundary with typed error handlers as a wrapper component
- * const SafeApp = () => ErrorBoundary(<App />).pipe(
- *   Stream.catchTags({
- *     RenderError: (e) => Stream.succeed(<div>Render failed: {e.componentName}</div>),
- *     StreamError: (e) => Stream.succeed(<div>Stream failed: {e.phase}</div>),
- *     EventHandlerError: (e) => Stream.succeed(<div>Event {e.eventType} failed</div>),
- *   })
- * );
- *
- * // Use it like any other component
- * <SafeApp />
+ * <ErrorBoundary fallback={(error) => <div>Error: {error._tag}</div>}>
+ *   <RouterOutlet />
+ * </ErrorBoundary>
  * ```
  *
- * **How it works:**
- * 1. `ErrorBoundary()` returns a Stream that first emits a BOUNDARY marker element
- * 2. The renderer detects this marker and sets up error handling
- * 3. If any error occurs in the subtree, the Stream fails with that ComponentError
- * 4. `Stream.catchTags` catches the error and produces a fallback Stream
- * 5. The fallback VElement is rendered in place of the failed content
+ * The `error` parameter is a `ComponentError` union — match on `_tag` for
+ * per-type handling:
  *
- * **Nesting:** Boundaries nest naturally - inner boundary catches first, unhandled
- * errors propagate to outer boundary following Effect/Stream error propagation rules.
+ * ```tsx
+ * const fallback = (error: ComponentError) => {
+ *   switch (error._tag) {
+ *     case "RenderError": return <div>Render failed: {error.componentName}</div>
+ *     case "StreamError": return <div>Stream failed in {error.phase}</div>
+ *     case "EventHandlerError": return <div>Event {error.eventType} failed</div>
+ *   }
+ * }
+ * ```
  *
- * @param children - The VElement(s) to wrap in an error boundary
- * @returns Stream<VElement, ComponentError, never> - pipe with Stream.catchTags to handle errors
+ * @param props.fallback - Function that receives the error and returns fallback UI
+ * @param props.children - Child components to wrap in the error boundary
  */
-export const ErrorBoundary = (
-  children: VElement | VElement[],
-): Stream.Stream<VElement, ComponentError, never> => {
-  const boundaryId = `boundary-${++boundaryIdCounter}`;
-  const childrenArray = normalizeChildren(children);
+export const ErrorBoundary = (props: {
+  fallback: (error: ComponentError) => VElement;
+  children?: VElement | VElement[];
+}): VElement => {
+  const childrenArray = props.children
+    ? normalizeChildren(props.children)
+    : [];
 
   if (childrenArray.length === 0) {
-    return Stream.die("ErrorBoundary() requires at least one child");
+    throw new Error("ErrorBoundary requires at least one child");
   }
 
-  // Create a stream that:
-  // 1. Emits the BOUNDARY marker with an onError callback
-  // 2. When onError is called, the stream fails with that error
-  // 3. Stream stays open until error or unmount
-  return Stream.async<VElement, ComponentError>((emit) => {
-    // Create the BOUNDARY marker with error callback wired to stream failure
-    const boundaryElement: VElement = {
-      type: "BOUNDARY" as const,
-      props: {
-        children: childrenArray,
-        boundaryId,
-        // When renderer detects an error in subtree, it calls this
-        onError: (error: ComponentError) => {
-          void emit.fail(error);
-        },
-      },
-    };
-
-    // Emit the marker immediately
-    void emit.single(boundaryElement);
-
-    // Stream stays open - it will fail when onError is called
-    // or be cancelled when the component unmounts
-  });
+  return {
+    type: "BOUNDARY" as const,
+    props: {
+      children: childrenArray,
+      boundaryId: `boundary-${++boundaryIdCounter}`,
+      fallback: props.fallback,
+    },
+  };
 };

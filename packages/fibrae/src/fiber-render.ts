@@ -79,7 +79,12 @@ const subscribeComponentStream = <E>(
         } else {
           // Subsequent emissions - queue re-render
           currentFiber.latestStreamValue = Option.some(vElement);
-          yield* queueFiberForRerender(currentFiber);
+          if (currentFiber.isParked) {
+            // Parked under an error boundary — signal recovery
+            yield* signalBoundaryRecovery(currentFiber);
+          } else {
+            yield* queueFiberForRerender(currentFiber);
+          }
         }
       }),
     ).pipe(
@@ -353,10 +358,11 @@ const toComponentError = (cause: unknown): ComponentError => {
 };
 
 /**
- * Handle an error by finding the nearest error boundary and invoking its handler.
- * 
- * Finds the nearest BOUNDARY and calls its onError callback to fail the stream.
- * The Stream.catchTags in user code will produce the fallback.
+ * Handle an error by finding the nearest error boundary and rendering its fallback.
+ *
+ * Parks the boundary's children (keeps subscriptions alive for recovery)
+ * and queues the boundary for re-render with the fallback element.
+ * When parked children emit new values (e.g. route change), the boundary resets.
  */
 const handleFiberError = (
   fiber: Fiber,
@@ -375,14 +381,26 @@ const handleFiberError = (
           return Option.none<Fiber>();
         }),
       onSome: (boundary) =>
-        Effect.sync(() => {
-          // Call onError to fail the stream
+        Effect.gen(function* () {
           const cfg = Option.getOrThrow(boundary.boundary);
-          cfg.onError(componentError);
           cfg.hasError = true;
-          
-          // The stream will fail and catchTags will produce fallback
-          // which will trigger a re-render via the stream subscription
+          cfg.error = Option.some(componentError);
+
+          // Park the boundary's child fiber tree — keep subscriptions alive for recovery.
+          // Walk all children and mark them as parked so their scopes aren't closed.
+          const parkFiberTree = (f: Fiber): void => {
+            f.isParked = true;
+            if (Option.isSome(f.child)) parkFiberTree(f.child.value);
+            if (Option.isSome(f.sibling)) parkFiberTree(f.sibling.value);
+          };
+          if (Option.isSome(boundary.child)) {
+            cfg.parkedFiber = boundary.child;
+            parkFiberTree(boundary.child.value);
+          }
+
+          // Queue the boundary for re-render — it will show the fallback
+          yield* queueFiberForRerender(boundary);
+
           return Option.none<Fiber>();
         }),
     });
@@ -469,6 +487,41 @@ const signalFiberReady = (fiber: Fiber): Effect.Effect<void, never, FibraeRuntim
 
     // Trigger re-render to swap fallback → children
     yield* queueFiberForRerender(boundary);
+  });
+
+/**
+ * Called when a parked-under-boundary fiber emits a new value (e.g. route change).
+ * Signals the error boundary to reset — unpark children and show new content.
+ */
+const signalBoundaryRecovery = (fiber: Fiber): Effect.Effect<void, never, FibraeRuntime> =>
+  Effect.gen(function* () {
+    // Walk up to find the boundary config (may be on an old/alternate fiber)
+    const boundaryOpt = findNearestBoundary(fiber);
+    if (Option.isNone(boundaryOpt)) return;
+
+    const cfg = Option.getOrThrow(boundaryOpt.value.boundary);
+
+    if (!cfg.hasError) return;
+
+    // Reset error state
+    cfg.hasError = false;
+    cfg.error = Option.none();
+
+    // Unpark the entire parked fiber tree
+    const unparkFiberTree = (f: Fiber): void => {
+      f.isParked = false;
+      if (Option.isSome(f.child)) unparkFiberTree(f.child.value);
+      if (Option.isSome(f.sibling)) unparkFiberTree(f.sibling.value);
+    };
+    if (Option.isSome(cfg.parkedFiber)) {
+      unparkFiberTree(cfg.parkedFiber.value);
+    }
+
+    // Use currentFiber ref to queue the ACTIVE boundary fiber (not the stale alternate)
+    const currentBoundary = Option.isSome(cfg.currentFiber)
+      ? cfg.currentFiber.value
+      : boundaryOpt.value;
+    yield* queueFiberForRerender(currentBoundary);
   });
 
 // =============================================================================
@@ -807,7 +860,7 @@ const updateHostComponent = (
 
     if (isBoundary) {
       const boundaryId = fiber.props.boundaryId as string;
-      const onError = fiber.props.onError as (error: ComponentError) => void;
+      const fallbackFn = fiber.props.fallback as (error: ComponentError) => VElement;
 
       // Inherit boundary state from alternate (previous render) if present
       // This preserves hasError state across re-renders
@@ -822,15 +875,46 @@ const updateHostComponent = (
       if (Option.isNone(fiber.boundary)) {
         fiber.boundary = Option.some({
           boundaryId,
-          onError,
+          fallback: fallbackFn,
           hasError: false,
+          error: Option.none(),
+          parkedFiber: Option.none(),
+          currentFiber: Option.none(),
         });
       }
 
-      // Render children (BOUNDARY doesn't have fallback state -
-      // the fallback is handled by Stream.catchTags in userland)
-      const children = fiber.props.children;
-      yield* reconcileChildren(fiber, children || []);
+      const cfg = Option.getOrThrow(fiber.boundary);
+      // Always update the current fiber reference (survives alternate swaps)
+      cfg.currentFiber = Option.some(fiber);
+
+      if (cfg.hasError && Option.isSome(cfg.error)) {
+        // Error state — render fallback, children are parked
+        const fallbackElement = cfg.fallback(cfg.error.value);
+        yield* reconcileChildren(fiber, [fallbackElement]);
+      } else if (Option.isSome(cfg.parkedFiber)) {
+        // Recovering from error — close parked scopes and re-create children fresh.
+        // The parked tree served only to keep the stream subscription alive long enough
+        // to detect the next emission (route change). Now we rebuild from scratch.
+        const closeParkedTree = (f: Fiber): Effect.Effect<void> =>
+          Effect.gen(function* () {
+            f.isParked = false;
+            if (Option.isSome(f.componentScope)) {
+              yield* Scope.close(f.componentScope.value, Exit.void);
+            }
+            if (Option.isSome(f.child)) yield* closeParkedTree(f.child.value);
+            if (Option.isSome(f.sibling)) yield* closeParkedTree(f.sibling.value);
+          });
+        yield* closeParkedTree(cfg.parkedFiber.value);
+        cfg.parkedFiber = Option.none();
+
+        // Re-create children from the original props
+        const children = fiber.props.children;
+        yield* reconcileChildren(fiber, children || []);
+      } else {
+        // Normal rendering — show children
+        const children = fiber.props.children;
+        yield* reconcileChildren(fiber, children || []);
+      }
       return;
     }
 

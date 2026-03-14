@@ -11,10 +11,9 @@
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Layer from "effect/Layer";
-import * as Stream from "effect/Stream";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
-import { render, Suspense, ErrorBoundary } from "fibrae";
+import { render, Suspense, ErrorBoundary, type ComponentError } from "fibrae";
 import {
   BrowserHistoryLive,
   NavigatorLive,
@@ -48,13 +47,13 @@ const NavBar = () => (
 // Error Fallback Component
 // =============================================================================
 
-const AppErrorFallback = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
+const AppErrorFallback = (error: ComponentError) => {
+  const message = String(error);
   return (
     <div class="error-fallback" data-cy="app-error">
       <h2 data-cy="error-title">Something went wrong</h2>
       <p data-cy="error-message">{message}</p>
-      <button data-cy="error-reload" onclick={() => window.location.reload()}>
+      <button data-cy="error-reload" onClick={() => window.location.reload()}>
         Reload Page
       </button>
     </div>
@@ -65,13 +64,13 @@ const AppErrorFallback = (error: unknown) => {
 // App Shell with Error Boundary
 // =============================================================================
 
-// Wrap RouterOutlet with ErrorBoundary and catchAll for error handling
-const RouteContent = () =>
-  ErrorBoundary(
+const RouteContent = () => (
+  <ErrorBoundary fallback={AppErrorFallback}>
     <Suspense fallback={<div data-cy="route-loading">Loading...</div>} threshold={50}>
       <RouterOutlet />
-    </Suspense>,
-  ).pipe(Stream.catchAll((error) => Stream.succeed(AppErrorFallback(error))));
+    </Suspense>
+  </ErrorBoundary>
+);
 
 const App = () => (
   <div class="app-container" data-cy="spa-app">

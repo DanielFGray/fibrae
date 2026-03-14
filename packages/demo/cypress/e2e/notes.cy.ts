@@ -209,6 +209,26 @@ describe("Notes App", () => {
         cy.getCy("error-reload").should("contain", "Reload Page");
       });
 
+      it("should navigate away from error state", () => {
+        // Cause an error on posts page
+        cy.intercept("GET", "/api/posts", {
+          statusCode: 500,
+          body: { error: "Server Error" },
+        }).as("getPostsError");
+
+        cy.visit("/notes.html");
+        cy.getCy("nav-posts").click();
+        cy.wait("@getPostsError");
+
+        cy.getCy("app-error", { timeout: 5000 }).should("exist");
+
+        // Navigate to home — boundary should recover
+        cy.getCy("nav-home").click();
+
+        // Should see home page, error should be gone
+        cy.getCy("home-page", { timeout: 5000 }).should("exist");
+        cy.getCy("app-error").should("not.exist");
+      });
     });
 
     describe("Form Validation", () => {

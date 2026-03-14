@@ -464,51 +464,41 @@ Effect.gen(function* () {
     return Stream.fromEffect(Effect.delay(Effect.fail(new TestFailure({ message: "slow-then-fail" })), "200 millis"));
   };
 
-  // Wrapper components using ErrorBoundary() API
-  const SafeCrashDuringRender = () => ErrorBoundary(<CrashDuringRender />).pipe(
-    Stream.catchTags({
-      RenderError: () => Stream.succeed(<div data-cy="fallback-render">Render Error</div>),
-      StreamError: () => Stream.empty,
-      EventHandlerError: () => Stream.empty,
-    }),
+  // Wrapper components using ErrorBoundary JSX API
+  const SafeCrashDuringRender = () => (
+    <ErrorBoundary fallback={() => <div data-cy="fallback-render">Render Error</div>}>
+      <CrashDuringRender />
+    </ErrorBoundary>
   );
 
-  const SafeEventFailer = () => ErrorBoundary(<EventFailer />).pipe(
-    Stream.catchTags({
-      EventHandlerError: (e) => Stream.succeed(
-        <div data-cy="fallback-event">EventHandlerError: eventType: {e.eventType}</div>
-      ),
-      RenderError: () => Stream.empty,
-      StreamError: () => Stream.empty,
-    }),
+  const SafeEventFailer = () => (
+    <ErrorBoundary fallback={(e) =>
+      e._tag === "EventHandlerError"
+        ? <div data-cy="fallback-event">EventHandlerError: eventType: {e.eventType}</div>
+        : <div>Error</div>
+    }>
+      <EventFailer />
+    </ErrorBoundary>
   );
 
-  const SafeStreamFailer = () => ErrorBoundary(<StreamFailer />).pipe(
-    Stream.catchTags({
-      StreamError: () => Stream.succeed(<div data-cy="fallback-stream">Stream Error</div>),
-      RenderError: () => Stream.empty,
-      EventHandlerError: () => Stream.empty,
-    }),
+  const SafeStreamFailer = () => (
+    <ErrorBoundary fallback={() => <div data-cy="fallback-stream">Stream Error</div>}>
+      <StreamFailer />
+    </ErrorBoundary>
   );
 
-  const SafeStreamFailerImmediate = () => ErrorBoundary(<StreamFailerImmediate />).pipe(
-    Stream.catchTags({
-      StreamError: () => Stream.succeed(<div data-cy="fallback-stream-immediate">Stream Immediate Error</div>),
-      RenderError: () => Stream.empty,
-      EventHandlerError: () => Stream.empty,
-    }),
+  const SafeStreamFailerImmediate = () => (
+    <ErrorBoundary fallback={() => <div data-cy="fallback-stream-immediate">Stream Immediate Error</div>}>
+      <StreamFailerImmediate />
+    </ErrorBoundary>
   );
 
-  const SafeSlowThenFail = () => ErrorBoundary(
-    <Suspense fallback={<div data-cy="suspense-loading">Loading slow component...</div>}>
-      <SlowThenFail />
-    </Suspense>
-  ).pipe(
-    Stream.catchTags({
-      StreamError: () => Stream.succeed(<div data-cy="fallback-suspense-error">Suspense Error Precedence</div>),
-      RenderError: () => Stream.empty,
-      EventHandlerError: () => Stream.empty,
-    }),
+  const SafeSlowThenFail = () => (
+    <ErrorBoundary fallback={() => <div data-cy="fallback-suspense-error">Suspense Error Precedence</div>}>
+      <Suspense fallback={<div data-cy="suspense-loading">Loading slow component...</div>}>
+        <SlowThenFail />
+      </Suspense>
+    </ErrorBoundary>
   );
 
   // Render each example independently
@@ -558,10 +548,10 @@ Effect.gen(function* () {
     ),
   );
 
-  // Effect-native ErrorBoundary() API examples (duplicate section for demo purposes)
+  // Typed error handling examples — pattern match on _tag
   const boundaryContainer = createSection(
-    "Example 8: Effect-Native ErrorBoundary() API",
-    "Type-safe error handling with Stream.catchTags",
+    "Example 8: Typed Error Handling",
+    "Pattern match on error._tag for per-type fallbacks",
     "boundary-container",
   );
 
@@ -580,40 +570,31 @@ Effect.gen(function* () {
     return Stream.concat(Stream.succeed(ok), Stream.fromEffect(fail));
   };
 
-  // Wrapper components that use ErrorBoundary() - must be function components since they return Streams
-  const BoundarySafeCrash = () => ErrorBoundary(<BoundaryCrashDuringRender />).pipe(
-    Stream.catchTags({
-      RenderError: (e) => Stream.succeed(<div data-cy="boundary-fallback-render">Boundary Render Error: {e.componentName}</div>),
-      StreamError: () => Stream.empty,
-      EventHandlerError: () => Stream.empty,
-    }),
-  );
-
-  const BoundarySafeEventFailer = () => ErrorBoundary(<BoundaryEventFailer />).pipe(
-    Stream.catchTags({
-      EventHandlerError: (e) => Stream.succeed(
-        <div data-cy="boundary-fallback-event">Boundary Event Error: {e.eventType}</div>
-      ),
-      RenderError: () => Stream.empty,
-      StreamError: () => Stream.empty,
-    }),
-  );
-
-  const BoundarySafeStreamFailer = () => ErrorBoundary(<BoundaryStreamFailer />).pipe(
-    Stream.catchTags({
-      StreamError: (e) => Stream.succeed(<div data-cy="boundary-fallback-stream">Boundary Stream Error: {e.phase}</div>),
-      RenderError: () => Stream.empty,
-      EventHandlerError: () => Stream.empty,
-    }),
-  );
-
-  // Render ErrorBoundary() examples - each wrapped component is a proper function component
+  // Render typed error handling examples
   yield* Effect.fork(
     render(
       <>
-        <BoundarySafeCrash />
-        <BoundarySafeEventFailer />
-        <BoundarySafeStreamFailer />
+        <ErrorBoundary fallback={(e) =>
+          e._tag === "RenderError"
+            ? <div data-cy="boundary-fallback-render">Boundary Render Error: {e.componentName}</div>
+            : <div>Error</div>
+        }>
+          <BoundaryCrashDuringRender />
+        </ErrorBoundary>
+        <ErrorBoundary fallback={(e) =>
+          e._tag === "EventHandlerError"
+            ? <div data-cy="boundary-fallback-event">Boundary Event Error: {e.eventType}</div>
+            : <div>Error</div>
+        }>
+          <BoundaryEventFailer />
+        </ErrorBoundary>
+        <ErrorBoundary fallback={(e) =>
+          e._tag === "StreamError"
+            ? <div data-cy="boundary-fallback-stream">Boundary Stream Error: {e.phase}</div>
+            : <div>Error</div>
+        }>
+          <BoundaryStreamFailer />
+        </ErrorBoundary>
       </>,
       boundaryContainer,
     ),

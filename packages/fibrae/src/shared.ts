@@ -141,18 +141,25 @@ export type SuspenseConfig = {
 };
 
 /**
- * Effect-native boundary configuration (ErrorBoundary API)
- * 
- * Created when the renderer encounters a BOUNDARY marker from ErrorBoundary().
- * The onError callback fails the boundary's stream, triggering catchTags.
+ * Error boundary configuration (ErrorBoundary component)
+ *
+ * Created when the renderer encounters a BOUNDARY marker from ErrorBoundary.
+ * On error, parks children (keeps subscriptions alive) and renders fallback.
+ * When parked children emit new values (e.g. route change), boundary resets.
  */
 export type BoundaryConfig = {
   /** Unique identifier for this boundary (for debugging) */
   boundaryId: string;
-  /** Callback to report errors - fails the boundary stream */
-  onError: (error: ComponentError) => void;
+  /** Fallback renderer — called with the caught error to produce fallback UI */
+  fallback: (error: ComponentError) => VElement;
   /** True when an error has occurred and fallback is being shown */
   hasError: boolean;
+  /** The caught error (when hasError is true) */
+  error: Option.Option<ComponentError>;
+  /** Reference to the parked child fiber (kept alive for recovery) */
+  parkedFiber: Option.Option<Fiber>;
+  /** Mutable reference to the current BOUNDARY fiber (survives reconciliation) */
+  currentFiber: Option.Option<Fiber>;
 };
 
 /**
@@ -254,13 +261,13 @@ export class HydrationMismatch extends Data.TaggedError("HydrationMismatch")<{
 /**
  * Error during component render (sync throw or Effect failure).
  *
- * Caught by ErrorBoundary and can be handled via Stream.catchTags:
- * ```typescript
- * const SafeApp = () => ErrorBoundary(<MyComponent />).pipe(
- *   Stream.catchTags({
- *     RenderError: (e) => Stream.succeed(<div>Render failed: {e.componentName}</div>),
- *   })
- * );
+ * Caught by ErrorBoundary — match on `_tag` in the fallback:
+ * ```tsx
+ * <ErrorBoundary fallback={(e) =>
+ *   e._tag === "RenderError"
+ *     ? <div>Render failed: {e.componentName}</div>
+ *     : <div>Error</div>
+ * }>
  * ```
  */
 /** Format a cause for inclusion in error messages. */

@@ -188,7 +188,7 @@ const LogoutButton = () =>
   });
 ```
 
-If an Effect event handler fails, the error is wrapped in `EventHandlerError` and reported to the nearest `ErrorBoundary`.
+If an Effect event handler fails, the error is wrapped in `EventHandlerError` and caught by the nearest `ErrorBoundary`.
 
 ## Routing
 
@@ -365,19 +365,28 @@ render(<App />, document.getElementById("root")!, { layer: routerLayer });
 
 ## Error Handling
 
-`ErrorBoundary(children)` returns a `Stream<VElement, ComponentError>` that you pipe through `Stream.catchTags` for typed error recovery:
+`ErrorBoundary` catches errors in its subtree and shows a fallback. It supports recovery — when children re-emit (e.g. route change), the boundary resets and shows the new content.
 
 ```tsx
 import { ErrorBoundary } from "fibrae";
-import * as Stream from "effect/Stream";
 
-const SafeApp = () => ErrorBoundary(<App />).pipe(
-  Stream.catchTags({
-    RenderError: (e) => Stream.succeed(<div>Render failed: {e.componentName}</div>),
-    StreamError: (e) => Stream.succeed(<div>Stream failed: {e.phase}</div>),
-    EventHandlerError: (e) => Stream.succeed(<div>Event {e.eventType} failed</div>),
-  })
+const App = () => (
+  <ErrorBoundary fallback={(error) => <div>Error: {error._tag}</div>}>
+    <RouterOutlet />
+  </ErrorBoundary>
 );
+```
+
+The `fallback` receives a `ComponentError` union. Match on `_tag` for per-type handling:
+
+```tsx
+const fallback = (error: ComponentError) => {
+  switch (error._tag) {
+    case "RenderError": return <div>Render failed: {error.componentName}</div>;
+    case "StreamError": return <div>Stream failed: {error.phase}</div>;
+    case "EventHandlerError": return <div>Event {error.eventType} failed</div>;
+  }
+};
 ```
 
 Error types:
@@ -388,7 +397,7 @@ Error types:
 | `StreamError` | `cause`, `phase` | Stream component failed (`"before-first-emission"` or `"after-first-emission"`) |
 | `EventHandlerError` | `cause`, `eventType` | An Effect event handler failed (e.g. `eventType: "click"`) |
 
-Boundaries nest naturally -- inner boundaries catch first, unhandled errors propagate outward.
+Boundaries nest naturally — inner boundaries catch first, unhandled errors propagate outward.
 
 ## Suspense
 
@@ -665,7 +674,6 @@ Head data is rendered during SSR and updated on client-side navigation.
 
 ```tsx
 import * as Effect from "effect/Effect";
-import * as Stream from "effect/Stream";
 import * as Schedule from "effect/Schedule";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -733,20 +741,14 @@ const AppRoutesLive = RouterBuilder.group(appRouter, "main", (handlers) =>
 );
 
 // --- Error Boundary + Suspense ---
-const SafeOutlet = () => ErrorBoundary(<RouterOutlet />).pipe(
-  Stream.catchTags({
-    RenderError: (e) => Stream.succeed(<div>Render failed: {e.componentName}</div>),
-    StreamError: (e) => Stream.succeed(<div>Stream failed: {e.phase}</div>),
-    EventHandlerError: (e) => Stream.succeed(<div>Event {e.eventType} failed</div>),
-  })
-);
-
 const App = () => (
   <>
     <Nav />
-    <Suspense fallback={<div>Loading...</div>} threshold={100}>
-      <SafeOutlet />
-    </Suspense>
+    <ErrorBoundary fallback={(e) => <div>Error: {e._tag}</div>}>
+      <Suspense fallback={<div>Loading...</div>} threshold={100}>
+        <RouterOutlet />
+      </Suspense>
+    </ErrorBoundary>
   </>
 );
 
@@ -771,7 +773,7 @@ render(<App />, document.getElementById("root")!, { layer: routerLayer });
 | `AtomRegistry` | Registry service for reading/writing atoms |
 | `Result` | `Result.initial()` / `Result.success(a)` for async value states |
 | `Suspense` | Threshold-based loading boundary |
-| `ErrorBoundary` | Returns `Stream<VElement, ComponentError>` for typed error handling |
+| `ErrorBoundary` | Catches errors in subtree, shows fallback, supports navigation recovery |
 | `ComponentScope` | Service providing `{ scope, mounted }` for lifecycle management |
 | `HydrationState` | Service for dehydrated state (auto-discovered from DOM) |
 | `RenderError` / `StreamError` / `EventHandlerError` | Tagged error types |
