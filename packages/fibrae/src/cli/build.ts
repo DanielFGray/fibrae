@@ -81,9 +81,10 @@ const writePageFile = (outDir: string, pathname: string, html: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const filePath = pathname === "/" || pathname === ""
-      ? path.join(outDir, "index.html")
-      : path.join(outDir, pathname, "index.html");
+    const filePath =
+      pathname === "/" || pathname === ""
+        ? path.join(outDir, "index.html")
+        : path.join(outDir, pathname, "index.html");
 
     yield* fs.makeDirectory(path.dirname(filePath), { recursive: true });
     yield* fs.writeFileString(filePath, html);
@@ -111,7 +112,9 @@ export interface BuildOptions {
 /**
  * Pre-render all routes marked with `prerender: true` to static HTML files.
  */
-export const build = (options: BuildOptions): Effect.Effect<void, unknown, FileSystem.FileSystem | Path.Path> =>
+export const build = (
+  options: BuildOptions,
+): Effect.Effect<void, unknown, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const {
       router,
@@ -161,7 +164,9 @@ export const build = (options: BuildOptions): Effect.Effect<void, unknown, FileS
       ({ pathname, html }) =>
         Effect.gen(function* () {
           yield* writePageFile(outDir, pathname, html);
-          yield* Effect.log(`  ${pathname} → ${outDir}${pathname === "/" ? "/index.html" : `${pathname}/index.html`}`);
+          yield* Effect.log(
+            `  ${pathname} → ${outDir}${pathname === "/" ? "/index.html" : `${pathname}/index.html`}`,
+          );
         }),
       { discard: true },
     );

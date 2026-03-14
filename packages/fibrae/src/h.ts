@@ -1,4 +1,10 @@
-import { type VElement, type ElementType, type Primitive, type VChild, type VNode } from "./shared.js";
+import {
+  type VElement,
+  type ElementType,
+  type Primitive,
+  type VChild,
+  type VNode,
+} from "./shared.js";
 
 // =============================================================================
 // Element Creation
@@ -14,7 +20,6 @@ export const createTextElement = (text: string): VElement => ({
     children: [],
   },
 });
-
 
 /**
  * Create a virtual element (JSX factory)

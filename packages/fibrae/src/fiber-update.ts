@@ -155,7 +155,11 @@ export const updateFunctionComponent = (
       fiber.componentScope = alt.componentScope;
       alt.componentScope = Option.none(); // Transfer ownership
       fiber.fiberRef = alt.fiberRef;
-      fiber.fiberRef.pipe(Option.map((ref) => { ref.current = fiber; }));
+      fiber.fiberRef.pipe(
+        Option.map((ref) => {
+          ref.current = fiber;
+        }),
+      );
       fiber.isMultiEmissionStream = alt.isMultiEmissionStream;
 
       yield* reconcileChildren(fiber, [vElement]);
@@ -182,7 +186,11 @@ export const updateFunctionComponent = (
     // Set up atom tracking
     const accessedAtoms = new Set<Atom.Atom<unknown>>();
     const accessedLiveAtoms = new Set<LiveAtom<any>>();
-    const trackingRegistry = makeTrackingRegistry(runtime.registry, accessedAtoms, accessedLiveAtoms);
+    const trackingRegistry = makeTrackingRegistry(
+      runtime.registry,
+      accessedAtoms,
+      accessedLiveAtoms,
+    );
     fiber.accessedAtoms = Option.some(accessedAtoms);
 
     // Build context with tracking registry AND ComponentScope
@@ -320,9 +328,7 @@ export const performUnitOfWork = (
     }
 
     // Return next unit of work: child → sibling → uncle (walk up to find sibling)
-    return fiber.child.pipe(
-      Option.orElse(() => findNextSibling(fiber)),
-    );
+    return fiber.child.pipe(Option.orElse(() => findNextSibling(fiber)));
   });
 
 // =============================================================================
@@ -411,9 +417,7 @@ export const activateLiveAtoms = (
           // Get shared EventSource for this URL (ref-counted via RcMap).
           // Scope.extend binds the reference to the component scope —
           // when the component unmounts, the ref count decrements.
-          const es = yield* RcMap.get(runtime.sseConnections, url).pipe(
-            Scope.extend(scope),
-          );
+          const es = yield* RcMap.get(runtime.sseConnections, url).pipe(Scope.extend(scope));
 
           const handler = (e: MessageEvent) => {
             try {

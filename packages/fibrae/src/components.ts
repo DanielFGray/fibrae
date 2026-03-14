@@ -115,9 +115,7 @@ export const ErrorBoundary = (props: {
   fallback: (error: ComponentError) => VElement;
   children?: VElement | VElement[];
 }): VElement => {
-  const childrenArray = props.children
-    ? normalizeChildren(props.children)
-    : [];
+  const childrenArray = props.children ? normalizeChildren(props.children) : [];
 
   if (childrenArray.length === 0) {
     throw new Error("ErrorBoundary requires at least one child");

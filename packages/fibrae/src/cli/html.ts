@@ -33,8 +33,10 @@ const metaToElement = (meta: MetaDescriptor): Option.Option<VElement> => {
       }),
     );
   if ("name" in meta) return Option.some(h("meta", { name: meta.name, content: meta.content }));
-  if ("property" in meta) return Option.some(h("meta", { property: meta.property, content: meta.content }));
-  if ("httpEquiv" in meta) return Option.some(h("meta", { "http-equiv": meta.httpEquiv, content: meta.content }));
+  if ("property" in meta)
+    return Option.some(h("meta", { property: meta.property, content: meta.content }));
+  if ("httpEquiv" in meta)
+    return Option.some(h("meta", { "http-equiv": meta.httpEquiv, content: meta.content }));
   if ("tagName" in meta) {
     const { tagName, ...attrs } = meta;
     return Option.some(h(tagName, attrs));
@@ -116,13 +118,9 @@ const PageShell = (props: PageOptions) =>
         id: "__fibrae-state__",
         dangerouslySetInnerHTML: JSON.stringify(props.dehydratedState),
       }),
-      ...(props.clientScript
-        ? [h("script", { type: "module", src: props.clientScript })]
-        : []),
+      ...(props.clientScript ? [h("script", { type: "module", src: props.clientScript })] : []),
     ]),
   ]);
 
 export const buildPage = (options: PageOptions): Effect.Effect<string, unknown> =>
-  renderToString(PageShell(options)).pipe(
-    Effect.map(({ html }) => `<!DOCTYPE html>\n${html}`),
-  );
+  renderToString(PageShell(options)).pipe(Effect.map(({ html }) => `<!DOCTYPE html>\n${html}`));

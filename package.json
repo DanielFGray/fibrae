@@ -39,7 +39,7 @@
     "size:check": "size-limit --limit"
   },
   "dependencies": {
-    "@effect-atom/atom": "0.5.2",
+    "@effect-atom/atom": "0.5.3",
     "@effect/platform": "^0.94.5",
     "@effect/platform-browser": "^0.74.0",
     "@effect/platform-bun": "^0.87.1",
@@ -50,9 +50,10 @@
   "devDependencies": {
     "@size-limit/esbuild": "^12.0.1",
     "@size-limit/file": "^12.0.1",
-    "cypress": "^15.10.0",
+    "cypress": "^15.12.0",
     "jiti": "^2.6.1",
-    "oxlint": "^1.50.0",
+    "oxfmt": "^0.40.0",
+    "oxlint": "^1.55.0",
     "size-limit": "^12.0.1"
   },
   "overrides": {
@@ -61,7 +62,9 @@
   "size-limit": [
     {
       "name": "fibrae",
-      "import": { "packages/fibrae/dist/index.js": "{ render, h, Suspense, ErrorBoundary }" },
+      "import": {
+        "packages/fibrae/dist/index.js": "{ render, h, Suspense, ErrorBoundary }"
+      },
       "limit": "10 kB",
       "ignore": ["effect", "effect/*", "@effect/*", "@effect-atom/*"]
     },

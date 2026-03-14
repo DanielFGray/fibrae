@@ -53,7 +53,9 @@ import type { VElement } from "../shared.js";
 const ErrorBubble = (cause: Cause.Cause<unknown>): VElement => {
   const error = Cause.squash(cause);
   return {
-    type: (() => { throw error; }) as never,
+    type: (() => {
+      throw error;
+    }) as never,
     props: { children: [] },
   };
 };
@@ -82,7 +84,11 @@ export class OutletDepth extends Context.Tag("fibrae/OutletDepth")<OutletDepth, 
  * For SSR hydration, the RouterStateAtom is pre-populated by the server,
  * so the first render uses that data and skips the loader.
  */
-export function RouterOutlet(): Stream.Stream<VElement, unknown, Navigator | RouterHandlers | AtomRegistry.AtomRegistry> {
+export function RouterOutlet(): Stream.Stream<
+  VElement,
+  unknown,
+  Navigator | RouterHandlers | AtomRegistry.AtomRegistry
+> {
   // Track if this is the first render (for SSR hydration)
   let isFirstRender = true;
 
@@ -220,9 +226,7 @@ export function RouterOutlet(): Stream.Stream<VElement, unknown, Navigator | Rou
           }).pipe(
             // Catch per-route errors so the stream stays alive for navigation recovery.
             // Emit a component that re-throws during render — ErrorBoundary catches it.
-            Effect.catchAllCause((cause) =>
-              Effect.succeed(ErrorBubble(cause) as VElement),
-            ),
+            Effect.catchAllCause((cause) => Effect.succeed(ErrorBubble(cause) as VElement)),
           ),
         ),
       );

@@ -31,11 +31,7 @@ import { attachEventListeners } from "./dom.js";
 import { normalizeToStream, makeTrackingRegistry } from "./tracking.js";
 import { type LiveAtom } from "./live/atom.js";
 
-import {
-  createFiber,
-  getComponentScopeService,
-  linkFibersAsSiblings,
-} from "./fiber-tree.js";
+import { createFiber, getComponentScopeService, linkFibersAsSiblings } from "./fiber-tree.js";
 import { handleFiberError } from "./fiber-boundary.js";
 import {
   performUnitOfWork,
@@ -117,7 +113,11 @@ const renderMailboxConsumer = (runtime: FibraeRuntime): Effect.Effect<void, neve
 
             // Copy dom from currentRoot to wipRoot
             const newState = yield* Ref.get(stateRef);
-            newState.wipRoot.pipe(Option.map((wip) => { wip.dom = currentRoot.dom; }));
+            newState.wipRoot.pipe(
+              Option.map((wip) => {
+                wip.dom = currentRoot.dom;
+              }),
+            );
 
             yield* Ref.update(stateRef, (s) => ({
               ...s,
@@ -324,20 +324,26 @@ const hydrateElement = (
 ): Effect.Effect<{ fiber: Fiber; nextCursor: Option.Option<Node> }, unknown, FibraeRuntime> =>
   Effect.gen(function* () {
     // Detect hydration mismatch: VElement type vs DOM node tag
-    if (typeof vElement.type === "string" && vElement.type !== "TEXT_ELEMENT" && vElement.type !== "FRAGMENT" && vElement.type !== "SUSPENSE" && vElement.type !== "BOUNDARY") {
+    if (
+      typeof vElement.type === "string" &&
+      vElement.type !== "TEXT_ELEMENT" &&
+      vElement.type !== "FRAGMENT" &&
+      vElement.type !== "SUSPENSE" &&
+      vElement.type !== "BOUNDARY"
+    ) {
       if (domNode.nodeType === Node.ELEMENT_NODE) {
         const expected = vElement.type.toUpperCase();
         const actual = (domNode as Element).tagName;
         if (expected !== actual) {
           yield* Effect.logError(
             `Hydration mismatch: expected <${vElement.type}> but found <${actual.toLowerCase()}>. ` +
-            `SSR and client component trees differ.`
+              `SSR and client component trees differ.`,
           );
         }
       } else if (domNode.nodeType === Node.TEXT_NODE) {
         yield* Effect.logError(
           `Hydration mismatch: expected <${vElement.type}> but found text node "${domNode.textContent?.substring(0, 30)}". ` +
-          `SSR and client component trees differ.`
+            `SSR and client component trees differ.`,
         );
       }
     }
@@ -390,12 +396,7 @@ const hydrateElement = (
         const firstContentNode = getNextHydratableSibling(domNode);
 
         // hydrateChildren links fibers as siblings and sets fiber.child
-        const afterChildren = yield* hydrateChildren(
-          fiber,
-          children,
-          firstContentNode,
-          runtime,
-        );
+        const afterChildren = yield* hydrateChildren(fiber, children, firstContentNode, runtime);
 
         // Skip past closing marker
         if (Option.isSome(afterChildren)) {
@@ -424,7 +425,10 @@ const hydrateElement = (
           let current: Node | null = domNode.nextSibling;
           while (current) {
             nodes.push(current);
-            if (current.nodeType === Node.COMMENT_NODE && (current as Comment).data.includes("/fibrae:sus")) {
+            if (
+              current.nodeType === Node.COMMENT_NODE &&
+              (current as Comment).data.includes("/fibrae:sus")
+            ) {
               return { nodesToRemove: nodes, closingMarker: current };
             }
             current = current.nextSibling;
@@ -433,9 +437,7 @@ const hydrateElement = (
         })();
 
         // Cursor after the closing marker
-        nextCursor = closingMarker
-          ? getNextHydratableSibling(closingMarker)
-          : Option.none();
+        nextCursor = closingMarker ? getNextHydratableSibling(closingMarker) : Option.none();
 
         // Remove fallback DOM
         nodesToRemove.forEach((node) => parent.removeChild(node));
@@ -447,12 +449,7 @@ const hydrateElement = (
         yield* reconcileChildren(fiber, children);
       } else {
         // No Suspense markers — treat as normal render
-        nextCursor = yield* hydrateChildren(
-          fiber,
-          children,
-          Option.some(domNode),
-          runtime,
-        );
+        nextCursor = yield* hydrateChildren(fiber, children, Option.some(domNode), runtime);
       }
     } else {
       // Host element - adopt DOM node and hydrate children
@@ -509,15 +506,16 @@ const hydrateFunctionComponent = (
     // Create scope for this component FIRST so it's available in context
     yield* resubscribeFiber(fiber);
 
-    const componentScopeService = yield* getComponentScopeService(
-      fiber,
-      "Expected componentScope",
-    );
+    const componentScopeService = yield* getComponentScopeService(fiber, "Expected componentScope");
 
     // Set up atom tracking
     const accessedAtoms = new Set<Atom.Atom<unknown>>();
     const accessedLiveAtoms = new Set<LiveAtom<any>>();
-    const trackingRegistry = makeTrackingRegistry(runtime.registry, accessedAtoms, accessedLiveAtoms);
+    const trackingRegistry = makeTrackingRegistry(
+      runtime.registry,
+      accessedAtoms,
+      accessedLiveAtoms,
+    );
     fiber.accessedAtoms = Option.some(accessedAtoms);
 
     // Build context with tracking registry AND ComponentScope

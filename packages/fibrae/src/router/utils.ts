@@ -21,13 +21,9 @@ export const parseSearchParams = (search: string): Record<string, string> =>
  * Filters out null and undefined values.
  */
 export const buildSearchString = (params: Record<string, unknown>): string => {
-  const entries = Object.entries(params).filter(
-    ([, v]) => v !== undefined && v !== null,
-  );
+  const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== null);
   if (entries.length === 0) return "";
-  const sp = new URLSearchParams(
-    entries.map(([k, v]) => [k, String(v)]),
-  );
+  const sp = new URLSearchParams(entries.map(([k, v]) => [k, String(v)]));
   return `?${sp.toString()}`;
 };
 
@@ -53,11 +49,11 @@ export const findRouteByName = (
   name: string,
 ): Option.Option<{ route: Route; group: AnyGroup }> =>
   Option.fromNullable(
-    router.groups.flatMap((group) =>
-      group.routes
-        .filter((route) => route.name === name)
-        .map((route) => ({ route, group }))
-    ).at(0),
+    router.groups
+      .flatMap((group) =>
+        group.routes.filter((route) => route.name === name).map((route) => ({ route, group })),
+      )
+      .at(0),
   );
 
 /**

@@ -129,15 +129,10 @@ export function group<const Name extends string>(name: Name): RouteGroup<Name> {
  *   .add(Route.get("settings", "/settings"));  // matches /dashboard/settings
  * ```
  */
-export function layout<const Name extends string>(
-  name: Name,
-  basePath: string,
-): LayoutGroup<Name> {
+export function layout<const Name extends string>(name: Name, basePath: string): LayoutGroup<Name> {
   // Normalize basePath - ensure it starts with / and doesn't end with /
   const normalizedBase = basePath.startsWith("/") ? basePath : `/${basePath}`;
-  const cleanBase = normalizedBase.endsWith("/")
-    ? normalizedBase.slice(0, -1)
-    : normalizedBase;
+  const cleanBase = normalizedBase.endsWith("/") ? normalizedBase.slice(0, -1) : normalizedBase;
 
   return {
     _tag: "LayoutGroup",
@@ -265,7 +260,11 @@ export interface SSRRouteResult {
  */
 export class CurrentRouteElement extends Context.Tag("fibrae/CurrentRouteElement")<
   CurrentRouteElement,
-  { readonly element: VElement; readonly state: DehydratedRouterState; readonly head: Option.Option<HeadData> }
+  {
+    readonly element: VElement;
+    readonly state: DehydratedRouterState;
+    readonly head: Option.Option<HeadData>;
+  }
 >() {}
 
 /**
@@ -322,7 +321,9 @@ export function serverLayer(
       // Match route using stripped pathname
       const match = router.matchRoute(matchPathname);
       if (Option.isNone(match)) {
-        return yield* Effect.fail(new RouterError({ message: `No route matched pathname: ${matchPathname}` }));
+        return yield* Effect.fail(
+          new RouterError({ message: `No route matched pathname: ${matchPathname}` }),
+        );
       }
 
       const { route, params } = match.value;
@@ -330,7 +331,9 @@ export function serverLayer(
       // Get handler for this route
       const handler = routerHandlers.getHandler(route.name);
       if (Option.isNone(handler)) {
-        return yield* Effect.fail(new RouterError({ message: `No handler found for route: ${route.name}` }));
+        return yield* Effect.fail(
+          new RouterError({ message: `No handler found for route: ${route.name}` }),
+        );
       }
 
       // Execute loader and render component
@@ -502,7 +505,9 @@ export function browserLayer(
         const state = hydratedState.value;
         const handler = routerHandlers.getHandler(state.routeName);
         if (Option.isNone(handler)) {
-          return yield* Effect.fail(new RouterError({ message: `No handler found for route: ${state.routeName}` }));
+          return yield* Effect.fail(
+            new RouterError({ message: `No handler found for route: ${state.routeName}` }),
+          );
         }
 
         // Render component with SSR loader data (skip loader)
@@ -523,11 +528,12 @@ export function browserLayer(
         // Execute head on client too (for title updates etc.)
         const head = yield* Option.match(handler.value.head, {
           onNone: () => Effect.succeedNone,
-          onSome: (fn) => fn({
-            loaderData: state.loaderData,
-            params: state.params,
-            searchParams: state.searchParams,
-          }).pipe(Effect.asSome),
+          onSome: (fn) =>
+            fn({
+              loaderData: state.loaderData,
+              params: state.params,
+              searchParams: state.searchParams,
+            }).pipe(Effect.asSome),
         });
 
         return { element, state: dehydratedState, head };
@@ -541,14 +547,18 @@ export function browserLayer(
 
       const match = router.matchRoute(matchPathname);
       if (Option.isNone(match)) {
-        return yield* Effect.fail(new RouterError({ message: `No route matched pathname: ${matchPathname}` }));
+        return yield* Effect.fail(
+          new RouterError({ message: `No route matched pathname: ${matchPathname}` }),
+        );
       }
 
       const { route, params } = match.value;
 
       const handler = routerHandlers.getHandler(route.name);
       if (Option.isNone(handler)) {
-        return yield* Effect.fail(new RouterError({ message: `No handler found for route: ${route.name}` }));
+        return yield* Effect.fail(
+          new RouterError({ message: `No handler found for route: ${route.name}` }),
+        );
       }
 
       const loaderCtx = { path: params, searchParams };

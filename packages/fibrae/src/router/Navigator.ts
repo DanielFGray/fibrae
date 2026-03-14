@@ -18,7 +18,13 @@ import * as Option from "effect/Option";
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import { History, type HistoryLocation } from "./History.js";
 import type { Router } from "./Router.js";
-import { parseSearchParams, buildSearchString, stripBasePath, findRouteByName, groupBasePath } from "./utils.js";
+import {
+  parseSearchParams,
+  buildSearchString,
+  stripBasePath,
+  findRouteByName,
+  groupBasePath,
+} from "./utils.js";
 
 // =============================================================================
 // Types

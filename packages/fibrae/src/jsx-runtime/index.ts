@@ -95,41 +95,74 @@ export const h = jsx;
  */
 type CamelCaseEventName = {
   // Keyboard
-  keydown: "KeyDown"; keyup: "KeyUp"; keypress: "KeyPress";
+  keydown: "KeyDown";
+  keyup: "KeyUp";
+  keypress: "KeyPress";
   // Mouse
-  mousedown: "MouseDown"; mouseup: "MouseUp"; mouseover: "MouseOver";
-  mouseout: "MouseOut"; mouseenter: "MouseEnter"; mouseleave: "MouseLeave";
-  mousemove: "MouseMove"; dblclick: "DblClick";
+  mousedown: "MouseDown";
+  mouseup: "MouseUp";
+  mouseover: "MouseOver";
+  mouseout: "MouseOut";
+  mouseenter: "MouseEnter";
+  mouseleave: "MouseLeave";
+  mousemove: "MouseMove";
+  dblclick: "DblClick";
   // Pointer
-  pointerdown: "PointerDown"; pointerup: "PointerUp"; pointermove: "PointerMove";
-  pointerover: "PointerOver"; pointerout: "PointerOut"; pointerenter: "PointerEnter";
-  pointerleave: "PointerLeave"; pointercancel: "PointerCancel";
-  gotpointercapture: "GotPointerCapture"; lostpointercapture: "LostPointerCapture";
+  pointerdown: "PointerDown";
+  pointerup: "PointerUp";
+  pointermove: "PointerMove";
+  pointerover: "PointerOver";
+  pointerout: "PointerOut";
+  pointerenter: "PointerEnter";
+  pointerleave: "PointerLeave";
+  pointercancel: "PointerCancel";
+  gotpointercapture: "GotPointerCapture";
+  lostpointercapture: "LostPointerCapture";
   // Touch
-  touchstart: "TouchStart"; touchend: "TouchEnd"; touchmove: "TouchMove";
+  touchstart: "TouchStart";
+  touchend: "TouchEnd";
+  touchmove: "TouchMove";
   touchcancel: "TouchCancel";
   // Focus
-  focusin: "FocusIn"; focusout: "FocusOut";
+  focusin: "FocusIn";
+  focusout: "FocusOut";
   // Drag
-  dragenter: "DragEnter"; dragleave: "DragLeave"; dragover: "DragOver";
-  dragstart: "DragStart"; dragend: "DragEnd";
+  dragenter: "DragEnter";
+  dragleave: "DragLeave";
+  dragover: "DragOver";
+  dragstart: "DragStart";
+  dragend: "DragEnd";
   // Animation / Transition
-  animationstart: "AnimationStart"; animationend: "AnimationEnd";
-  animationiteration: "AnimationIteration"; animationcancel: "AnimationCancel";
-  transitionstart: "TransitionStart"; transitionend: "TransitionEnd";
-  transitionrun: "TransitionRun"; transitioncancel: "TransitionCancel";
+  animationstart: "AnimationStart";
+  animationend: "AnimationEnd";
+  animationiteration: "AnimationIteration";
+  animationcancel: "AnimationCancel";
+  transitionstart: "TransitionStart";
+  transitionend: "TransitionEnd";
+  transitionrun: "TransitionRun";
+  transitioncancel: "TransitionCancel";
   // Composition
-  compositionstart: "CompositionStart"; compositionend: "CompositionEnd";
+  compositionstart: "CompositionStart";
+  compositionend: "CompositionEnd";
   compositionupdate: "CompositionUpdate";
   // Selection
-  selectstart: "SelectStart"; selectionchange: "SelectionChange";
+  selectstart: "SelectStart";
+  selectionchange: "SelectionChange";
   // Media
-  canplay: "CanPlay"; canplaythrough: "CanPlayThrough"; durationchange: "DurationChange";
-  loadeddata: "LoadedData"; loadedmetadata: "LoadedMetadata"; loadstart: "LoadStart";
-  ratechange: "RateChange"; timeupdate: "TimeUpdate"; volumechange: "VolumeChange";
+  canplay: "CanPlay";
+  canplaythrough: "CanPlayThrough";
+  durationchange: "DurationChange";
+  loadeddata: "LoadedData";
+  loadedmetadata: "LoadedMetadata";
+  loadstart: "LoadStart";
+  ratechange: "RateChange";
+  timeupdate: "TimeUpdate";
+  volumechange: "VolumeChange";
   // Misc
-  contextmenu: "ContextMenu"; beforeinput: "BeforeInput";
-  fullscreenchange: "FullscreenChange"; fullscreenerror: "FullscreenError";
+  contextmenu: "ContextMenu";
+  beforeinput: "BeforeInput";
+  fullscreenchange: "FullscreenChange";
+  fullscreenerror: "FullscreenError";
 };
 
 /**
@@ -145,7 +178,9 @@ type OnEventName<K extends string> = K extends keyof CamelCaseEventName
  * Maps "click" → "onClick", "keydown" → "onKeyDown", etc.
  */
 type EventHandlerProps = {
-  [K in keyof HTMLElementEventMap as OnEventName<K & string>]?: (event: HTMLElementEventMap[K]) => void;
+  [K in keyof HTMLElementEventMap as OnEventName<K & string>]?: (
+    event: HTMLElementEventMap[K],
+  ) => void;
 };
 
 /**
@@ -191,7 +226,9 @@ type NarrowedEventNames = keyof NarrowedEventHandlers<HTMLElement>;
  * typed event handlers, and narrowed form-element events.
  * Narrowed events override the generic ones to avoid union parameter types.
  */
-type HTMLElementProps<E extends HTMLElement> = BaseHTMLProps & Omit<EventHandlerProps, NarrowedEventNames> & NarrowedEventHandlers<E>;
+type HTMLElementProps<E extends HTMLElement> = BaseHTMLProps &
+  Omit<EventHandlerProps, NarrowedEventNames> &
+  NarrowedEventHandlers<E>;
 
 /**
  * Element-specific attribute types for elements with unique properties.
@@ -295,7 +332,9 @@ type SpecificElements = {
  * Derived from TypeScript's own HTMLElementTagNameMap (~140 elements).
  */
 type GenericElements = {
-  [K in Exclude<keyof HTMLElementTagNameMap, keyof SpecificElements>]: HTMLElementProps<HTMLElementTagNameMap[K]>;
+  [K in Exclude<keyof HTMLElementTagNameMap, keyof SpecificElements>]: HTMLElementProps<
+    HTMLElementTagNameMap[K]
+  >;
 };
 
 // Provide properly typed JSX namespace
@@ -309,9 +348,7 @@ declare global {
     // What function components can return (TS 5.1+)
     // This allows components to return Effect<VElement> or Stream<VElement>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    type ElementType =
-      | keyof IntrinsicElements
-      | ((props: any) => VNode);
+    type ElementType = keyof IntrinsicElements | ((props: any) => VNode);
 
     // Typed HTML elements: specific overrides + generic fallback for all others
     interface IntrinsicElements extends SpecificElements, GenericElements {}

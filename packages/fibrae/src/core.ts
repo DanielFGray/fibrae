@@ -111,13 +111,9 @@ export function render(
 
       // Compose: user layer (if any) feeds from registryLayer, all merge together
       const baseLayer = Layer.mergeAll(runtimeLayer, registryLayer, hydrationLayer);
-      const fullLayer = options?.layer
-        ? Layer.provideMerge(options.layer, baseLayer)
-        : baseLayer;
+      const fullLayer = options?.layer ? Layer.provideMerge(options.layer, baseLayer) : baseLayer;
 
-      return yield* renderCore(element, cont).pipe(
-        Effect.provide(fullLayer),
-      );
+      return yield* renderCore(element, cont).pipe(Effect.provide(fullLayer));
     });
 
   if (container === undefined) {

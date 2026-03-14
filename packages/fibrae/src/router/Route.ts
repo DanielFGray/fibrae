@@ -64,21 +64,16 @@ function parsePathTemplate(
   paramNames: string[];
   pathSchema: Option.Option<Schema.Schema.Any>;
 } {
-  const paramNames = schemas.map(
-    (schema, i) => getParamName(schema) ?? String(i),
-  );
+  const paramNames = schemas.map((schema, i) => getParamName(schema) ?? String(i));
 
-  const path = segments[0] + schemas
-    .map((_, i) => `:${paramNames[i]}${segments[i + 1]}`)
-    .join("");
+  const path = segments[0] + schemas.map((_, i) => `:${paramNames[i]}${segments[i + 1]}`).join("");
 
-  const pathSchemaObj = Object.fromEntries(
-    paramNames.map((name, i) => [name, schemas[i]]),
-  );
+  const pathSchemaObj = Object.fromEntries(paramNames.map((name, i) => [name, schemas[i]]));
 
-  const pathSchema = paramNames.length > 0
-    ? Option.some(Schema.Struct(pathSchemaObj as Record<string, Schema.Schema.Any>))
-    : Option.none<Schema.Schema.Any>();
+  const pathSchema =
+    paramNames.length > 0
+      ? Option.some(Schema.Struct(pathSchemaObj as Record<string, Schema.Schema.Any>))
+      : Option.none<Schema.Schema.Any>();
 
   return { path, paramNames, pathSchema };
 }

@@ -82,15 +82,7 @@ export type Primitive =
  * What can appear as children in JSX (recursive type)
  * Includes primitives, VElements, and arrays thereof
  */
-export type VChild =
-  | VElement
-  | string
-  | number
-  | bigint
-  | boolean
-  | null
-  | undefined
-  | VChild[];
+export type VChild = VElement | string | number | bigint | boolean | null | undefined | VChild[];
 
 /**
  * What components can return - VElement or wrapped in Effect/Stream
@@ -104,9 +96,7 @@ export type VNode =
  * Element type can be a primitive or a component function
  * Components can return VNode (VElement, Effect<VElement>, or Stream<VElement>)
  */
-export type ElementType<Props = {}> =
-  | Primitive
-  | ((props: Props) => VNode);
+export type ElementType<Props = {}> = Primitive | ((props: Props) => VNode);
 
 /**
  * Virtual element representation - the core unit of the virtual DOM
@@ -206,7 +196,11 @@ export const isEvent = (key: string) => key.startsWith("on");
  * Helper to check if a key is a regular property (not children, ref, key, or event)
  */
 export const isProperty = (key: string) =>
-  key !== "children" && key !== "ref" && key !== "key" && key !== "dangerouslySetInnerHTML" && !isEvent(key);
+  key !== "children" &&
+  key !== "ref" &&
+  key !== "key" &&
+  key !== "dangerouslySetInnerHTML" &&
+  !isEvent(key);
 
 /**
  * Check if an element type is a primitive (string) or component (function)

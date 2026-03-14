@@ -18,7 +18,11 @@ import {
   EventHandlerError,
 } from "./shared.js";
 import { FibraeRuntime } from "./runtime.js";
-import { findNearestBoundary, findNearestSuspenseBoundary, queueFiberForRerender } from "./fiber-tree.js";
+import {
+  findNearestBoundary,
+  findNearestSuspenseBoundary,
+  queueFiberForRerender,
+} from "./fiber-tree.js";
 
 /**
  * Convert a raw cause/error to a ComponentError.

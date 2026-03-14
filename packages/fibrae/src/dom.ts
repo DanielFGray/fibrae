@@ -53,14 +53,37 @@ export const propertyUpdateMap: Record<
 
 export const isEvent = (key: string) => key.startsWith("on");
 export const isProperty = (key: string) =>
-  key !== "children" && key !== "ref" && key !== "key" && key !== "dangerouslySetInnerHTML" && !isEvent(key);
+  key !== "children" &&
+  key !== "ref" &&
+  key !== "key" &&
+  key !== "dangerouslySetInnerHTML" &&
+  !isEvent(key);
 
 const unitlessProperties = new Set([
-  "animationIterationCount", "boxFlex", "boxFlexGroup", "boxOrdinalGroup",
-  "columnCount", "fillOpacity", "flex", "flexGrow", "flexPositive",
-  "flexShrink", "flexNegative", "flexOrder", "fontWeight", "gridColumn",
-  "gridRow", "lineClamp", "lineHeight", "opacity", "order", "orphans",
-  "tabSize", "widows", "zIndex", "zoom",
+  "animationIterationCount",
+  "boxFlex",
+  "boxFlexGroup",
+  "boxOrdinalGroup",
+  "columnCount",
+  "fillOpacity",
+  "flex",
+  "flexGrow",
+  "flexPositive",
+  "flexShrink",
+  "flexNegative",
+  "flexOrder",
+  "fontWeight",
+  "gridColumn",
+  "gridRow",
+  "lineClamp",
+  "lineHeight",
+  "opacity",
+  "order",
+  "orphans",
+  "tabSize",
+  "widows",
+  "zIndex",
+  "zoom",
 ]);
 
 /**
@@ -81,7 +104,9 @@ export const setDomProperty = (el: HTMLElement, name: string, value: unknown): v
         } else {
           el.style.setProperty(
             key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`),
-            typeof val === "number" && val !== 0 && !unitlessProperties.has(key) ? `${val}px` : String(val),
+            typeof val === "number" && val !== 0 && !unitlessProperties.has(key)
+              ? `${val}px`
+              : String(val),
           );
         }
       }
@@ -132,12 +157,13 @@ export const setDomProperty = (el: HTMLElement, name: string, value: unknown): v
  * Submit events auto-preventDefault when handler returns an Effect.
  * Effect failures are wrapped in EventHandlerError and forwarded to onError.
  */
-export const createEventWrapper = (
-  handler: (event: Event) => unknown,
-  eventType: string,
-  runtime: FibraeRuntime,
-  onError?: (error: EventHandlerError) => Effect.Effect<unknown, never, unknown>,
-): EventListener =>
+export const createEventWrapper =
+  (
+    handler: (event: Event) => unknown,
+    eventType: string,
+    runtime: FibraeRuntime,
+    onError?: (error: EventHandlerError) => Effect.Effect<unknown, never, unknown>,
+  ): EventListener =>
   (event: Event) => {
     const result = handler(event);
     if (Effect.isEffect(result)) {

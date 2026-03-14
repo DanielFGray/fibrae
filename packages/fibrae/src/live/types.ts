@@ -2,8 +2,8 @@
  * @since 1.0.0
  * LiveChannel — shared definition imported by both server and client.
  */
-import type * as Schema from "effect/Schema"
-import type { Atom } from "@effect-atom/atom"
+import type * as Schema from "effect/Schema";
+import type { Atom } from "@effect-atom/atom";
 
 /**
  * A LiveChannel defines a named server→client sync point:
@@ -14,10 +14,10 @@ import type { Atom } from "@effect-atom/atom"
  * @since 1.0.0
  */
 export interface LiveChannel<A, I = A> {
-  readonly _tag: "LiveChannel"
-  readonly name: string
-  readonly schema: Schema.Schema<A, I>
-  readonly atom: Atom.Writable<A>
+  readonly _tag: "LiveChannel";
+  readonly name: string;
+  readonly schema: Schema.Schema<A, I>;
+  readonly atom: Atom.Writable<A>;
 }
 
 /**
@@ -36,10 +36,10 @@ export interface LiveChannel<A, I = A> {
  * @since 1.0.0
  */
 export const channel = <A, I>(opts: {
-  readonly name: string
-  readonly schema: Schema.Schema<A, I>
-  readonly atom: Atom.Writable<A>
+  readonly name: string;
+  readonly schema: Schema.Schema<A, I>;
+  readonly atom: Atom.Writable<A>;
 }): LiveChannel<A, I> => ({
   _tag: "LiveChannel" as const,
   ...opts,
-})
+});

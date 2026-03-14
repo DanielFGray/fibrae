@@ -2,14 +2,14 @@
  * @since 1.0.0
  * Client-side LiveSync — connects to SSE endpoint and syncs atoms.
  */
-import * as Effect from "effect/Effect"
-import * as Either from "effect/Either"
-import * as Runtime from "effect/Runtime"
-import * as Scope from "effect/Scope"
-import * as Schema from "effect/Schema"
-import { Registry as AtomRegistry } from "@effect-atom/atom"
-import { ComponentScope } from "../shared.js"
-import type { LiveChannel } from "./types.js"
+import * as Effect from "effect/Effect";
+import * as Either from "effect/Either";
+import * as Runtime from "effect/Runtime";
+import * as Scope from "effect/Scope";
+import * as Schema from "effect/Schema";
+import { Registry as AtomRegistry } from "@effect-atom/atom";
+import { ComponentScope } from "../shared.js";
+import type { LiveChannel } from "./types.js";
 
 /**
  * Options for `connect()`.
@@ -18,9 +18,9 @@ import type { LiveChannel } from "./types.js"
  */
 export interface ConnectOptions {
   /** SSE endpoint URL (e.g. "/api/live"). */
-  readonly url: string
+  readonly url: string;
   /** Whether to send cookies cross-origin. Required for cookie-based auth. */
-  readonly withCredentials?: boolean
+  readonly withCredentials?: boolean;
 }
 
 /**
@@ -50,37 +50,42 @@ export const connect = <A, I>(
 ): Effect.Effect<void, never, AtomRegistry.AtomRegistry | ComponentScope> =>
   Effect.gen(function* () {
     // Skip during SSR
-    if (typeof window === "undefined") return
+    if (typeof window === "undefined") return;
 
-    const registry = yield* AtomRegistry.AtomRegistry
-    const { scope } = yield* ComponentScope
-    const rt = yield* Effect.runtime<never>()
-    const run = Runtime.runSync(rt)
-    const decode = Schema.decodeUnknownEither(Schema.parseJson(channel.schema))
+    const registry = yield* AtomRegistry.AtomRegistry;
+    const { scope } = yield* ComponentScope;
+    const rt = yield* Effect.runtime<never>();
+    const run = Runtime.runSync(rt);
+    const decode = Schema.decodeUnknownEither(Schema.parseJson(channel.schema));
 
-    const es = new EventSource(options.url, { withCredentials: options.withCredentials ?? false })
+    const es = new EventSource(options.url, { withCredentials: options.withCredentials ?? false });
 
     es.addEventListener(channel.name, (e: MessageEvent) => {
-      const result = decode(e.data)
+      const result = decode(e.data);
       if (Either.isRight(result)) {
-        registry.set(channel.atom, result.right)
+        registry.set(channel.atom, result.right);
       } else {
         run(
           Effect.logWarning("LiveSync decode error").pipe(
             Effect.annotateLogs({ channel: channel.name, error: String(result.left) }),
           ),
-        )
+        );
       }
-    })
+    });
 
     es.onerror = () => {
-      run(Effect.logWarning("LiveSync connection error").pipe(
-        Effect.annotateLogs("channel", channel.name),
-      ))
-    }
+      run(
+        Effect.logWarning("LiveSync connection error").pipe(
+          Effect.annotateLogs("channel", channel.name),
+        ),
+      );
+    };
 
-    yield* Scope.addFinalizer(scope, Effect.sync(() => es.close()))
-  })
+    yield* Scope.addFinalizer(
+      scope,
+      Effect.sync(() => es.close()),
+    );
+  });
 
 /**
  * Connect to a multiplexed SSE endpoint and sync multiple channels' atoms.
@@ -95,36 +100,41 @@ export const connectGroup = (
   options: ConnectOptions,
 ): Effect.Effect<void, never, AtomRegistry.AtomRegistry | ComponentScope> =>
   Effect.gen(function* () {
-    if (typeof window === "undefined") return
+    if (typeof window === "undefined") return;
 
-    const registry = yield* AtomRegistry.AtomRegistry
-    const { scope } = yield* ComponentScope
-    const rt = yield* Effect.runtime<never>()
-    const run = Runtime.runSync(rt)
+    const registry = yield* AtomRegistry.AtomRegistry;
+    const { scope } = yield* ComponentScope;
+    const rt = yield* Effect.runtime<never>();
+    const run = Runtime.runSync(rt);
 
-    const es = new EventSource(options.url, { withCredentials: options.withCredentials ?? false })
+    const es = new EventSource(options.url, { withCredentials: options.withCredentials ?? false });
 
     for (const ch of channels) {
-      const decode = Schema.decodeUnknownEither(Schema.parseJson(ch.schema))
+      const decode = Schema.decodeUnknownEither(Schema.parseJson(ch.schema));
       es.addEventListener(ch.name, (e: MessageEvent) => {
-        const result = decode(e.data)
+        const result = decode(e.data);
         if (Either.isRight(result)) {
-          registry.set(ch.atom, result.right)
+          registry.set(ch.atom, result.right);
         } else {
           run(
             Effect.logWarning("LiveSync decode error").pipe(
               Effect.annotateLogs({ channel: ch.name, error: String(result.left) }),
             ),
-          )
+          );
         }
-      })
+      });
     }
 
     es.onerror = () => {
-      run(Effect.logWarning("LiveSync connection error").pipe(
-        Effect.annotateLogs("channels", channels.map((c) => c.name).join(",")),
-      ))
-    }
+      run(
+        Effect.logWarning("LiveSync connection error").pipe(
+          Effect.annotateLogs("channels", channels.map((c) => c.name).join(",")),
+        ),
+      );
+    };
 
-    yield* Scope.addFinalizer(scope, Effect.sync(() => es.close()))
-  })
+    yield* Scope.addFinalizer(
+      scope,
+      Effect.sync(() => es.close()),
+    );
+  });

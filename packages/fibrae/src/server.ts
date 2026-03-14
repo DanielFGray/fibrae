@@ -17,7 +17,14 @@ import * as Deferred from "effect/Deferred";
 import type * as Layer from "effect/Layer";
 
 import { Atom, Registry as AtomRegistry, Hydration } from "@effect-atom/atom";
-import { type VElement, type ElementType, type Primitive, isStream, isProperty, RenderError } from "./shared.js";
+import {
+  type VElement,
+  type ElementType,
+  type Primitive,
+  isStream,
+  isProperty,
+  RenderError,
+} from "./shared.js";
 
 // Re-export to satisfy declaration file requirements
 export type { Layer };
@@ -224,10 +231,8 @@ const renderVElementToString = (
       const rawHtml = vElement.props.dangerouslySetInnerHTML;
       if (rawHtml != null) return String(rawHtml);
 
-      return yield* Effect.reduce(
-        vElement.props.children ?? [],
-        "",
-        (acc, child) => renderVElementToString(child).pipe(Effect.map((h) => acc + h)),
+      return yield* Effect.reduce(vElement.props.children ?? [], "", (acc, child) =>
+        renderVElementToString(child).pipe(Effect.map((h) => acc + h)),
       );
     } else if (type === "SUSPENSE") {
       // Suspense boundary - race child rendering against timeout
@@ -279,13 +284,12 @@ const renderVElementToString = (
       }
 
       const rawHtml = vElement.props.dangerouslySetInnerHTML;
-      const childrenHtml = rawHtml != null
-        ? String(rawHtml)
-        : yield* Effect.reduce(
-            vElement.props.children ?? [],
-            "",
-            (acc, child) => renderVElementToString(child).pipe(Effect.map((h) => acc + h)),
-          );
+      const childrenHtml =
+        rawHtml != null
+          ? String(rawHtml)
+          : yield* Effect.reduce(vElement.props.children ?? [], "", (acc, child) =>
+              renderVElementToString(child).pipe(Effect.map((h) => acc + h)),
+            );
 
       return `<${type}${attrs}${keyAttr}>${childrenHtml}</${type}>`;
     }

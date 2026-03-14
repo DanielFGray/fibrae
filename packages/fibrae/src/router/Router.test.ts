@@ -130,18 +130,14 @@ describe("Router module", () => {
     test("layout.add is chainable", () => {
       const overview = Route.get("overview", "/overview");
       const settings = Route.get("settings", "/settings");
-      const dashboardLayout = Router.layout("dashboard", "/dashboard")
-        .add(overview)
-        .add(settings);
+      const dashboardLayout = Router.layout("dashboard", "/dashboard").add(overview).add(settings);
       expect(dashboardLayout.routes.length).toBe(2);
     });
 
     test("router.matchRoute matches layout routes with basePath prefix", () => {
       const overview = Route.get("overview", "/overview");
       const settings = Route.get("settings", "/settings");
-      const dashboardLayout = Router.layout("dashboard", "/dashboard")
-        .add(overview)
-        .add(settings);
+      const dashboardLayout = Router.layout("dashboard", "/dashboard").add(overview).add(settings);
       const router = Router.make("root").add(dashboardLayout);
 
       // Should match /dashboard/overview

@@ -7,6 +7,9 @@
     "type": "git",
     "url": "https://github.com/DanielFGray/fibrae"
   },
+  "bin": {
+    "fibrae": "./dist/cli/cli.js"
+  },
   "files": [
     "dist"
   ],
@@ -52,16 +55,15 @@
       "import": "./dist/cli/vite-plugin.js"
     }
   },
-  "bin": {
-    "fibrae": "./dist/cli/cli.js"
-  },
   "scripts": {
     "dev:server": "vite dev",
-    "build:watch": "tsc --watch -p .",
-    "build": "tsc -p .",
-    "types:watch": "tsc -p . --noEmit --watch",
-    "types:check": "tsc -p . --noEmit",
-    "types:check:fast": "tsgo -p . --noEmit",
+    "format": "oxfmt src/",
+    "lint": "oxlint src/",
+    "prebuild": "run-s format lint",
+    "build:watch": "tsgo --watch -p .",
+    "build": "tsgo -p .",
+    "types:watch": "tsgo -p . --noEmit --watch",
+    "types:check": "tsgo -p . --noEmit",
     "effect:check": "effect-language-service diagnostics --project tsconfig.json",
     "prepare": "effect-language-service patch --module tsc --module typescript"
   },

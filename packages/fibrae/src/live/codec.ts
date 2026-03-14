@@ -3,7 +3,7 @@
  * SSE encode/decode helpers for LiveSync.
  */
 
-const encoder = new TextEncoder()
+const encoder = new TextEncoder();
 
 /**
  * Encode an SSE event as a Uint8Array.
@@ -14,9 +14,8 @@ const encoder = new TextEncoder()
  */
 export const encodeSSE = (name: string, data: unknown, id?: string): Uint8Array =>
   encoder.encode(
-    (id !== undefined ? `id: ${id}\n` : "") +
-    `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`,
-  )
+    (id !== undefined ? `id: ${id}\n` : "") + `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`,
+  );
 
 /**
  * Encode an SSE comment (keepalive).
@@ -25,8 +24,7 @@ export const encodeSSE = (name: string, data: unknown, id?: string): Uint8Array 
  *
  * @since 1.0.0
  */
-export const encodeComment = (text: string): Uint8Array =>
-  encoder.encode(`: ${text}\n\n`)
+export const encodeComment = (text: string): Uint8Array => encoder.encode(`: ${text}\n\n`);
 
 /**
  * Encode an SSE retry directive.
@@ -37,8 +35,7 @@ export const encodeComment = (text: string): Uint8Array =>
  *
  * @since 1.0.0
  */
-export const encodeRetry = (millis: number): Uint8Array =>
-  encoder.encode(`retry: ${millis}\n\n`)
+export const encodeRetry = (millis: number): Uint8Array => encoder.encode(`retry: ${millis}\n\n`);
 
 /**
  * Standard SSE response headers.
@@ -48,4 +45,4 @@ export const encodeRetry = (millis: number): Uint8Array =>
 export const SSE_HEADERS = {
   "Cache-Control": "no-cache",
   Connection: "keep-alive",
-} as const
+} as const;

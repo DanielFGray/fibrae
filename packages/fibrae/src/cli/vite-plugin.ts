@@ -68,10 +68,7 @@ const renderDevPage = (opts: {
  * Walk the Vite module graph from an entry and collect CSS module URLs.
  * Injects these as <style> tags in the SSR HTML to prevent FOUC.
  */
-const collectCss = async (
-  server: ViteDevServer,
-  entryUrl: string,
-): Promise<string[]> => {
+const collectCss = async (server: ViteDevServer, entryUrl: string): Promise<string[]> => {
   // Warm the module graph so CSS deps are discovered
   await server.transformRequest(entryUrl);
 
@@ -140,9 +137,7 @@ export const fibrae = (config: FibraeConfig): Plugin => {
           // Collect CSS from client entry's module graph and inject into <head>
           const cssUrls = await collectCss(server, config.client);
           const cssTags = cssUrls.map((u) => `<link rel="stylesheet" href="${u}">`).join("\n");
-          const withCss = cssTags
-            ? rawHtml.replace("</head>", `${cssTags}\n</head>`)
-            : rawHtml;
+          const withCss = cssTags ? rawHtml.replace("</head>", `${cssTags}\n</head>`) : rawHtml;
 
           // Let Vite inject HMR client
           const result = await server.transformIndexHtml(url, withCss);
@@ -166,7 +161,9 @@ export const fibrae = (config: FibraeConfig): Plugin => {
         const { router, handlersLayer, appShell } = appModule;
 
         if (!router || !handlersLayer) {
-          console.warn("[fibrae-ssg] Entry module missing router or handlersLayer exports. Skipping SSG.");
+          console.warn(
+            "[fibrae-ssg] Entry module missing router or handlersLayer exports. Skipping SSG.",
+          );
           return;
         }
 

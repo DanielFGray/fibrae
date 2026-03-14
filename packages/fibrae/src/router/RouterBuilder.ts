@@ -48,7 +48,7 @@ export type LoaderResult<T, E = never, R = never> = T | Effect.Effect<T, E, R>;
 
 /** Normalize a value-or-Effect to always be an Effect. */
 const liftEffect = <A>(value: A | Effect.Effect<A, any, any>): Effect.Effect<A> =>
-  Effect.isEffect(value) ? value as Effect.Effect<A> : Effect.succeed(value as A);
+  Effect.isEffect(value) ? (value as Effect.Effect<A>) : Effect.succeed(value as A);
 
 /**
  * Per-route metadata for the document `<head>`.
@@ -138,7 +138,9 @@ export interface RouteHandler {
   readonly component: (props: ComponentProps) => VElement;
   readonly head: Option.Option<(ctx: HeadContext) => Effect.Effect<HeadData>>;
   readonly prerender: boolean;
-  readonly getStaticPaths: Option.Option<() => Effect.Effect<ReadonlyArray<Record<string, unknown>>>>;
+  readonly getStaticPaths: Option.Option<
+    () => Effect.Effect<ReadonlyArray<Record<string, unknown>>>
+  >;
 }
 
 /**
@@ -244,10 +246,7 @@ function makeGroupHandlers<GroupName extends string>(
       SearchParams extends Record<string, unknown>,
       R,
       E,
-    >(
-      routeName: RouteName,
-      config: HandlerConfig<LoaderData, PathParams, SearchParams, R, E>,
-    ) {
+    >(routeName: RouteName, config: HandlerConfig<LoaderData, PathParams, SearchParams, R, E>) {
       const maybeRoute = Option.fromNullable(routesByName.get(routeName));
       if (Option.isNone(maybeRoute)) {
         throw new Error(`Route "${routeName}" not found in group "${groupName}"`);
@@ -261,15 +260,15 @@ function makeGroupHandlers<GroupName extends string>(
 
       const head = Option.fromNullable(config.head).pipe(
         Option.map(
-          (fn) => (ctx: HeadContext): Effect.Effect<HeadData> =>
-            liftEffect(fn(ctx as HeadContext<LoaderData, PathParams, SearchParams>)),
+          (fn) =>
+            (ctx: HeadContext): Effect.Effect<HeadData> =>
+              liftEffect(fn(ctx as HeadContext<LoaderData, PathParams, SearchParams>)),
         ),
       );
 
       const getStaticPaths = Option.fromNullable(config.getStaticPaths).pipe(
         Option.map(
-          (fn) => (): Effect.Effect<ReadonlyArray<Record<string, unknown>>> =>
-            liftEffect(fn()),
+          (fn) => (): Effect.Effect<ReadonlyArray<Record<string, unknown>>> => liftEffect(fn()),
         ),
       );
 
@@ -321,10 +320,7 @@ function makeLayoutGroupHandlers<GroupName extends string>(
       SearchParams extends Record<string, unknown>,
       R,
       E,
-    >(
-      routeName: RouteName,
-      config: HandlerConfig<LoaderData, PathParams, SearchParams, R, E>,
-    ) {
+    >(routeName: RouteName, config: HandlerConfig<LoaderData, PathParams, SearchParams, R, E>) {
       const maybeRoute = Option.fromNullable(routesByName.get(routeName));
       if (Option.isNone(maybeRoute)) {
         throw new Error(`Route "${routeName}" not found in layout group "${groupName}"`);
@@ -338,15 +334,15 @@ function makeLayoutGroupHandlers<GroupName extends string>(
 
       const head = Option.fromNullable(config.head).pipe(
         Option.map(
-          (fn) => (ctx: HeadContext): Effect.Effect<HeadData> =>
-            liftEffect(fn(ctx as HeadContext<LoaderData, PathParams, SearchParams>)),
+          (fn) =>
+            (ctx: HeadContext): Effect.Effect<HeadData> =>
+              liftEffect(fn(ctx as HeadContext<LoaderData, PathParams, SearchParams>)),
         ),
       );
 
       const getStaticPaths = Option.fromNullable(config.getStaticPaths).pipe(
         Option.map(
-          (fn) => (): Effect.Effect<ReadonlyArray<Record<string, unknown>>> =>
-            liftEffect(fn()),
+          (fn) => (): Effect.Effect<ReadonlyArray<Record<string, unknown>>> => liftEffect(fn()),
         ),
       );
 
@@ -418,7 +414,9 @@ export function group<GroupName extends string, R>(
 export function group<GroupName extends string, R, R2>(
   appRouter: Router,
   groupName: GroupName,
-  build: (handlers: GroupHandlers<GroupName>) => Effect.Effect<GroupHandlers<GroupName, R>, never, R2>,
+  build: (
+    handlers: GroupHandlers<GroupName>,
+  ) => Effect.Effect<GroupHandlers<GroupName, R>, never, R2>,
 ): Layer.Layer<RouterHandlers, never, R | R2>;
 export function group<GroupName extends string, R, R2>(
   appRouter: Router,
@@ -507,7 +505,9 @@ export function layoutGroup<GroupName extends string, R, R2>(
   groupName: GroupName,
   build: (
     handlers: LayoutGroupHandlers<GroupName>,
-  ) => LayoutGroupHandlers<GroupName, R> | Effect.Effect<LayoutGroupHandlers<GroupName, R>, never, R2>,
+  ) =>
+    | LayoutGroupHandlers<GroupName, R>
+    | Effect.Effect<LayoutGroupHandlers<GroupName, R>, never, R2>,
 ): Layer.Layer<RouterHandlers, never, R | R2> {
   const routeGroup = findGroup(appRouter, groupName);
 
@@ -605,9 +605,9 @@ export interface PrerenderRoute {
  * - If `getStaticPaths` is defined, calls it to enumerate all param sets
  * - Otherwise, defaults to `[{}]` (a single page with no params)
  */
-export const getPrerenderRoutes = (
-  handlers: { readonly handlers: ReadonlyMap<string, RouteHandler> },
-): Effect.Effect<ReadonlyArray<PrerenderRoute>> =>
+export const getPrerenderRoutes = (handlers: {
+  readonly handlers: ReadonlyMap<string, RouteHandler>;
+}): Effect.Effect<ReadonlyArray<PrerenderRoute>> =>
   Effect.all(
     Array.from(handlers.handlers.values())
       .filter((h) => h.prerender)
@@ -615,6 +615,6 @@ export const getPrerenderRoutes = (
         Option.match(handler.getStaticPaths, {
           onNone: () => Effect.succeed([{}] as ReadonlyArray<Record<string, unknown>>),
           onSome: (fn) => fn(),
-        }).pipe(Effect.map((paramSets): PrerenderRoute => ({ handler, paramSets })))
+        }).pipe(Effect.map((paramSets): PrerenderRoute => ({ handler, paramSets }))),
       ),
   );

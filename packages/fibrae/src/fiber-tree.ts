@@ -9,11 +9,7 @@
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import type {
-  VElement,
-  ElementType,
-  Fiber,
-} from "./shared.js";
+import type { VElement, ElementType, Fiber } from "./shared.js";
 import { FibraeRuntime } from "./runtime.js";
 
 // =============================================================================

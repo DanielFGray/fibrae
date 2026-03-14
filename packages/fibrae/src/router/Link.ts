@@ -137,14 +137,14 @@ export function createLink(router: Router) {
         });
       };
 
-       // Return VElement directly - children are already normalized by JSX runtime
+      // Return VElement directly - children are already normalized by JSX runtime
       // Normalize children to array (VChild can be single value or array)
       const normalizedChildren = props.children
         ? Array.isArray(props.children)
           ? props.children
           : [props.children]
         : [];
-      
+
       return {
         type: "a",
         props: {

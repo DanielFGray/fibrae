@@ -109,7 +109,10 @@ export const updateDom = (
 
     // Handle dangerouslySetInnerHTML
     if (nextProps.dangerouslySetInnerHTML != null) {
-      if (el instanceof HTMLElement && nextProps.dangerouslySetInnerHTML !== prevProps.dangerouslySetInnerHTML) {
+      if (
+        el instanceof HTMLElement &&
+        nextProps.dangerouslySetInnerHTML !== prevProps.dangerouslySetInnerHTML
+      ) {
         el.innerHTML = String(nextProps.dangerouslySetInnerHTML);
       }
     }

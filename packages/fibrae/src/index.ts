@@ -19,12 +19,7 @@ export type { VElement, ElementType, Primitive } from "./shared.js";
 export type { VElement as VNode } from "./shared.js";
 
 // Error types
-export {
-  RenderError,
-  StreamError,
-  EventHandlerError,
-  type ComponentError,
-} from "./shared.js";
+export { RenderError, StreamError, EventHandlerError, type ComponentError } from "./shared.js";
 
 // Component lifecycle
 export { ComponentScope } from "./shared.js";

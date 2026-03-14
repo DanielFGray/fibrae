@@ -88,14 +88,10 @@ export class FibraeRuntime extends Effect.Service<FibraeRuntime>()("FibraeRuntim
       getResult: <A, E>(
         atom: Atom.Atom<Result.Result<A, E>>,
         options?: { readonly suspendOnWaiting?: boolean },
-      ): Effect.Effect<A, E> =>
-        RegistryModule.getResult(registry, atom, options),
-      toStreamResult: <A, E>(
-        atom: Atom.Atom<Result.Result<A, E>>,
-      ): Stream.Stream<A, E> =>
+      ): Effect.Effect<A, E> => RegistryModule.getResult(registry, atom, options),
+      toStreamResult: <A, E>(atom: Atom.Atom<Result.Result<A, E>>): Stream.Stream<A, E> =>
         RegistryModule.toStreamResult(registry, atom),
-      refresh: <A>(atom: Atom.Atom<A>): void =>
-        registry.refresh(atom),
+      refresh: <A>(atom: Atom.Atom<A>): void => registry.refresh(atom),
     };
 
     return {
