@@ -1,7 +1,16 @@
+/**
+ * LiveSync E2E Tests
+ *
+ * Tests SSE-based live data synchronization:
+ * - Single channel (connect)
+ * - Multi channel (connectGroup)
+ * - SSE protocol (monotonic IDs, retry directive)
+ */
+
 describe("LiveSync", () => {
-  // =========================================================================
+  // ===========================================================================
   // connect — single channel
-  // =========================================================================
+  // ===========================================================================
 
   describe("connect (single channel)", () => {
     beforeEach(() => {
@@ -9,7 +18,6 @@ describe("LiveSync", () => {
     })
 
     it("SSR renders placeholder, then hydrates with live data", () => {
-      // After hydration + SSE connect, should show an ISO date
       cy.get('[data-cy="single-clock"]', { timeout: 10000 })
         .invoke("text")
         .should("match", /\d{4}-\d{2}-\d{2}/)
@@ -20,7 +28,6 @@ describe("LiveSync", () => {
         .invoke("text")
         .should("match", /\d{4}-\d{2}-\d{2}/)
         .then((first) => {
-          // Clock ticks every 1s — wait then verify the value changed
           cy.wait(1500)
           cy.get('[data-cy="single-clock"]')
             .invoke("text")
@@ -29,9 +36,9 @@ describe("LiveSync", () => {
     })
   })
 
-  // =========================================================================
+  // ===========================================================================
   // connectGroup — multiple channels over one EventSource
-  // =========================================================================
+  // ===========================================================================
 
   describe("connectGroup (multi channel)", () => {
     beforeEach(() => {
@@ -45,7 +52,6 @@ describe("LiveSync", () => {
     })
 
     it("syncs the counter channel atom to a value > 0", () => {
-      // Counter increments each second; wait for a non-zero value
       cy.get('[data-cy="multi-counter"]', { timeout: 10000 })
         .invoke("text")
         .should("not.eq", "0")
@@ -66,9 +72,9 @@ describe("LiveSync", () => {
     })
   })
 
-  // =========================================================================
+  // ===========================================================================
   // SSE protocol features — id and retry
-  // =========================================================================
+  // ===========================================================================
 
   describe("SSE protocol", () => {
     it("events carry monotonic id field (single channel)", () => {
@@ -97,7 +103,6 @@ describe("LiveSync", () => {
             }, 10000)
           }),
       ).then((events) => {
-        // IDs should be monotonic integers starting from 0
         expect(events[0].id).to.eq("0")
         expect(events[1].id).to.eq("1")
         expect(events[2].id).to.eq("2")
@@ -133,9 +138,7 @@ describe("LiveSync", () => {
             }, 10000)
           }),
       ).then((ids) => {
-        // All IDs should be numeric strings
         ids.forEach((id) => expect(Number(id)).to.be.a("number"))
-        // IDs should be monotonically increasing across channels
         const nums = ids.map(Number)
         for (let i = 1; i < nums.length; i++) {
           expect(nums[i]).to.be.greaterThan(nums[i - 1])
@@ -144,7 +147,6 @@ describe("LiveSync", () => {
     })
 
     it("stream includes retry directive", () => {
-      // Use Node.js task to read raw SSE bytes (bypasses browser/Vite proxy)
       cy.task("readSSEStream", {
         url: "http://localhost:3001/api/live/test-clock",
         timeoutMs: 5000,
