@@ -60,11 +60,15 @@
     "build:watch": "tsc --watch -p .",
     "build": "tsc -p .",
     "types:watch": "tsc -p . --noEmit --watch",
-    "types:check": "tsc -p . --noEmit"
+    "types:check": "tsc -p . --noEmit",
+    "types:check:fast": "tsgo -p . --noEmit",
+    "effect:check": "effect-language-service diagnostics --project tsconfig.json",
+    "prepare": "effect-language-service patch --module tsc --module typescript"
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",
     "@types/node": "^24.10.0",
+    "@typescript/native-preview": "^7.0.0-dev.20260314.1",
     "typescript": "catalog:",
     "vite": "^8.0.0"
   },
