@@ -37,14 +37,14 @@ const postsRoute = Route.get("posts", "/posts");
 const postRoute = Route.get("post")`/posts/${Route.param("id", Schema.NumberFromString)}`;
 
 // Build the router
-const appRouter = Router.make("app").add(
-  Router.group("main")
-    .add(homeRoute)
-    .add(counterRoute)
-    .add(todosRoute)
-    .add(postsRoute)
-    .add(postRoute),
-);
+const mainGroup = Router.group("main")
+  .add(homeRoute)
+  .add(counterRoute)
+  .add(todosRoute)
+  .add(postsRoute)
+  .add(postRoute);
+
+const appRouter = Router.make("app").add(mainGroup);
 
 // Create Link component bound to router
 const Link = createLink(appRouter);
@@ -279,7 +279,7 @@ const PostDetailPage = ({ id }: { id: number }) => {
 // Route Handlers (using RouterBuilder)
 // =============================================================================
 
-const AppRoutesLive = RouterBuilder.group(appRouter, "main", (handlers) =>
+const AppRoutesLive = RouterBuilder.group(appRouter, mainGroup, (handlers) =>
   handlers
     .handle("home", {
       component: () => <HomePage />,

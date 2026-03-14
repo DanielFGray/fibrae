@@ -122,7 +122,7 @@ export function Navigation(): VElement {
 export function createSSRRouterHandlers(isServer: boolean) {
   const source = isServer ? "server" : "client";
 
-  return RouterBuilder.group(SSRRouter, "ssr", (handlers) =>
+  return RouterBuilder.group(SSRRouter, SSRRouterRoutes, (handlers) =>
     handlers
       .handle("home", {
         loader: () => ({

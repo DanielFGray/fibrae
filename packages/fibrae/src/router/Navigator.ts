@@ -117,19 +117,22 @@ export class Navigator extends Context.Tag("fibrae/Navigator")<Navigator, Naviga
 
 /**
  * Match current location against router and return CurrentRoute.
+ * Returns Effect since route matching uses Schema.decodeUnknown.
  */
 function matchLocation(
   router: Router,
   location: HistoryLocation,
   basePath: string = "",
-): Option.Option<CurrentRoute> {
+): Effect.Effect<Option.Option<CurrentRoute>> {
   return router.matchRoute(stripBasePath(location.pathname, basePath)).pipe(
-    Option.map(({ route, params, layouts }) => ({
-      routeName: route.name,
-      params,
-      searchParams: parseSearchParams(location.search),
-      layouts: layouts.map((l) => l.name),
-    })),
+    Effect.map((matchResult) =>
+      Option.map(matchResult, ({ route, params, layouts }) => ({
+        routeName: route.name,
+        params,
+        searchParams: parseSearchParams(location.search),
+        layouts: layouts.map((l) => l.name),
+      })),
+    ),
   );
 }
 
@@ -171,13 +174,14 @@ export function NavigatorLive(
 
       // Get initial location and create currentRoute atom
       const initialLocation = registry.get(history.location);
-      const initialRoute = matchLocation(router, initialLocation, basePath);
+      const initialRoute = yield* matchLocation(router, initialLocation, basePath);
       const currentRouteAtom = Atom.make(initialRoute);
 
       // Subscribe to location changes to update currentRoute.
       // This handles popstate events (browser back/forward) automatically.
+      // Effect.runSync is safe here: matchPath is pure computation with no requirements.
       const unsubscribe = registry.subscribe(history.location, (location) => {
-        const matched = matchLocation(router, location, basePath);
+        const matched = Effect.runSync(matchLocation(router, location, basePath));
         registry.set(currentRouteAtom, matched);
       });
 
@@ -201,7 +205,7 @@ export function NavigatorLive(
 
             // Build URL from route and params
             const pathParams = navigateOptions.path ?? ({} as Record<string, unknown>);
-            const routePathname = route.interpolate(pathParams);
+            const routePathname = yield* route.interpolate(pathParams);
             // Prepend navigator basePath AND route's layout basePath
             const pathname = basePath + routeBasePath + routePathname;
             const search = navigateOptions.searchParams
@@ -215,7 +219,11 @@ export function NavigatorLive(
             } else {
               yield* history.push(url);
             }
-          }),
+          }).pipe(
+            Effect.catchTag("RouteError", (e) =>
+              Effect.logWarning(`Navigation failed: ${e.message}`),
+            ),
+          ),
 
         // Back/forward - currentRoute updates automatically when history.location
         // changes (popstate handler updates locationAtom, derived atom recomputes)
@@ -255,6 +263,29 @@ export function NavigatorLive(
 // =============================================================================
 // Convenience Accessors
 // =============================================================================
+
+/**
+ * Create a typed go() function constrained to valid route names.
+ *
+ * Usage:
+ * ```typescript
+ * const go = createGo(AppRouter);
+ * yield* go("posts");           // OK
+ * yield* go("typo");            // compile-time error!
+ * ```
+ */
+export function createGo<RouteNames extends string>(
+  _router: Router<string, RouteNames>,
+): (
+  routeName: RouteNames,
+  options?: NavigateOptions,
+) => Effect.Effect<void, never, Navigator | AtomRegistry.AtomRegistry> {
+  return (routeName, options) =>
+    Effect.gen(function* () {
+      const nav = yield* Navigator;
+      yield* nav.go(routeName, options);
+    });
+}
 
 /**
  * Navigate to a route by name.

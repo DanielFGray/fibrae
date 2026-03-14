@@ -83,7 +83,7 @@ function PostPage(props: {
 // =============================================================================
 
 // Create handler layer
-const AppRoutesLive = RouterBuilder.group(AppRouter, "app", (handlers) =>
+const AppRoutesLive = RouterBuilder.group(AppRouter, AppRoutes, (handlers) =>
   Effect.succeed(
     handlers
       .handle("home", {

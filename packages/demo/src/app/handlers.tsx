@@ -13,7 +13,7 @@ import type { VElement } from "fibrae";
 import { AtomRegistry, Suspense } from "fibrae";
 import { RouterBuilder } from "fibrae/router";
 import { PostsClient, type Post } from "../api/index.js";
-import { AppRouter, Link } from "./routes.js";
+import { AppRouter, AppRoutes, Link } from "./routes.js";
 import { PostDetail } from "./components/PostDetail.js";
 import { PostForm, PostFormTitleAtom, PostFormContentAtom } from "./components/PostForm.js";
 import { PostList } from "./components/PostList.js";
@@ -70,7 +70,7 @@ function PostsPage(): VElement {
 export function createAppHandlers(isServer: boolean) {
   const source = isServer ? "server" : "client";
 
-  return RouterBuilder.group(AppRouter, "app", (handlers) =>
+  return RouterBuilder.group(AppRouter, AppRoutes, (handlers) =>
     handlers
       // Home page - no loader needed
       .handle("home", {
@@ -142,3 +142,13 @@ export const AppHandlersClientLive = createAppHandlers(false);
  */
 export const AppHandlersLive = (isServer: boolean) =>
   createAppHandlers(isServer);
+
+// =============================================================================
+// Type Safety Assertions (compile-time tests)
+// =============================================================================
+
+void RouterBuilder.group(AppRouter, AppRoutes, (h) =>
+  h
+    // @ts-expect-error — "typo" is not a valid route name for this group
+    .handle("typo", { component: () => <div /> }),
+);

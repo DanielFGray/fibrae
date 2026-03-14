@@ -86,7 +86,7 @@ export class OutletDepth extends Context.Tag("fibrae/OutletDepth")<OutletDepth, 
  */
 export function RouterOutlet(): Stream.Stream<
   VElement,
-  unknown,
+  never,
   Navigator | RouterHandlers | AtomRegistry.AtomRegistry
 > {
   // Track if this is the first render (for SSR hydration)

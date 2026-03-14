@@ -10,12 +10,21 @@
 
 import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
+import * as Effect from "effect/Effect";
+import * as Data from "effect/Data";
 
 /**
  * Annotation symbol for storing parameter name in schema metadata.
  * Mirrors HttpApiSchema.AnnotationParam pattern.
  */
 export const AnnotationParam: unique symbol = Symbol.for("fibrae/Route/AnnotationParam");
+
+/**
+ * Typed error for route operations (interpolation, matching failures).
+ */
+export class RouteError extends Data.TaggedError("RouteError")<{
+  readonly message: string;
+}> {}
 
 /**
  * Represents a single route with path and optional search params validation.
@@ -34,14 +43,15 @@ export interface Route<
   /**
    * Match a pathname against this route.
    * Returns the decoded path parameters if matched, None otherwise.
+   * Uses Schema.decodeUnknown (Effect-returning) for path param validation.
    */
-  readonly match: (pathname: string) => Option.Option<PathParams>;
+  readonly match: (pathname: string) => Effect.Effect<Option.Option<PathParams>>;
 
   /**
    * Build a URL from path parameters.
-   * Throws if required params are missing.
+   * Fails with RouteError if required params are missing.
    */
-  readonly interpolate: (params: PathParams) => string;
+  readonly interpolate: (params: PathParams) => Effect.Effect<string, RouteError>;
 
   /**
    * Set search parameter schema for this route.
@@ -94,34 +104,36 @@ function getParamName(schema: Schema.Schema.Any): string | undefined {
  * Pattern: "/posts/:id/comments/:commentId"
  * Pathname: "/posts/123/comments/456"
  * Returns: { id: "123", commentId: "456" }
+ *
+ * Uses Schema.decodeUnknown (Effect-returning) for path param validation.
  */
 function matchPath(
   pattern: string,
   pathname: string,
-  pathSchema: Option.Option<any>,
-): Option.Option<Record<string, unknown>> {
+  pathSchema: Option.Option<Schema.Schema.Any>,
+): Effect.Effect<Option.Option<Record<string, unknown>>> {
   // Convert pattern with :params to regex
   const regexPattern = pattern.replace(/:(\w+)/g, "(?<$1>[^/]+)");
   const regex = new RegExp(`^${regexPattern}/?$`);
   const match = pathname.match(regex);
 
   if (!match) {
-    return Option.none();
+    return Effect.succeed(Option.none());
   }
 
   const params = match.groups ?? {};
 
-  // Decode and validate with schema if present
+  // Decode and validate with schema if present.
+  // Cast to Effect<unknown, unknown> to erase the Schema.Any's `any` R parameter,
+  // since route schemas never have Effect requirements.
   if (Option.isSome(pathSchema)) {
-    try {
-      const decoded = Schema.decodeSync(pathSchema.value)(params) as Record<string, unknown>;
-      return Option.some(decoded);
-    } catch {
-      return Option.none();
-    }
+    return (Schema.decodeUnknown(pathSchema.value)(params) as Effect.Effect<unknown, unknown>).pipe(
+      Effect.map((decoded) => Option.some(decoded as Record<string, unknown>)),
+      Effect.catchAll(() => Effect.succeed(Option.none<Record<string, unknown>>())),
+    );
   }
 
-  return Option.some(params);
+  return Effect.succeed(Option.some(params));
 }
 
 /**
@@ -130,14 +142,28 @@ function matchPath(
  * Params: { id: 123, commentId: 456 }
  * Returns: "/posts/123/comments/456"
  */
-function interpolatePath(pattern: string, params: Record<string, unknown>): string {
-  return pattern.replace(/:(\w+)/g, (_, key) => {
+function interpolatePath(
+  pattern: string,
+  params: Record<string, unknown>,
+): Effect.Effect<string, RouteError> {
+  const segments: string[] = [];
+  const paramPattern = /:(\w+)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = paramPattern.exec(pattern)) !== null) {
+    segments.push(pattern.slice(lastIndex, match.index));
+    const key = match[1];
     const value = params[key];
     if (value === undefined) {
-      throw new Error(`Missing required parameter: ${key}`);
+      return Effect.fail(new RouteError({ message: `Missing required parameter: ${key}` }));
     }
-    return String(value);
-  });
+    segments.push(String(value));
+    lastIndex = paramPattern.lastIndex;
+  }
+  segments.push(pattern.slice(lastIndex));
+
+  return Effect.succeed(segments.join(""));
 }
 
 /**
@@ -173,9 +199,12 @@ function makeRoute<
     path,
     pathSchema,
     searchSchema,
-    match: (pathname) => matchPath(path, pathname, pathSchema as any) as Option.Option<PathParams>,
-    interpolate: (params) => interpolatePath(path, params as any),
-    setSearchParams: (schema) => makeRoute(_name, path, pathSchema, Option.some(schema) as any),
+    match: (pathname) =>
+      matchPath(path, pathname, pathSchema as Option.Option<Schema.Schema.Any>) as Effect.Effect<
+        Option.Option<PathParams>
+      >,
+    interpolate: (params) => interpolatePath(path, params) as Effect.Effect<string, RouteError>,
+    setSearchParams: (schema) => makeRoute(_name, path, pathSchema, Option.some(schema)),
   };
 }
 
@@ -192,7 +221,11 @@ function makeGetter(): RouteConstructor {
     // Return template literal handler
     return (segments: TemplateStringsArray, ...schemas: readonly Schema.Schema.Any[]) => {
       const { path: parsedPath, pathSchema } = parsePathTemplate(segments, Array.from(schemas));
-      return makeRoute(name, parsedPath, pathSchema as any);
+      return makeRoute(
+        name,
+        parsedPath,
+        pathSchema as Option.Option<Schema.Schema<Record<string, unknown>>>,
+      );
     };
   }) as RouteConstructor;
 }

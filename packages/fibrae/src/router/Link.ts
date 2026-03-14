@@ -27,10 +27,11 @@ import { findRouteByName, groupBasePath, buildSearchString } from "./utils.js";
 
 /**
  * Props for the Link component.
+ * RouteNames constrains `to` to valid route names when created via createLink.
  */
-export interface LinkProps {
-  /** Route name to navigate to */
-  readonly to: string;
+export interface LinkProps<RouteNames extends string = string> {
+  /** Route name to navigate to — constrained to valid route names */
+  readonly to: RouteNames;
   /** Path parameters for the route */
   readonly params?: Record<string, unknown>;
   /** Search/query parameters */
@@ -53,6 +54,7 @@ export interface LinkProps {
 
 /**
  * Build the href for a route with params.
+ * Returns Effect since route.interpolate is effectful.
  */
 function buildHref(
   router: Router,
@@ -60,14 +62,19 @@ function buildHref(
   params?: Record<string, unknown>,
   search?: Record<string, unknown>,
   basePath: string = "",
-): string {
+): Effect.Effect<string> {
   return findRouteByName(router, routeName).pipe(
-    Option.map(({ route, group }) => {
-      const pathname = route.interpolate(params ?? {});
-      const searchString = search ? buildSearchString(search) : "";
-      return `${basePath}${groupBasePath(group)}${pathname}${searchString}`;
+    Option.match({
+      onNone: () => Effect.succeed("#"),
+      onSome: ({ route, group }) =>
+        route.interpolate(params ?? ({} as Record<string, unknown>)).pipe(
+          Effect.map((pathname) => {
+            const searchString = search ? buildSearchString(search) : "";
+            return `${basePath}${groupBasePath(group)}${pathname}${searchString}`;
+          }),
+          Effect.catchAll(() => Effect.succeed("#")),
+        ),
     }),
-    Option.getOrElse(() => "#"),
   );
 }
 
@@ -82,22 +89,31 @@ function buildHref(
  * - Building hrefs from route names
  * - Checking active state
  *
+ * The returned Link component constrains `to` to the router's valid route names.
+ *
  * Usage:
  * ```typescript
  * const Link = createLink(appRouter);
  * <Link to="posts" params={{ id: 123 }}>View Post</Link>
+ * // <Link to="typo" /> — compile-time error!
  * ```
  */
-export function createLink(router: Router) {
+export function createLink<RouteNames extends string>(router: Router<string, RouteNames>) {
   return function Link(
-    props: LinkProps,
+    props: LinkProps<RouteNames>,
   ): Effect.Effect<VElement, never, Navigator | AtomRegistry.AtomRegistry> {
     return Effect.gen(function* () {
       const navigator = yield* Navigator;
       const currentRoute = yield* Atom.get(navigator.currentRoute);
 
       // Build href for SSR/accessibility (includes basePath)
-      const href = buildHref(router, props.to, props.params, props.search, navigator.basePath);
+      const href = yield* buildHref(
+        router,
+        props.to,
+        props.params,
+        props.search,
+        navigator.basePath,
+      );
 
       // Check if this link is active
       const isActive = Option.match(currentRoute, {

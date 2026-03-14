@@ -10,6 +10,7 @@
 
 // Route declaration
 export * as Route from "./Route.js";
+export { RouteError } from "./Route.js";
 
 // Router and groups
 export * as Router from "./Router.js";
@@ -49,7 +50,7 @@ export { History as HistoryTag, BrowserHistoryLive, MemoryHistoryLive } from "./
 
 // Re-export Navigator types and service tag
 export type { CurrentRoute, NavigateOptions, NavigatorService } from "./Navigator.js";
-export { Navigator as NavigatorTag, NavigatorLive } from "./Navigator.js";
+export { Navigator as NavigatorTag, NavigatorLive, createGo } from "./Navigator.js";
 
 // Re-export Link component factory
 export type { LinkProps } from "./Link.js";

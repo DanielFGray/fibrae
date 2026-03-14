@@ -37,30 +37,36 @@ export class RouterError extends Data.TaggedError("RouterError")<{
 /**
  * A group of routes for organizational purposes.
  * Groups provide namespacing for handler implementation.
+ * RouteNames accumulates route name literal types via .add() for type-safe navigation.
  */
-export interface RouteGroup<Name extends string = string> {
+export interface RouteGroup<Name extends string = string, RouteNames extends string = never> {
   readonly _tag: "RouteGroup";
   readonly name: Name;
   readonly routes: readonly Route[];
-  readonly add: (route: Route) => RouteGroup<Name>;
+  readonly add: <RName extends string>(route: Route<RName>) => RouteGroup<Name, RouteNames | RName>;
 }
 
 /**
  * A layout group wraps routes with a layout component.
  * The layout component should render <RouterOutlet /> for children.
+ * RouteNames accumulates route name literal types via .add() for type-safe navigation.
  */
-export interface LayoutGroup<Name extends string = string> {
+export interface LayoutGroup<Name extends string = string, RouteNames extends string = never> {
   readonly _tag: "LayoutGroup";
   readonly name: Name;
   readonly basePath: string;
   readonly routes: readonly Route[];
-  readonly add: (route: Route) => LayoutGroup<Name>;
+  readonly add: <RName extends string>(
+    route: Route<RName>,
+  ) => LayoutGroup<Name, RouteNames | RName>;
 }
 
 /**
  * Union of group types that can be added to a router.
  */
-export type AnyGroup<Name extends string = string> = RouteGroup<Name> | LayoutGroup<Name>;
+export type AnyGroup<Name extends string = string, RouteNames extends string = never> =
+  | RouteGroup<Name, RouteNames>
+  | LayoutGroup<Name, RouteNames>;
 
 /**
  * Result of matching a route, including any layout wrappers.
@@ -75,35 +81,43 @@ export interface RouteMatch {
 
 /**
  * The complete router holding all route groups and enabling route matching.
+ * RouteNames accumulates all route names from added groups for type-safe navigation.
  */
-export interface Router<Name extends string = string> {
+export interface Router<Name extends string = string, RouteNames extends string = never> {
   readonly name: Name;
   readonly groups: readonly AnyGroup[];
-  readonly add: (group: AnyGroup) => Router<Name>;
+  readonly add: <GName extends string, GRouteNames extends string>(
+    group: AnyGroup<GName, GRouteNames>,
+  ) => Router<Name, RouteNames | GRouteNames>;
 
   /**
    * Match a pathname against all routes in the router.
    * Returns the matched route, group name, decoded path parameters,
    * and any layout groups that wrap the route.
    */
-  readonly matchRoute: (pathname: string) => Option.Option<RouteMatch>;
+  readonly matchRoute: (pathname: string) => Effect.Effect<Option.Option<RouteMatch>>;
 }
 
 /**
  * Create a route group with the given name.
  * Routes are added via group.add(route).
+ * Route names accumulate as literal types through the builder chain.
  */
-export function group<const Name extends string>(name: Name): RouteGroup<Name> {
+export function group<const Name extends string>(name: Name): RouteGroup<Name, never> {
+  return createRouteGroup<Name, never>(name, []);
+}
+
+/** Internal helper — creates a RouteGroup with accumulated RouteNames. */
+function createRouteGroup<Name extends string, RouteNames extends string>(
+  name: Name,
+  routes: readonly Route[],
+): RouteGroup<Name, RouteNames> {
   return {
     _tag: "RouteGroup",
     name,
-    routes: [],
-    add(route: Route): RouteGroup<Name> {
-      return {
-        ...this,
-        routes: [...this.routes, route],
-      };
-    },
+    routes,
+    add: <RName extends string>(route: Route<RName>) =>
+      createRouteGroup<Name, RouteNames | RName>(name, [...routes, route]),
   };
 }
 
@@ -129,69 +143,86 @@ export function group<const Name extends string>(name: Name): RouteGroup<Name> {
  *   .add(Route.get("settings", "/settings"));  // matches /dashboard/settings
  * ```
  */
-export function layout<const Name extends string>(name: Name, basePath: string): LayoutGroup<Name> {
+export function layout<const Name extends string>(
+  name: Name,
+  basePath: string,
+): LayoutGroup<Name, never> {
   // Normalize basePath - ensure it starts with / and doesn't end with /
   const normalizedBase = basePath.startsWith("/") ? basePath : `/${basePath}`;
   const cleanBase = normalizedBase.endsWith("/") ? normalizedBase.slice(0, -1) : normalizedBase;
 
+  return createLayoutGroup<Name, never>(name, cleanBase, []);
+}
+
+/** Internal helper — creates a LayoutGroup with accumulated RouteNames. */
+function createLayoutGroup<Name extends string, RouteNames extends string>(
+  name: Name,
+  basePath: string,
+  routes: readonly Route[],
+): LayoutGroup<Name, RouteNames> {
   return {
     _tag: "LayoutGroup",
     name,
-    basePath: cleanBase,
-    routes: [],
-    add(route: Route): LayoutGroup<Name> {
-      return {
-        ...this,
-        routes: [...this.routes, route],
-      };
-    },
+    basePath,
+    routes,
+    add: <RName extends string>(route: Route<RName>) =>
+      createLayoutGroup<Name, RouteNames | RName>(name, basePath, [...routes, route]),
   };
 }
 
 /**
  * Create a router with the given name.
  * Groups are added via router.add(group).
+ * Route names accumulate from groups for type-safe navigation.
  */
-export function make<const Name extends string>(name: Name): Router<Name> {
+export function make<const Name extends string>(name: Name): Router<Name, never> {
+  return createRouter<Name, never>(name, []);
+}
+
+/** Internal helper — creates a Router with accumulated RouteNames. */
+function createRouter<Name extends string, RouteNames extends string>(
+  name: Name,
+  groups: readonly AnyGroup[],
+): Router<Name, RouteNames> {
   return {
     name,
-    groups: [],
-    add(g: AnyGroup): Router<Name> {
-      return {
-        ...this,
-        groups: [...this.groups, g],
-      };
-    },
-    matchRoute(pathname: string): Option.Option<RouteMatch> {
-      const tryMatchGroup = (g: AnyGroup): Option.Option<RouteMatch> => {
+    groups,
+    add: <GName extends string, GRouteNames extends string>(g: AnyGroup<GName, GRouteNames>) =>
+      createRouter<Name, RouteNames | GRouteNames>(name, [...groups, g]),
+
+    matchRoute(pathname: string): Effect.Effect<Option.Option<RouteMatch>> {
+      const tryMatchRoutes = (
+        routes: readonly Route[],
+        path: string,
+        groupName: string,
+        layouts: readonly LayoutGroup[],
+      ): Effect.Effect<Option.Option<RouteMatch>> =>
+        Effect.gen(function* () {
+          for (const route of routes) {
+            const match = yield* route.match(path);
+            if (Option.isSome(match)) {
+              return Option.some({ groupName, route, params: match.value, layouts });
+            }
+          }
+          return Option.none();
+        });
+
+      const tryMatchGroup = (g: AnyGroup): Effect.Effect<Option.Option<RouteMatch>> => {
         if (g._tag === "LayoutGroup") {
-          if (!pathname.startsWith(g.basePath)) return Option.none();
+          if (!pathname.startsWith(g.basePath)) return Effect.succeed(Option.none());
           const remainingPath = pathname.slice(g.basePath.length) || "/";
           return tryMatchRoutes(g.routes, remainingPath, g.name, [g]);
         }
         return tryMatchRoutes(g.routes, pathname, g.name, []);
       };
 
-      const tryMatchRoutes = (
-        routes: readonly Route[],
-        path: string,
-        groupName: string,
-        layouts: readonly LayoutGroup[],
-      ): Option.Option<RouteMatch> => {
-        for (const route of routes) {
-          const match = route.match(path);
-          if (Option.isSome(match)) {
-            return Option.some({ groupName, route, params: match.value, layouts });
-          }
+      return Effect.gen(function* () {
+        for (const g of groups) {
+          const result = yield* tryMatchGroup(g);
+          if (Option.isSome(result)) return result;
         }
         return Option.none();
-      };
-
-      for (const g of this.groups) {
-        const result = tryMatchGroup(g);
-        if (Option.isSome(result)) return result;
-      }
-      return Option.none();
+      });
     },
   };
 }
@@ -319,14 +350,14 @@ export function serverLayer(
       const registry = yield* AtomRegistry.AtomRegistry;
 
       // Match route using stripped pathname
-      const match = router.matchRoute(matchPathname);
-      if (Option.isNone(match)) {
+      const matchResult = yield* router.matchRoute(matchPathname);
+      if (Option.isNone(matchResult)) {
         return yield* Effect.fail(
           new RouterError({ message: `No route matched pathname: ${matchPathname}` }),
         );
       }
 
-      const { route, params } = match.value;
+      const { route, params } = matchResult.value;
 
       // Get handler for this route
       const handler = routerHandlers.getHandler(route.name);
@@ -545,14 +576,14 @@ export function browserLayer(
       const search = window.location.search;
       const searchParams = parseSearchParams(search);
 
-      const match = router.matchRoute(matchPathname);
-      if (Option.isNone(match)) {
+      const matchResult = yield* router.matchRoute(matchPathname);
+      if (Option.isNone(matchResult)) {
         return yield* Effect.fail(
           new RouterError({ message: `No route matched pathname: ${matchPathname}` }),
         );
       }
 
-      const { route, params } = match.value;
+      const { route, params } = matchResult.value;
 
       const handler = routerHandlers.getHandler(route.name);
       if (Option.isNone(handler)) {

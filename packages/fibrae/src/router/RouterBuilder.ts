@@ -12,6 +12,7 @@ import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import type { Router, RouteGroup, LayoutGroup, AnyGroup } from "./Router.js";
+import { RouterError } from "./Router.js";
 import type { Route } from "./Route.js";
 import type { VElement } from "../shared.js";
 
@@ -46,9 +47,9 @@ export interface ComponentProps<
  */
 export type LoaderResult<T, E = never, R = never> = T | Effect.Effect<T, E, R>;
 
-/** Normalize a value-or-Effect to always be an Effect. */
-const liftEffect = <A>(value: A | Effect.Effect<A, any, any>): Effect.Effect<A> =>
-  Effect.isEffect(value) ? (value as Effect.Effect<A>) : Effect.succeed(value as A);
+/** Normalize a LoaderResult (value or Effect) into an Effect. No type erasure. */
+const liftLoader = <A, E, R>(value: LoaderResult<A, E, R>): Effect.Effect<A, E, R> =>
+  Effect.isEffect(value) ? value : Effect.succeed(value);
 
 /**
  * Per-route metadata for the document `<head>`.
@@ -134,12 +135,13 @@ export interface HandlerConfig<
 export interface RouteHandler {
   readonly routeName: string;
   readonly route: Route;
-  readonly loader: (ctx: LoaderContext) => Effect.Effect<unknown>;
+  /** Type-erased loader. R = never because requirements are captured by the Layer. */
+  readonly loader: (ctx: LoaderContext) => Effect.Effect<unknown, unknown>;
   readonly component: (props: ComponentProps) => VElement;
-  readonly head: Option.Option<(ctx: HeadContext) => Effect.Effect<HeadData>>;
+  readonly head: Option.Option<(ctx: HeadContext) => Effect.Effect<HeadData, unknown>>;
   readonly prerender: boolean;
   readonly getStaticPaths: Option.Option<
-    () => Effect.Effect<ReadonlyArray<Record<string, unknown>>>
+    () => Effect.Effect<ReadonlyArray<Record<string, unknown>>, unknown>
   >;
 }
 
@@ -158,17 +160,24 @@ export interface LayoutHandler {
  *
  * Each handle() call unions the loader's R into the group's accumulated R,
  * ensuring the final Layer type declares all required services.
+ *
+ * RouteNames constrains handle() to only accept valid route names from the group.
  */
-export interface GroupHandlers<GroupName extends string = string, R = never> {
+export interface GroupHandlers<
+  GroupName extends string = string,
+  RouteNames extends string = string,
+  R = never,
+> {
   readonly groupName: GroupName;
   readonly handlers: readonly RouteHandler[];
 
   /**
    * Register a handler for a route in this group.
+   * RouteName is constrained to the group's valid route names.
    * Accumulates the loader's service requirements into the group's R.
    */
   readonly handle: <
-    RouteName extends string,
+    RouteName extends RouteNames,
     LoaderData = unknown,
     PathParams extends Record<string, unknown> = Record<string, unknown>,
     SearchParams extends Record<string, unknown> = Record<string, unknown>,
@@ -177,15 +186,21 @@ export interface GroupHandlers<GroupName extends string = string, R = never> {
   >(
     routeName: RouteName,
     config: HandlerConfig<LoaderData, PathParams, SearchParams, R2, E>,
-  ) => GroupHandlers<GroupName, R | R2>;
+  ) => GroupHandlers<GroupName, RouteNames, R | R2>;
 }
 
 /**
  * Handlers builder for a layout group.
  * Includes layout component registration plus child route handlers.
  * Accumulates loader service requirements (R) like GroupHandlers.
+ *
+ * RouteNames constrains handle() to only accept valid route names from the group.
  */
-export interface LayoutGroupHandlers<GroupName extends string = string, R = never> {
+export interface LayoutGroupHandlers<
+  GroupName extends string = string,
+  RouteNames extends string = string,
+  R = never,
+> {
   readonly groupName: GroupName;
   readonly handlers: readonly RouteHandler[];
   readonly layoutHandler: LayoutHandler | null;
@@ -194,14 +209,15 @@ export interface LayoutGroupHandlers<GroupName extends string = string, R = neve
    * Register the layout component for this layout group.
    * The layout component should render <RouterOutlet /> for children.
    */
-  readonly layout: (component: () => VElement) => LayoutGroupHandlers<GroupName, R>;
+  readonly layout: (component: () => VElement) => LayoutGroupHandlers<GroupName, RouteNames, R>;
 
   /**
    * Register a handler for a route in this layout group.
+   * RouteName is constrained to the group's valid route names.
    * Accumulates the loader's service requirements into the group's R.
    */
   readonly handle: <
-    RouteName extends string,
+    RouteName extends RouteNames,
     LoaderData = unknown,
     PathParams extends Record<string, unknown> = Record<string, unknown>,
     SearchParams extends Record<string, unknown> = Record<string, unknown>,
@@ -210,7 +226,7 @@ export interface LayoutGroupHandlers<GroupName extends string = string, R = neve
   >(
     routeName: RouteName,
     config: HandlerConfig<LoaderData, PathParams, SearchParams, R2, E>,
-  ) => LayoutGroupHandlers<GroupName, R | R2>;
+  ) => LayoutGroupHandlers<GroupName, RouteNames, R | R2>;
 }
 
 /**
@@ -229,47 +245,62 @@ export class RouterHandlers extends Context.Tag("fibrae/RouterHandlers")<
 
 /**
  * Create handlers builder for a route group.
+ * RouteNames is threaded through to constrain handle() calls.
  */
-function makeGroupHandlers<GroupName extends string>(
+function makeGroupHandlers<GroupName extends string, RouteNames extends string>(
   groupName: GroupName,
-  grp: RouteGroup<GroupName>,
-): GroupHandlers<GroupName> {
+  grp: RouteGroup<GroupName, RouteNames>,
+): GroupHandlers<GroupName, RouteNames> {
   const routesByName = new Map<string, Route>(grp.routes.map((r) => [r.name, r]));
 
-  const buildHandlers = (handlers: readonly RouteHandler[]): GroupHandlers<GroupName> => ({
+  const buildHandlers = (
+    handlers: readonly RouteHandler[],
+  ): GroupHandlers<GroupName, RouteNames> => ({
     groupName,
     handlers,
     handle<
-      RouteName extends string,
+      RouteName extends RouteNames,
       LoaderData,
       PathParams extends Record<string, unknown>,
       SearchParams extends Record<string, unknown>,
-      R,
+      R2,
       E,
-    >(routeName: RouteName, config: HandlerConfig<LoaderData, PathParams, SearchParams, R, E>) {
+    >(routeName: RouteName, config: HandlerConfig<LoaderData, PathParams, SearchParams, R2, E>) {
       const maybeRoute = Option.fromNullable(routesByName.get(routeName));
       if (Option.isNone(maybeRoute)) {
-        throw new Error(`Route "${routeName}" not found in group "${groupName}"`);
+        throw new RouterError({
+          message: `Route "${routeName}" not found in group "${groupName}"`,
+        });
       }
       const route = maybeRoute.value;
 
-      const loader = (ctx: LoaderContext): Effect.Effect<unknown> =>
-        config.loader
-          ? liftEffect(config.loader(ctx as LoaderContext<PathParams, SearchParams>))
-          : Effect.succeed(null);
+      // Type-erasure boundary: loader/head/getStaticPaths are stored with R = never
+      // because their actual requirements (R2) are captured by the Layer's R type parameter.
+      // Casts to LoaderContext<PathParams, SearchParams> are safe — RouterOutlet always
+      // passes correctly-typed params decoded from the route schema.
+      const loader = (ctx: LoaderContext): Effect.Effect<unknown, unknown> =>
+        (config.loader
+          ? liftLoader(config.loader(ctx as LoaderContext<PathParams, SearchParams>))
+          : Effect.succeed(null)) as Effect.Effect<unknown, unknown>;
 
       const head = Option.fromNullable(config.head).pipe(
-        Option.map(
-          (fn) =>
-            (ctx: HeadContext): Effect.Effect<HeadData> =>
-              liftEffect(fn(ctx as HeadContext<LoaderData, PathParams, SearchParams>)),
-        ),
+        Option.map((fn) => (ctx: HeadContext): Effect.Effect<HeadData, unknown> => {
+          const result = fn(ctx as HeadContext<LoaderData, PathParams, SearchParams>);
+          return (Effect.isEffect(result) ? result : Effect.succeed(result)) as Effect.Effect<
+            HeadData,
+            unknown
+          >;
+        }),
       );
 
       const getStaticPaths = Option.fromNullable(config.getStaticPaths).pipe(
-        Option.map(
-          (fn) => (): Effect.Effect<ReadonlyArray<Record<string, unknown>>> => liftEffect(fn()),
-        ),
+        Option.map((fn) => (): Effect.Effect<ReadonlyArray<Record<string, unknown>>, unknown> => {
+          const result = fn();
+          return (Effect.isEffect(result) ? result : Effect.succeed(result)) as Effect.Effect<
+            ReadonlyArray<Record<string, unknown>>,
+            unknown
+          >;
+        }),
       );
 
       const handler: RouteHandler = {
@@ -282,7 +313,7 @@ function makeGroupHandlers<GroupName extends string>(
         getStaticPaths,
       };
 
-      return buildHandlers([...handlers, handler]);
+      return buildHandlers([...handlers, handler]) as GroupHandlers<GroupName, RouteNames, any>;
     },
   });
 
@@ -291,17 +322,18 @@ function makeGroupHandlers<GroupName extends string>(
 
 /**
  * Create handlers builder for a layout group.
+ * RouteNames is threaded through to constrain handle() calls.
  */
-function makeLayoutGroupHandlers<GroupName extends string>(
+function makeLayoutGroupHandlers<GroupName extends string, RouteNames extends string>(
   groupName: GroupName,
-  layoutGroup: LayoutGroup<GroupName>,
-): LayoutGroupHandlers<GroupName> {
-  const routesByName = new Map<string, Route>(layoutGroup.routes.map((r) => [r.name, r]));
+  layoutGrp: LayoutGroup<GroupName, RouteNames>,
+): LayoutGroupHandlers<GroupName, RouteNames> {
+  const routesByName = new Map<string, Route>(layoutGrp.routes.map((r) => [r.name, r]));
 
   const buildHandlers = (
     handlers: readonly RouteHandler[],
     layoutHandler: LayoutHandler | null,
-  ): LayoutGroupHandlers<GroupName> => ({
+  ): LayoutGroupHandlers<GroupName, RouteNames> => ({
     groupName,
     handlers,
     layoutHandler,
@@ -314,36 +346,48 @@ function makeLayoutGroupHandlers<GroupName extends string>(
     },
 
     handle<
-      RouteName extends string,
+      RouteName extends RouteNames,
       LoaderData,
       PathParams extends Record<string, unknown>,
       SearchParams extends Record<string, unknown>,
-      R,
+      R2,
       E,
-    >(routeName: RouteName, config: HandlerConfig<LoaderData, PathParams, SearchParams, R, E>) {
+    >(routeName: RouteName, config: HandlerConfig<LoaderData, PathParams, SearchParams, R2, E>) {
       const maybeRoute = Option.fromNullable(routesByName.get(routeName));
       if (Option.isNone(maybeRoute)) {
-        throw new Error(`Route "${routeName}" not found in layout group "${groupName}"`);
+        throw new RouterError({
+          message: `Route "${routeName}" not found in layout group "${groupName}"`,
+        });
       }
       const route = maybeRoute.value;
 
-      const loader = (ctx: LoaderContext): Effect.Effect<unknown> =>
-        config.loader
-          ? liftEffect(config.loader(ctx as LoaderContext<PathParams, SearchParams>))
-          : Effect.succeed(null);
+      // Type-erasure boundary: loader/head/getStaticPaths are stored with R = never
+      // because their actual requirements (R2) are captured by the Layer's R type parameter.
+      // Casts to LoaderContext<PathParams, SearchParams> are safe — RouterOutlet always
+      // passes correctly-typed params decoded from the route schema.
+      const loader = (ctx: LoaderContext): Effect.Effect<unknown, unknown> =>
+        (config.loader
+          ? liftLoader(config.loader(ctx as LoaderContext<PathParams, SearchParams>))
+          : Effect.succeed(null)) as Effect.Effect<unknown, unknown>;
 
       const head = Option.fromNullable(config.head).pipe(
-        Option.map(
-          (fn) =>
-            (ctx: HeadContext): Effect.Effect<HeadData> =>
-              liftEffect(fn(ctx as HeadContext<LoaderData, PathParams, SearchParams>)),
-        ),
+        Option.map((fn) => (ctx: HeadContext): Effect.Effect<HeadData, unknown> => {
+          const result = fn(ctx as HeadContext<LoaderData, PathParams, SearchParams>);
+          return (Effect.isEffect(result) ? result : Effect.succeed(result)) as Effect.Effect<
+            HeadData,
+            unknown
+          >;
+        }),
       );
 
       const getStaticPaths = Option.fromNullable(config.getStaticPaths).pipe(
-        Option.map(
-          (fn) => (): Effect.Effect<ReadonlyArray<Record<string, unknown>>> => liftEffect(fn()),
-        ),
+        Option.map((fn) => (): Effect.Effect<ReadonlyArray<Record<string, unknown>>, unknown> => {
+          const result = fn();
+          return (Effect.isEffect(result) ? result : Effect.succeed(result)) as Effect.Effect<
+            ReadonlyArray<Record<string, unknown>>,
+            unknown
+          >;
+        }),
       );
 
       const handler: RouteHandler = {
@@ -356,7 +400,11 @@ function makeLayoutGroupHandlers<GroupName extends string>(
         getStaticPaths,
       };
 
-      return buildHandlers([...handlers, handler], layoutHandler);
+      return buildHandlers([...handlers, handler], layoutHandler) as LayoutGroupHandlers<
+        GroupName,
+        RouteNames,
+        any
+      >;
     },
   });
 
@@ -364,21 +412,10 @@ function makeLayoutGroupHandlers<GroupName extends string>(
 }
 
 /**
- * Find a route group by name in a router.
- */
-function findGroup<GroupName extends string>(
-  appRouter: Router,
-  groupName: GroupName,
-): AnyGroup<GroupName> {
-  const maybeGroup = Option.fromNullable(appRouter.groups.find((g) => g.name === groupName));
-  if (Option.isNone(maybeGroup)) {
-    throw new Error(`Group "${groupName}" not found in router "${appRouter.name}"`);
-  }
-  return maybeGroup.value as AnyGroup<GroupName>;
-}
-
-/**
  * Create a Layer that provides handlers for a route group.
+ *
+ * Accepts the RouteGroup directly (not a string name) so that handle()
+ * is constrained to valid route names at compile time.
  *
  * The build callback can return either:
  * - GroupHandlers directly (simple case)
@@ -389,52 +426,49 @@ function findGroup<GroupName extends string>(
  * // Simple - no Effect wrapper needed
  * const AppRoutesLive = RouterBuilder.group(
  *   AppRouter,
- *   "app",
+ *   AppRoutes,   // pass the RouteGroup for type-safe handle()
  *   (handlers) => handlers
- *     .handle("home", { component: () => <HomePage /> })
+ *     .handle("home", { component: () => <HomePage /> })    // constrained
  *     .handle("posts", { loader: () => fetchPosts(), component: ... })
- * )
- *
- * // With Effect context (when handlers need services)
- * const AppRoutesLive = RouterBuilder.group(
- *   AppRouter,
- *   "app",
- *   (handlers) => Effect.gen(function* () {
- *     const config = yield* Config;
- *     return handlers.handle("home", { ... });
- *   })
  * )
  * ```
  */
-export function group<GroupName extends string, R>(
-  appRouter: Router,
-  groupName: GroupName,
-  build: (handlers: GroupHandlers<GroupName>) => GroupHandlers<GroupName, R>,
+export function group<GroupName extends string, RouteNames extends string, R>(
+  _appRouter: Router,
+  routeGroup: RouteGroup<GroupName, RouteNames>,
+  build: (
+    handlers: GroupHandlers<GroupName, RouteNames>,
+  ) => GroupHandlers<GroupName, RouteNames, R>,
 ): Layer.Layer<RouterHandlers, never, R>;
-export function group<GroupName extends string, R, R2>(
-  appRouter: Router,
-  groupName: GroupName,
+export function group<GroupName extends string, RouteNames extends string, R, R2>(
+  _appRouter: Router,
+  routeGroup: RouteGroup<GroupName, RouteNames>,
   build: (
-    handlers: GroupHandlers<GroupName>,
-  ) => Effect.Effect<GroupHandlers<GroupName, R>, never, R2>,
+    handlers: GroupHandlers<GroupName, RouteNames>,
+  ) => Effect.Effect<GroupHandlers<GroupName, RouteNames, R>, never, R2>,
 ): Layer.Layer<RouterHandlers, never, R | R2>;
-export function group<GroupName extends string, R, R2>(
-  appRouter: Router,
-  groupName: GroupName,
+export function group<GroupName extends string, RouteNames extends string, R, R2>(
+  _appRouter: Router,
+  routeGroup: RouteGroup<GroupName, RouteNames>,
   build: (
-    handlers: GroupHandlers<GroupName>,
-  ) => GroupHandlers<GroupName, R> | Effect.Effect<GroupHandlers<GroupName, R>, never, R2>,
+    handlers: GroupHandlers<GroupName, RouteNames>,
+  ) =>
+    | GroupHandlers<GroupName, RouteNames, R>
+    | Effect.Effect<GroupHandlers<GroupName, RouteNames, R>, never, R2>,
 ): Layer.Layer<RouterHandlers, never, R | R2> {
-  const routeGroup = findGroup(appRouter, groupName);
-
-  // Check if it's a layout group - if so, throw helpful error
-  if (routeGroup._tag === "LayoutGroup") {
-    throw new Error(
-      `Group "${groupName}" is a LayoutGroup. Use RouterBuilder.layoutGroup() instead of RouterBuilder.group().`,
-    );
+  // Validate it's not a layout group (runtime safety net — types should prevent this)
+  if ((routeGroup as AnyGroup)._tag === "LayoutGroup") {
+    return Layer.effect(
+      RouterHandlers,
+      Effect.die(
+        new RouterError({
+          message: `Group "${routeGroup.name}" is a LayoutGroup. Use RouterBuilder.layoutGroup() instead.`,
+        }),
+      ),
+    ) as Layer.Layer<RouterHandlers, never, R | R2>;
   }
 
-  const initialHandlers = makeGroupHandlers(groupName, routeGroup as RouteGroup<GroupName>);
+  const initialHandlers = makeGroupHandlers(routeGroup.name, routeGroup);
 
   // The Layer construction only needs the build callback's R2. The loader requirements (R)
   // are needed at execution time (when serverLayer/browserLayer call handler.loader).
@@ -467,20 +501,13 @@ export function group<GroupName extends string, R, R2>(
 /**
  * Create a Layer that provides handlers for a layout group.
  *
- * Layout groups require a layout component that renders <RouterOutlet /> for children.
+ * Accepts the LayoutGroup directly for type-safe handle() calls.
  *
  * Usage:
  * ```typescript
- * const DashboardLayout = () => (
- *   <div class="dashboard">
- *     <Sidebar />
- *     <RouterOutlet />
- *   </div>
- * );
- *
  * const DashboardRoutesLive = RouterBuilder.layoutGroup(
  *   AppRouter,
- *   "dashboard",
+ *   DashboardRoutes,
  *   (handlers) => handlers
  *     .layout(DashboardLayout)
  *     .handle("overview", { component: () => <Overview /> })
@@ -488,36 +515,42 @@ export function group<GroupName extends string, R, R2>(
  * )
  * ```
  */
-export function layoutGroup<GroupName extends string, R>(
-  appRouter: Router,
-  groupName: GroupName,
-  build: (handlers: LayoutGroupHandlers<GroupName>) => LayoutGroupHandlers<GroupName, R>,
+export function layoutGroup<GroupName extends string, RouteNames extends string, R>(
+  _appRouter: Router,
+  layoutGrp: LayoutGroup<GroupName, RouteNames>,
+  build: (
+    handlers: LayoutGroupHandlers<GroupName, RouteNames>,
+  ) => LayoutGroupHandlers<GroupName, RouteNames, R>,
 ): Layer.Layer<RouterHandlers, never, R>;
-export function layoutGroup<GroupName extends string, R, R2>(
-  appRouter: Router,
-  groupName: GroupName,
+export function layoutGroup<GroupName extends string, RouteNames extends string, R, R2>(
+  _appRouter: Router,
+  layoutGrp: LayoutGroup<GroupName, RouteNames>,
   build: (
-    handlers: LayoutGroupHandlers<GroupName>,
-  ) => Effect.Effect<LayoutGroupHandlers<GroupName, R>, never, R2>,
+    handlers: LayoutGroupHandlers<GroupName, RouteNames>,
+  ) => Effect.Effect<LayoutGroupHandlers<GroupName, RouteNames, R>, never, R2>,
 ): Layer.Layer<RouterHandlers, never, R | R2>;
-export function layoutGroup<GroupName extends string, R, R2>(
-  appRouter: Router,
-  groupName: GroupName,
+export function layoutGroup<GroupName extends string, RouteNames extends string, R, R2>(
+  _appRouter: Router,
+  layoutGrp: LayoutGroup<GroupName, RouteNames>,
   build: (
-    handlers: LayoutGroupHandlers<GroupName>,
+    handlers: LayoutGroupHandlers<GroupName, RouteNames>,
   ) =>
-    | LayoutGroupHandlers<GroupName, R>
-    | Effect.Effect<LayoutGroupHandlers<GroupName, R>, never, R2>,
+    | LayoutGroupHandlers<GroupName, RouteNames, R>
+    | Effect.Effect<LayoutGroupHandlers<GroupName, RouteNames, R>, never, R2>,
 ): Layer.Layer<RouterHandlers, never, R | R2> {
-  const routeGroup = findGroup(appRouter, groupName);
-
-  if (routeGroup._tag !== "LayoutGroup") {
-    throw new Error(
-      `Group "${groupName}" is not a LayoutGroup. Use RouterBuilder.group() instead.`,
-    );
+  // Runtime safety net — types should prevent this
+  if ((layoutGrp as AnyGroup)._tag !== "LayoutGroup") {
+    return Layer.effect(
+      RouterHandlers,
+      Effect.die(
+        new RouterError({
+          message: `Group "${layoutGrp.name}" is not a LayoutGroup. Use RouterBuilder.group() instead.`,
+        }),
+      ),
+    ) as Layer.Layer<RouterHandlers, never, R | R2>;
   }
 
-  const initialHandlers = makeLayoutGroupHandlers(groupName, routeGroup as LayoutGroup<GroupName>);
+  const initialHandlers = makeLayoutGroupHandlers(layoutGrp.name, layoutGrp);
 
   return Layer.effect(
     RouterHandlers,
@@ -579,7 +612,10 @@ export function router(_router: Router): Layer.Layer<RouterHandlers> {
  * Execute a route's loader and render its component.
  * Returns the rendered VElement.
  */
-export function executeRoute(handler: RouteHandler, ctx: LoaderContext): Effect.Effect<VElement> {
+export function executeRoute(
+  handler: RouteHandler,
+  ctx: LoaderContext,
+): Effect.Effect<VElement, unknown> {
   return Effect.gen(function* () {
     const loaderData = yield* handler.loader(ctx);
     return handler.component({
@@ -607,7 +643,7 @@ export interface PrerenderRoute {
  */
 export const getPrerenderRoutes = (handlers: {
   readonly handlers: ReadonlyMap<string, RouteHandler>;
-}): Effect.Effect<ReadonlyArray<PrerenderRoute>> =>
+}): Effect.Effect<ReadonlyArray<PrerenderRoute>, unknown, unknown> =>
   Effect.all(
     Array.from(handlers.handlers.values())
       .filter((h) => h.prerender)

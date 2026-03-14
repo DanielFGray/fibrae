@@ -61,7 +61,23 @@ export const Link = createLink(AppRouter);
 export { RouterOutlet };
 
 // =============================================================================
-// Route Names (for type safety)
+// Route Names (inferred from router — no manual type needed)
 // =============================================================================
 
-export type AppRouteName = "home" | "posts" | "postNew" | "postEdit" | "post";
+/** Route names are inferred from the router's type parameter. */
+export type AppRouteName = typeof AppRouter extends Router.Router<string, infer R> ? R : never;
+
+// =============================================================================
+// Type Safety Assertions (compile-time tests)
+// =============================================================================
+
+// Valid route names compile fine:
+void Link({ to: "home" });
+void Link({ to: "posts" });
+void Link({ to: "post" });
+
+// @ts-expect-error — "typo" is not a valid route name
+void Link({ to: "typo" });
+
+// @ts-expect-error — empty string is not a valid route name
+void Link({ to: "" });
