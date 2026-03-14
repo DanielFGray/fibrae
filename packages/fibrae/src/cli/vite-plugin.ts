@@ -4,7 +4,7 @@
  * Hooks into Vite's build pipeline to pre-render routes after the client build.
  * In dev mode, provides on-demand SSR middleware.
  */
-import type { Plugin, ResolvedConfig, ViteDevServer } from "vite";
+import type { Plugin, ResolvedConfig, ViteDevServer, ModuleNode } from "vite";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Layer from "effect/Layer";
@@ -64,6 +64,35 @@ const renderDevPage = (opts: {
     });
   });
 
+/**
+ * Walk the Vite module graph from an entry and collect CSS module URLs.
+ * Injects these as <style> tags in the SSR HTML to prevent FOUC.
+ */
+const collectCss = async (
+  server: ViteDevServer,
+  entryUrl: string,
+): Promise<string[]> => {
+  // Warm the module graph so CSS deps are discovered
+  await server.transformRequest(entryUrl);
+
+  const seen = new Set<string>();
+  const cssUrls: string[] = [];
+
+  const walk = (mod: ModuleNode | undefined) => {
+    if (!mod?.id || seen.has(mod.id)) return;
+    seen.add(mod.id);
+    if (mod.id.endsWith(".css")) {
+      cssUrls.push(mod.url);
+    }
+    for (const dep of mod.importedModules) {
+      walk(dep);
+    }
+  };
+
+  walk(await server.moduleGraph.getModuleByUrl(entryUrl));
+  return cssUrls;
+};
+
 export const fibrae = (config: FibraeConfig): Plugin => {
   let _resolvedConfig: ResolvedConfig;
 
@@ -94,7 +123,7 @@ export const fibrae = (config: FibraeConfig): Plugin => {
             return next();
           }
 
-          const result = await Effect.runPromise(
+          const rawHtml = await Effect.runPromise(
             renderDevPage({
               router,
               handlersLayer,
@@ -107,6 +136,16 @@ export const fibrae = (config: FibraeConfig): Plugin => {
               headTags: config.headTags,
             }),
           );
+
+          // Collect CSS from client entry's module graph and inject into <head>
+          const cssUrls = await collectCss(server, config.client);
+          const cssTags = cssUrls.map((u) => `<link rel="stylesheet" href="${u}">`).join("\n");
+          const withCss = cssTags
+            ? rawHtml.replace("</head>", `${cssTags}\n</head>`)
+            : rawHtml;
+
+          // Let Vite inject HMR client
+          const result = await server.transformIndexHtml(url, withCss);
 
           res.setHeader("Content-Type", "text/html");
           res.end(result);
