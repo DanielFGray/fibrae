@@ -4,12 +4,15 @@
   "categories": {
     "correctness": "error",
     "suspicious": "warn",
+    "perf": "warn",
+    "style": "off",
     "pedantic": "off"
   },
   "ignorePatterns": ["**/dist/**", "**/node_modules/**", "**/priorart/**"],
   "rules": {
     "no-unused-vars": "warn",
     "typescript/no-floating-promises": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
     "unicorn/require-module-specifiers": "off",
     "import/no-unassigned-import": "off"
   }

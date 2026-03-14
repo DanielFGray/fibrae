@@ -58,7 +58,7 @@
   "scripts": {
     "dev:server": "vite dev",
     "format": "oxfmt src/",
-    "lint": "oxlint src/",
+    "lint": "oxlint --tsconfig tsconfig.json src/",
     "prebuild": "run-s format lint",
     "build:watch": "tsgo --watch -p .",
     "build": "tsgo -p .",
