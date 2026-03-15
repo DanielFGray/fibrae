@@ -124,6 +124,10 @@ export class FibraeRuntime extends Effect.Service<FibraeRuntime>()("FibraeRuntim
  *
  * IMPORTANT: fullContextRef must be set by render() before this is called.
  */
+// fullContextRef holds the dynamically-assembled context (FibraeRuntime + user layers).
+// Its static type is Context<never> because the full set of services isn't known until
+// render() composes all layers. The casts below are load-bearing — they bridge the gap
+// between the dynamic context and the type system's static requirements.
 export const runForkWithRuntime =
   (runtime: FibraeRuntime) =>
   <A, E>(effect: Effect.Effect<A, E, unknown>) => {
