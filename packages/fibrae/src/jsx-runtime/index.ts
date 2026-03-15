@@ -211,19 +211,46 @@ type NarrowedEventHandlers<E extends HTMLElement> = {
 };
 
 /**
- * Common HTML attributes shared across all elements.
+ * Global HTML attributes derived from the DOM HTMLElement interface.
+ * Using native types prevents false negatives (e.g. missing `role`).
  */
-type BaseHTMLProps = {
+type NativeGlobalAttrs = Partial<
+  Pick<
+    HTMLElement,
+    | "accessKey"
+    | "autocapitalize"
+    | "autofocus"
+    | "contentEditable"
+    | "dir"
+    | "draggable"
+    | "enterKeyHint"
+    | "hidden"
+    | "id"
+    | "inert"
+    | "inputMode"
+    | "lang"
+    | "nonce"
+    | "popover"
+    | "role"
+    | "slot"
+    | "spellcheck"
+    | "tabIndex"
+    | "title"
+    | "translate"
+  >
+>;
+
+/**
+ * Common HTML attributes shared across all elements.
+ * Combines fibrae-specific props with native global HTML attributes.
+ */
+type BaseHTMLProps = NativeGlobalAttrs & {
   key?: string | number;
   ref?: ((el: HTMLElement) => void) | { current: HTMLElement | null };
+  /** Accepts CSS string or object (native DOM uses CSSStyleDeclaration) */
   style?: string | Record<string, string | number>;
   class?: string;
   className?: string;
-  id?: string;
-  title?: string;
-  tabIndex?: number;
-  hidden?: boolean;
-  draggable?: boolean;
   children?: VChild;
   /** Set raw HTML content. Replaces children — use with care. */
   dangerouslySetInnerHTML?: string;
