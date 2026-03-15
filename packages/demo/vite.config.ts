@@ -9,9 +9,9 @@ export default defineConfig({
   server: {
     proxy: {
       // Proxy SSR requests to Effect HTTP server
-      "/ssr": "http://localhost:3001",
+      "/ssr": "http://localhost:3015",
       // Proxy API requests to Effect HTTP server
-      "/api": "http://localhost:3001",
+      "/api": "http://localhost:3015",
     },
     fs: {
       // Allow serving files from the worktree and parent directories

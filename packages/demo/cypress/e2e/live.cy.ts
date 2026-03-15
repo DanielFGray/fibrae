@@ -148,7 +148,7 @@ describe("LiveSync", () => {
 
     it("stream includes retry directive", () => {
       cy.task("readSSEStream", {
-        url: "http://localhost:3001/api/live/test-clock",
+        url: "http://localhost:3015/api/live/test-clock",
         timeoutMs: 5000,
       }).then((raw) => {
         expect(raw).to.include("retry: 5000")
@@ -159,7 +159,7 @@ describe("LiveSync", () => {
 
     it("multi-channel stream includes retry directive", () => {
       cy.task("readSSEStream", {
-        url: "http://localhost:3001/api/live/test-multi",
+        url: "http://localhost:3015/api/live/test-multi",
         waitFor: ["retry:", "event: clock", "event: counter"],
         timeoutMs: 5000,
       }).then((raw) => {
