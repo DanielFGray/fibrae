@@ -3,9 +3,9 @@ import * as Stream from "effect/Stream";
 import * as Effect from "effect/Effect";
 import * as Scope from "effect/Scope";
 import * as Deferred from "effect/Deferred";
-import * as Data from "effect/Data";
+import * as Schema from "effect/Schema";
 import * as Context from "effect/Context";
-// Import Cause and Types for declaration file emission (needed by Data.TaggedError)
+// Import Cause and Types for declaration file emission (needed by Schema.TaggedError)
 import type * as Cause from "effect/Cause";
 import type * as Types from "effect/Types";
 import { Atom as BaseAtom } from "@effect-atom/atom";
@@ -239,14 +239,17 @@ export const isStream = (value: unknown): value is Stream.Stream<any, any, any> 
  * );
  * ```
  */
-export class HydrationMismatch extends Data.TaggedError("HydrationMismatch")<{
-  /** What the VElement tree expected (e.g., "div", "3 children") */
-  readonly expected: string;
-  /** What the DOM actually had (e.g., "span", "2 children") */
-  readonly actual: string;
-  /** Human-readable path to the mismatch location (e.g., "div > ul > li:2") */
-  readonly path: string;
-}> {}
+export class HydrationMismatch extends Schema.TaggedError<HydrationMismatch>()(
+  "HydrationMismatch",
+  {
+    /** What the VElement tree expected (e.g., "div", "3 children") */
+    expected: Schema.String,
+    /** What the DOM actually had (e.g., "span", "2 children") */
+    actual: Schema.String,
+    /** Human-readable path to the mismatch location (e.g., "div > ul > li:2") */
+    path: Schema.String,
+  },
+) {}
 
 // =============================================================================
 // Component Errors
@@ -268,12 +271,12 @@ export class HydrationMismatch extends Data.TaggedError("HydrationMismatch")<{
 const formatCause = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
-export class RenderError extends Data.TaggedError("RenderError")<{
+export class RenderError extends Schema.TaggedError<RenderError>()("RenderError", {
   /** The underlying error that caused the render failure */
-  readonly cause: unknown;
+  cause: Schema.Unknown,
   /** Name of the component that failed (if available) */
-  readonly componentName?: string;
-}> {
+  componentName: Schema.optional(Schema.String),
+}) {
   get message() {
     const name = this.componentName ? ` in ${this.componentName}` : "";
     return `RenderError${name}: ${formatCause(this.cause)}`;
@@ -287,12 +290,12 @@ export class RenderError extends Data.TaggedError("RenderError")<{
  * - "before-first-emission": Stream failed before producing any value (shows fallback immediately)
  * - "after-first-emission": Stream failed after showing content (replaces content with fallback)
  */
-export class StreamError extends Data.TaggedError("StreamError")<{
+export class StreamError extends Schema.TaggedError<StreamError>()("StreamError", {
   /** The underlying error that caused the stream failure */
-  readonly cause: unknown;
+  cause: Schema.Unknown,
   /** When the error occurred relative to first emission */
-  readonly phase: "before-first-emission" | "after-first-emission";
-}> {
+  phase: Schema.Literal("before-first-emission", "after-first-emission"),
+}) {
   get message() {
     return `StreamError (${this.phase}): ${formatCause(this.cause)}`;
   }
@@ -303,12 +306,15 @@ export class StreamError extends Data.TaggedError("StreamError")<{
  *
  * The `eventType` field indicates which event triggered the failure (e.g., "click", "change").
  */
-export class EventHandlerError extends Data.TaggedError("EventHandlerError")<{
-  /** The underlying error that caused the event handler failure */
-  readonly cause: unknown;
-  /** The DOM event type that triggered this handler (e.g., "click", "change") */
-  readonly eventType: string;
-}> {
+export class EventHandlerError extends Schema.TaggedError<EventHandlerError>()(
+  "EventHandlerError",
+  {
+    /** The underlying error that caused the event handler failure */
+    cause: Schema.Unknown,
+    /** The DOM event type that triggered this handler (e.g., "click", "change") */
+    eventType: Schema.String,
+  },
+) {
   get message() {
     return `EventHandlerError (${this.eventType}): ${formatCause(this.cause)}`;
   }

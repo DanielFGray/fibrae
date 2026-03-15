@@ -17,7 +17,7 @@ import * as Option from "effect/Option";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Context from "effect/Context";
-import * as Data from "effect/Data";
+import * as Schema from "effect/Schema";
 import { Registry as AtomRegistry } from "@effect-atom/atom";
 import { History, MemoryHistoryLive, type HistoryLocation } from "./History.js";
 import { Navigator, NavigatorLive } from "./Navigator.js";
@@ -29,10 +29,10 @@ import { parseSearchParams, stripBasePath } from "./utils.js";
 /**
  * Router error for route matching and navigation failures.
  */
-export class RouterError extends Data.TaggedError("RouterError")<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+export class RouterError extends Schema.TaggedError<RouterError>()("RouterError", {
+  message: Schema.String,
+  cause: Schema.optional(Schema.Unknown),
+}) {}
 
 /**
  * A group of routes for organizational purposes.

@@ -11,7 +11,6 @@
 import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 import * as Effect from "effect/Effect";
-import * as Data from "effect/Data";
 
 /**
  * Annotation symbol for storing parameter name in schema metadata.
@@ -22,9 +21,9 @@ export const AnnotationParam: unique symbol = Symbol.for("fibrae/Route/Annotatio
 /**
  * Typed error for route operations (interpolation, matching failures).
  */
-export class RouteError extends Data.TaggedError("RouteError")<{
-  readonly message: string;
-}> {}
+export class RouteError extends Schema.TaggedError<RouteError>()("RouteError", {
+  message: Schema.String,
+}) {}
 
 /**
  * Represents a single route with path and optional search params validation.
