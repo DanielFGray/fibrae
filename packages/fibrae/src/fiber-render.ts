@@ -289,7 +289,7 @@ const hydrateChildren = (
   vElements: VElement[],
   startCursor: Option.Option<Node>,
   runtime: FibraeRuntime,
-): Effect.Effect<Option.Option<Node>, unknown, FibraeRuntime> =>
+): Effect.Effect<Option.Option<Node>, never, FibraeRuntime> =>
   Effect.gen(function* () {
     // Walk vElements and DOM cursor together using Effect.reduce
     const { fibers, cursor } = yield* Effect.reduce(
@@ -321,7 +321,7 @@ const hydrateElement = (
   vElement: VElement,
   domNode: Node,
   runtime: FibraeRuntime,
-): Effect.Effect<{ fiber: Fiber; nextCursor: Option.Option<Node> }, unknown, FibraeRuntime> =>
+): Effect.Effect<{ fiber: Fiber; nextCursor: Option.Option<Node> }, never, FibraeRuntime> =>
   Effect.gen(function* () {
     // Detect hydration mismatch: VElement type vs DOM node tag
     if (
@@ -497,7 +497,7 @@ const hydrateFunctionComponent = (
   vElement: VElement,
   domNode: Node,
   runtime: FibraeRuntime,
-): Effect.Effect<Option.Option<Node>, unknown, FibraeRuntime> =>
+): Effect.Effect<Option.Option<Node>, never, FibraeRuntime> =>
   Effect.gen(function* () {
     // Capture current context during render phase for event handlers in commit phase
     const currentContext = yield* FiberRef.get(FiberRef.currentContext);
