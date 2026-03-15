@@ -4,9 +4,9 @@ Effect-native JSX browser renderer with SSR, SSG, routing, live SSE sync, and au
 
 ## Branches
 
-- `develop` — v3 release branch (Effect v3 + @effect-atom/atom)
+- `develop` — default branch, day-to-day development
+- `main` — release branch (merge develop → main triggers release-please → npm publish)
 - `smol` — v4 rewrite (Effect 4.0.0-beta.8, uses `effect/unstable/reactivity`)
-- `main` — releases only (requires version bump)
 
 ## Commands
 
