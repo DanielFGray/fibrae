@@ -61,12 +61,15 @@ const renderRoute = (config: {
 const expandRoutes = (
   prerenderRoutes: ReadonlyArray<PrerenderRoute>,
   basePath: string,
-): ReadonlyArray<{ pathname: string; handler: RouteHandler }> =>
-  prerenderRoutes.flatMap(({ handler, paramSets }) =>
-    paramSets.map((params) => ({
-      pathname: basePath + handler.route.interpolate(params as Record<string, never>),
-      handler,
-    })),
+): Effect.Effect<ReadonlyArray<{ pathname: string; handler: RouteHandler }>, unknown> =>
+  Effect.all(
+    prerenderRoutes.flatMap(({ handler, paramSets }) =>
+      paramSets.map((params) =>
+        handler.route
+          .interpolate(params as Record<string, never>)
+          .pipe(Effect.map((pathname) => ({ pathname: basePath + pathname, handler }))),
+      ),
+    ),
   );
 
 /**
@@ -133,7 +136,7 @@ export const build = (
       handlersLayer,
     );
 
-    const routes = expandRoutes(handlers, basePath);
+    const routes = yield* expandRoutes(handlers, basePath);
 
     if (routes.length === 0) {
       yield* Effect.log("No prerender routes found.");

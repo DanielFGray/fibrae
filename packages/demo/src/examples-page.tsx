@@ -239,8 +239,8 @@ const DebouncedSearch = () =>
           data-cy="search-input"
           type="text"
           value={currentQuery}
-          onInput={(e: InputEvent) => {
-            const value = (e.target as HTMLInputElement).value;
+          onInput={(e) => {
+            const value = e.target.value;
             registry.set(queryAtom, value);
             // Return an Effect that will be auto-executed - stress test!
             return performSearch(value);

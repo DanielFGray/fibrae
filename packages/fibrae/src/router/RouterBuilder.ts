@@ -643,7 +643,7 @@ export interface PrerenderRoute {
  */
 export const getPrerenderRoutes = (handlers: {
   readonly handlers: ReadonlyMap<string, RouteHandler>;
-}): Effect.Effect<ReadonlyArray<PrerenderRoute>, unknown, unknown> =>
+}): Effect.Effect<ReadonlyArray<PrerenderRoute>, unknown> =>
   Effect.all(
     Array.from(handlers.handlers.values())
       .filter((h) => h.prerender)

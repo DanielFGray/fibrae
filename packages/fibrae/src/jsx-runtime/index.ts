@@ -174,13 +174,25 @@ type OnEventName<K extends string> = K extends keyof CamelCaseEventName
   : `on${Capitalize<K>}`;
 
 /**
+ * Event handler return type — handlers can return void, an Effect (forked
+ * with app context via runForkWithRuntime), or a Promise.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type EventHandlerReturn = void | import("effect/Effect").Effect<any, any, any>;
+
+/**
  * Event handler props derived from the DOM's own HTMLElementEventMap.
- * Maps "click" → "onClick", "keydown" → "onKeyDown", etc.
+ * Accepts both camelCase (onClick) and lowercase (onclick) since the runtime
+ * lowercases all event prop names before calling addEventListener.
  */
 type EventHandlerProps = {
   [K in keyof HTMLElementEventMap as OnEventName<K & string>]?: (
     event: HTMLElementEventMap[K],
-  ) => void;
+  ) => EventHandlerReturn;
+} & {
+  [K in keyof HTMLElementEventMap as `on${K & string}`]?: (
+    event: HTMLElementEventMap[K],
+  ) => EventHandlerReturn;
 };
 
 /**
@@ -188,10 +200,14 @@ type EventHandlerProps = {
  * event.currentTarget to the specific element type so users don't need casts.
  */
 type NarrowedEventHandlers<E extends HTMLElement> = {
-  onInput?: (event: Event & { target: E; currentTarget: E }) => void;
-  onChange?: (event: Event & { target: E; currentTarget: E }) => void;
-  onFocus?: (event: FocusEvent & { target: E; currentTarget: E }) => void;
-  onBlur?: (event: FocusEvent & { target: E; currentTarget: E }) => void;
+  onInput?: (event: Event & { target: E; currentTarget: E }) => EventHandlerReturn;
+  oninput?: (event: Event & { target: E; currentTarget: E }) => EventHandlerReturn;
+  onChange?: (event: Event & { target: E; currentTarget: E }) => EventHandlerReturn;
+  onchange?: (event: Event & { target: E; currentTarget: E }) => EventHandlerReturn;
+  onFocus?: (event: FocusEvent & { target: E; currentTarget: E }) => EventHandlerReturn;
+  onfocus?: (event: FocusEvent & { target: E; currentTarget: E }) => EventHandlerReturn;
+  onBlur?: (event: FocusEvent & { target: E; currentTarget: E }) => EventHandlerReturn;
+  onblur?: (event: FocusEvent & { target: E; currentTarget: E }) => EventHandlerReturn;
 };
 
 /**
@@ -199,7 +215,7 @@ type NarrowedEventHandlers<E extends HTMLElement> = {
  */
 type BaseHTMLProps = {
   key?: string | number;
-  ref?: (el: HTMLElement) => void;
+  ref?: ((el: HTMLElement) => void) | { current: HTMLElement | null };
   style?: string | Record<string, string | number>;
   class?: string;
   className?: string;
@@ -310,6 +326,7 @@ type ButtonAttrs = {
 
 type LabelAttrs = {
   htmlFor?: string;
+  for?: string;
 };
 
 /**
