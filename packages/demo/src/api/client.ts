@@ -63,12 +63,16 @@ const makeClients = Effect.gen(function* () {
     list: () => client.posts.list({}).pipe(Effect.orDie),
     findById: (id) => client.posts.findById({ path: { id } }).pipe(Effect.orDie),
     create: (data) =>
-      client.posts.create({ payload: { title: data.title, content: data.content } }).pipe(Effect.orDie),
+      client.posts
+        .create({ payload: { title: data.title, content: data.content } })
+        .pipe(Effect.orDie),
     update: (id, data) =>
-      client.posts.update({
-        path: { id },
-        payload: { title: data.title, content: data.content },
-      }).pipe(Effect.orDie),
+      client.posts
+        .update({
+          path: { id },
+          payload: { title: data.title, content: data.content },
+        })
+        .pipe(Effect.orDie),
     delete: (id) => client.posts.delete({ path: { id } }).pipe(Effect.orDie),
   };
 

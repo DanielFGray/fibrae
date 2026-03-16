@@ -134,11 +134,7 @@ const ConditionalCleanup = () =>
 
     return (
       <div data-cy="conditional-container">
-        {show ? (
-          <CleanupComponent />
-        ) : (
-          <div data-cy="component-removed">Component was removed</div>
-        )}
+        {show ? <CleanupComponent /> : <div data-cy="component-removed">Component was removed</div>}
       </div>
     );
   });
@@ -148,11 +144,7 @@ const SwitchingParent = () =>
   Effect.gen(function* () {
     const which = yield* Atom.get(whichChildAtom);
 
-    return (
-      <div data-cy="switching-container">
-        {which === "A" ? <ChildA /> : <ChildB />}
-      </div>
-    );
+    return <div data-cy="switching-container">{which === "A" ? <ChildA /> : <ChildB />}</div>;
   });
 
 // Parent that conditionally shows MultiFinalizer
@@ -162,11 +154,7 @@ const ConditionalMulti = () =>
 
     return (
       <div data-cy="multi-container">
-        {show ? (
-          <MultiFinalizer />
-        ) : (
-          <div data-cy="multi-removed">Multi removed</div>
-        )}
+        {show ? <MultiFinalizer /> : <div data-cy="multi-removed">Multi removed</div>}
       </div>
     );
   });
@@ -178,11 +166,7 @@ const ConditionalMounted = () =>
 
     return (
       <div data-cy="mounted-container">
-        {show ? (
-          <MountedComponent />
-        ) : (
-          <div data-cy="mounted-removed">Mounted removed</div>
-        )}
+        {show ? <MountedComponent /> : <div data-cy="mounted-removed">Mounted removed</div>}
       </div>
     );
   });
@@ -193,7 +177,10 @@ const Controls = () =>
     const registry = yield* AtomRegistry.AtomRegistry;
 
     return (
-      <div data-cy="controls" style="margin-bottom: 2rem; padding: 1rem; background: #333; border-radius: 8px;">
+      <div
+        data-cy="controls"
+        style="margin-bottom: 2rem; padding: 1rem; background: #333; border-radius: 8px;"
+      >
         <h3>Test Controls</h3>
         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
           <button
@@ -245,7 +232,10 @@ const LogDisplay = () => {
       <p style="color: #999; font-size: 0.9em;">
         Check window.cleanupLog in console or via Cypress
       </p>
-      <pre data-cy="log-content" style="background: #111; padding: 1rem; border-radius: 4px; overflow-x: auto;">
+      <pre
+        data-cy="log-content"
+        style="background: #111; padding: 1rem; border-radius: 4px; overflow-x: auto;"
+      >
         {JSON.stringify(window.cleanupLog, null, 2)}
       </pre>
     </div>
@@ -257,8 +247,8 @@ const App = () => (
   <div style="max-width: 800px; margin: 0 auto; padding: 2rem;">
     <h1>ComponentScope Test</h1>
     <p style="color: #999; margin-bottom: 2rem;">
-      Tests that ComponentScope allows components to register cleanup finalizers
-      that run when the component unmounts.
+      Tests that ComponentScope allows components to register cleanup finalizers that run when the
+      component unmounts.
     </p>
 
     <Controls />

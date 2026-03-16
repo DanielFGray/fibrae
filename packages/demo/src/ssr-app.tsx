@@ -130,7 +130,9 @@ export const TodoList = () =>
 
     const removeTodo = (text: string) =>
       Effect.sync(() => {
-        registry.update(todosAtom, (list: readonly string[]) => list.filter((t: string) => t !== text));
+        registry.update(todosAtom, (list: readonly string[]) =>
+          list.filter((t: string) => t !== text),
+        );
         // Also persist to server
         void fetch("/ssr/todo/save", {
           method: "POST",

@@ -23,7 +23,7 @@ import {
   BrowserHistoryLive,
   NavigatorTag,
   NavigatorLive,
-  createLink,
+  Link,
 } from "fibrae/router";
 
 // =============================================================================
@@ -34,7 +34,7 @@ const homeRoute = Route.get("home", "/");
 const counterRoute = Route.get("counter", "/counter");
 const todosRoute = Route.get("todos", "/todos");
 const postsRoute = Route.get("posts", "/posts");
-const postRoute = Route.get("post")`/posts/${Route.param("id", Schema.NumberFromString)}`;
+const postRoute = Route.get("post", "/posts/:id", { id: Schema.NumberFromString });
 
 // Build the router
 const mainGroup = Router.group("main")
@@ -44,10 +44,14 @@ const mainGroup = Router.group("main")
   .add(postsRoute)
   .add(postRoute);
 
-const appRouter = Router.make("app").add(mainGroup);
+export const appRouter = Router.make("app").add(mainGroup);
 
-// Create Link component bound to router
-const Link = createLink(appRouter);
+// Register route names for type-safe Link
+declare module "fibrae/router" {
+  interface RegisteredRouter {
+    appRouter: typeof appRouter;
+  }
+}
 
 // =============================================================================
 // Atoms for State
@@ -94,7 +98,7 @@ const HomePage = () => (
 );
 
 const CounterPage = () =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const count = yield* Atom.get(counterAtom);
 
     return (
@@ -129,7 +133,7 @@ const TodoItem = ({
   todo: { id: number; text: string };
   onRemove: (id: number) => void;
 }) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const completedAtom = todoCompletedAtom(todo.id);
     const isCompleted = yield* Atom.get(completedAtom);
 
@@ -160,7 +164,7 @@ const TodoItem = ({
 let nextTodoId = 1;
 
 const TodosPage = () =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const todoList = yield* Atom.get(todosAtom);
 
     const addTodo = (text: string) => {
@@ -210,7 +214,7 @@ const TodosPage = () =>
 
 // PostsPage now receives searchParams from the loader via props
 const PostsPage = ({ searchParams }: { searchParams: { sort?: string } }) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const navigator = yield* NavigatorTag;
     const currentSort = searchParams.sort ?? "";
 
@@ -222,13 +226,13 @@ const PostsPage = ({ searchParams }: { searchParams: { sort?: string } }) =>
           <span>Sort by:</span>
           <button
             data-cy="sort-by-date"
-            onClick={() => navigator.go("posts", { searchParams: { sort: "date" } })}
+            onClick={() => navigator.go("/posts", { search: { sort: "date" } })}
           >
             Date
           </button>
           <button
             data-cy="sort-by-title"
-            onClick={() => navigator.go("posts", { searchParams: { sort: "title" } })}
+            onClick={() => navigator.go("/posts", { search: { sort: "title" } })}
           >
             Title
           </button>
@@ -242,7 +246,7 @@ const PostsPage = ({ searchParams }: { searchParams: { sort?: string } }) =>
         <ul class="post-list">
           {posts.map((post) => (
             <li key={post.id}>
-              <Link data-cy={`post-link-${post.id}`} to="post" params={{ id: post.id }}>
+              <Link data-cy={`post-link-${post.id}`} href={`/posts/${post.id}`}>
                 <span data-cy="post-link">{post.title}</span>
               </Link>
               <p style="margin: 0.25rem 0 0 0; color: #888; font-size: 0.9em;">{post.excerpt}</p>
@@ -304,21 +308,21 @@ const AppRoutesLive = RouterBuilder.group(appRouter, mainGroup, (handlers) =>
 // =============================================================================
 
 const NavBar = () =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const navigator = yield* NavigatorTag;
 
     return (
       <nav>
-        <Link data-cy="nav-home" to="home">
+        <Link data-cy="nav-home" href="/">
           Home
         </Link>
-        <Link data-cy="nav-counter" to="counter">
+        <Link data-cy="nav-counter" href="/counter">
           Counter
         </Link>
-        <Link data-cy="nav-todos" to="todos">
+        <Link data-cy="nav-todos" href="/todos">
           Todos
         </Link>
-        <Link data-cy="nav-posts" to="posts">
+        <Link data-cy="nav-posts" href="/posts">
           Posts
         </Link>
 
@@ -356,7 +360,7 @@ const routerLayer = pipe(
   Layer.provideMerge(AppRoutesLive),
 );
 
-Effect.gen(function*() {
+Effect.gen(function* () {
   const root = pipe(document.getElementById("root"), Option.fromNullable, Option.getOrThrow);
 
   return yield* render(<App />, root, { layer: routerLayer });

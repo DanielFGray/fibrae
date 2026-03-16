@@ -1,5 +1,4 @@
 /** @jsxImportSource fibrae */
-import { h } from "fibrae";
 
 /**
  * SSR-compatible versions of demo components.
@@ -69,10 +68,14 @@ export const StreamCounterPlaceholder = () => (
 );
 
 // Composite App component for SSR
-export const App = () =>
-  h("div", {}, [
-    h(StaticHeader),
-    h(StreamCounterPlaceholder),
-    h("div", {}, [h(Counter, { label: "Counter A" }), h(Counter, { label: "Counter B" })]),
-    h(TodoList),
-  ]);
+export const App = () => (
+  <div>
+    <StaticHeader />
+    <StreamCounterPlaceholder />
+    <div>
+      <Counter label="Counter A" />
+      <Counter label="Counter B" />
+    </div>
+    <TodoList />
+  </div>
+);

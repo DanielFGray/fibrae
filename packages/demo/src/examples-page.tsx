@@ -437,70 +437,6 @@ Effect.gen(function* () {
     "error-container",
   );
 
-  const EventFailer = () => (
-    <div>
-      <button data-cy="fail-event" onClick={() => Effect.fail(new TestFailure({ message: "event-crash" }))}>
-        Fail Event
-      </button>
-    </div>
-  );
-
-  // Stream that emits once then fails (tests post-first-emission failure)
-  const StreamFailer = () => {
-    const ok = <div data-cy="stream-ok">Stream OK once</div>;
-    const fail = Effect.delay(Effect.fail(new TestFailure({ message: "stream-crash" })), "300 millis");
-    return Stream.concat(Stream.succeed(ok), Stream.fromEffect(fail));
-  };
-
-  // Stream that fails before first emission (tests pre-first-emission failure)
-  const StreamFailerImmediate = () => {
-    return Stream.fromEffect(Effect.fail(new TestFailure({ message: "stream-crash-immediate" })));
-  };
-
-  // Stream that takes longer than Suspense threshold then fails
-  // Tests that ErrorBoundary() takes precedence over Suspense fallback
-  const SlowThenFail = () => {
-    // Delay 200ms (> 100ms threshold) so Suspense shows loading, then fail
-    return Stream.fromEffect(Effect.delay(Effect.fail(new TestFailure({ message: "slow-then-fail" })), "200 millis"));
-  };
-
-  // Wrapper components using ErrorBoundary JSX API
-  const SafeCrashDuringRender = () => (
-    <ErrorBoundary fallback={() => <div data-cy="fallback-render">Render Error</div>}>
-      <CrashDuringRender />
-    </ErrorBoundary>
-  );
-
-  const SafeEventFailer = () => (
-    <ErrorBoundary fallback={(e) =>
-      e._tag === "EventHandlerError"
-        ? <div data-cy="fallback-event">EventHandlerError: eventType: {e.eventType}</div>
-        : <div>Error</div>
-    }>
-      <EventFailer />
-    </ErrorBoundary>
-  );
-
-  const SafeStreamFailer = () => (
-    <ErrorBoundary fallback={() => <div data-cy="fallback-stream">Stream Error</div>}>
-      <StreamFailer />
-    </ErrorBoundary>
-  );
-
-  const SafeStreamFailerImmediate = () => (
-    <ErrorBoundary fallback={() => <div data-cy="fallback-stream-immediate">Stream Immediate Error</div>}>
-      <StreamFailerImmediate />
-    </ErrorBoundary>
-  );
-
-  const SafeSlowThenFail = () => (
-    <ErrorBoundary fallback={() => <div data-cy="fallback-suspense-error">Suspense Error Precedence</div>}>
-      <Suspense fallback={<div data-cy="suspense-loading">Loading slow component...</div>}>
-        <SlowThenFail />
-      </Suspense>
-    </ErrorBoundary>
-  );
-
   // Render each example independently
   yield* Effect.fork(render(<Counter label="Example Counter" />, counterContainer));
 
@@ -538,11 +474,52 @@ Effect.gen(function* () {
   yield* Effect.fork(
     render(
       <>
-        <SafeCrashDuringRender />
-        <SafeEventFailer />
-        <SafeStreamFailer />
-        <SafeStreamFailerImmediate />
-        <SafeSlowThenFail />
+        <ErrorBoundary fallback={() => <div data-cy="fallback-render">Render Error</div>}>
+          <CrashDuringRender />
+        </ErrorBoundary>
+        <ErrorBoundary
+          fallback={(e) =>
+            e._tag === "EventHandlerError" ? (
+              <div data-cy="fallback-event">EventHandlerError: eventType: {e.eventType}</div>
+            ) : (
+              <div>Error</div>
+            )
+          }
+        >
+          <div>
+            <button
+              data-cy="fail-event"
+              onClick={() => Effect.fail(new TestFailure({ message: "event-crash" }))}
+            >
+              Fail Event
+            </button>
+          </div>
+        </ErrorBoundary>
+        <ErrorBoundary fallback={() => <div data-cy="fallback-stream">Stream Error</div>}>
+          {Stream.concat(
+            Stream.succeed(<div data-cy="stream-ok">Stream OK once</div>),
+            Stream.fromEffect(
+              Effect.delay(Effect.fail(new TestFailure({ message: "stream-crash" })), "300 millis"),
+            ),
+          )}
+        </ErrorBoundary>
+        <ErrorBoundary
+          fallback={() => <div data-cy="fallback-stream-immediate">Stream Immediate Error</div>}
+        >
+          {Stream.fromEffect(Effect.fail(new TestFailure({ message: "stream-crash-immediate" })))}
+        </ErrorBoundary>
+        <ErrorBoundary
+          fallback={() => <div data-cy="fallback-suspense-error">Suspense Error Precedence</div>}
+        >
+          <Suspense fallback={<div data-cy="suspense-loading">Loading slow component...</div>}>
+            {Stream.fromEffect(
+              Effect.delay(
+                Effect.fail(new TestFailure({ message: "slow-then-fail" })),
+                "200 millis",
+              ),
+            )}
+          </Suspense>
+        </ErrorBoundary>
       </>,
       errorContainer,
     ),
@@ -557,7 +534,10 @@ Effect.gen(function* () {
 
   const BoundaryEventFailer = () => (
     <div>
-      <button data-cy="boundary-fail-event" onClick={() => Effect.fail(new TestFailure({ message: "boundary-event-crash" }))}>
+      <button
+        data-cy="boundary-fail-event"
+        onClick={() => Effect.fail(new TestFailure({ message: "boundary-event-crash" }))}
+      >
         Fail Event (boundary)
       </button>
     </div>
@@ -566,7 +546,10 @@ Effect.gen(function* () {
   // Stream that emits once then fails
   const BoundaryStreamFailer = () => {
     const ok = <div data-cy="boundary-stream-ok">Boundary Stream OK once</div>;
-    const fail = Effect.delay(Effect.fail(new TestFailure({ message: "boundary-stream-crash" })), "300 millis");
+    const fail = Effect.delay(
+      Effect.fail(new TestFailure({ message: "boundary-stream-crash" })),
+      "300 millis",
+    );
     return Stream.concat(Stream.succeed(ok), Stream.fromEffect(fail));
   };
 
@@ -574,25 +557,37 @@ Effect.gen(function* () {
   yield* Effect.fork(
     render(
       <>
-        <ErrorBoundary fallback={(e) =>
-          e._tag === "RenderError"
-            ? <div data-cy="boundary-fallback-render">Boundary Render Error: {e.componentName}</div>
-            : <div>Error</div>
-        }>
+        <ErrorBoundary
+          fallback={(e) =>
+            e._tag === "RenderError" ? (
+              <div data-cy="boundary-fallback-render">Boundary Render Error: {e.componentName}</div>
+            ) : (
+              <div>Error</div>
+            )
+          }
+        >
           <BoundaryCrashDuringRender />
         </ErrorBoundary>
-        <ErrorBoundary fallback={(e) =>
-          e._tag === "EventHandlerError"
-            ? <div data-cy="boundary-fallback-event">Boundary Event Error: {e.eventType}</div>
-            : <div>Error</div>
-        }>
+        <ErrorBoundary
+          fallback={(e) =>
+            e._tag === "EventHandlerError" ? (
+              <div data-cy="boundary-fallback-event">Boundary Event Error: {e.eventType}</div>
+            ) : (
+              <div>Error</div>
+            )
+          }
+        >
           <BoundaryEventFailer />
         </ErrorBoundary>
-        <ErrorBoundary fallback={(e) =>
-          e._tag === "StreamError"
-            ? <div data-cy="boundary-fallback-stream">Boundary Stream Error: {e.phase}</div>
-            : <div>Error</div>
-        }>
+        <ErrorBoundary
+          fallback={(e) =>
+            e._tag === "StreamError" ? (
+              <div data-cy="boundary-fallback-stream">Boundary Stream Error: {e.phase}</div>
+            ) : (
+              <div>Error</div>
+            )
+          }
+        >
           <BoundaryStreamFailer />
         </ErrorBoundary>
       </>,

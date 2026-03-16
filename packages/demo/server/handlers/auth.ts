@@ -35,10 +35,7 @@ export const getCurrentUserFromCookies = Effect.gen(function* () {
 /**
  * Layer that provides CurrentUser from cookies (may fail with UnauthorizedError)
  */
-export const CurrentUserFromCookies = Layer.effect(
-  CurrentUser,
-  getCurrentUserFromCookies,
-);
+export const CurrentUserFromCookies = Layer.effect(CurrentUser, getCurrentUserFromCookies);
 
 // =============================================================================
 // Auth Handlers

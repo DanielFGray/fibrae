@@ -8,7 +8,7 @@
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as BrowserPlatform from "@effect/platform-browser";
-import { h, render } from "fibrae";
+import { render } from "fibrae";
 import { Router, RouterOutlet } from "fibrae/router";
 
 import { AppRouter, AppHandlersClientLive, Link } from "./app/index.js";
@@ -20,15 +20,15 @@ import { ApiClientLive } from "./api/index.js";
 
 const NavBar = () => (
   <nav data-cy="main-nav">
-    <Link data-cy="nav-home" to="home">
+    <Link data-cy="nav-home" href="/">
       Home
     </Link>
     {" | "}
-    <Link data-cy="nav-posts" to="posts">
+    <Link data-cy="nav-posts" href="/posts">
       Posts
     </Link>
     {" | "}
-    <Link data-cy="nav-new-post" to="postNew">
+    <Link data-cy="nav-new-post" href="/posts/new">
       New Post
     </Link>
   </nav>
@@ -61,7 +61,7 @@ if (!container) {
 console.log("[ssr-notes-hydrate] Starting hydration");
 Effect.gen(function* () {
   // Create RouterOutlet - it will read from hydrated RouterStateAtom
-  const outlet = h(RouterOutlet, {});
+  const outlet = <RouterOutlet />;
 
   // Wrap in App shell
   const app = (

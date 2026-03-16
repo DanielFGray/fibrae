@@ -236,9 +236,7 @@ const LiveCounterComponent: Component = () =>
     const ticker = bridge.stream(
       Stream.make(0, 1, 2).pipe(
         Stream.concat(
-          Stream.iterate(3, (n) => n + 1).pipe(
-            Stream.schedule(Schedule.spaced("1 second")),
-          ),
+          Stream.iterate(3, (n) => n + 1).pipe(Stream.schedule(Schedule.spaced("1 second"))),
         ),
       ),
     );

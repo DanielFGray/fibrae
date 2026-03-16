@@ -171,9 +171,7 @@ function popSuspenseHandler() {
 }
 
 function getSuspenseHandler(): Fiber | null {
-  return suspenseStack.length > 0
-    ? suspenseStack[suspenseStack.length - 1]
-    : null;
+  return suspenseStack.length > 0 ? suspenseStack[suspenseStack.length - 1] : null;
 }
 ```
 

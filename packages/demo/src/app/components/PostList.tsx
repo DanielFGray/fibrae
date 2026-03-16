@@ -31,7 +31,7 @@ export function PostList(): Effect.Effect<VElement, never, PostsClient> {
           <ul data-cy="posts-ul">
             {posts.map((post) => (
               <li key={post.id} data-cy={`post-item-${post.id}`}>
-                <Link to="post" params={{ id: post.id }} data-cy={`post-link-${post.id}`}>
+                <Link href={`/posts/${post.id}`} data-cy={`post-link-${post.id}`}>
                   <strong>{post.title}</strong>
                 </Link>
                 <span class="post-meta"> by {post.authorId}</span>
@@ -68,9 +68,7 @@ export function PostListStream(): Stream.Stream<VElement, never, PostsClient> {
             <ul data-cy="posts-ul">
               {currentPosts.map((post) => (
                 <li key={post.id} data-cy={`post-item-${post.id}`}>
-                  <Link to="post" params={{ id: post.id }}>
-                    {post.title}
-                  </Link>
+                  <Link href={`/posts/${post.id}`}>{post.title}</Link>
                 </li>
               ))}
             </ul>

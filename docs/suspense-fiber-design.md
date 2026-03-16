@@ -130,9 +130,7 @@ const findNearestSuspenseBoundary = (fiber: Fiber): Option.Option<Fiber> => {
 Called when threshold expires before first stream emission:
 
 ```typescript
-const handleFiberSuspension = (
-  fiber: Fiber,
-): Effect.Effect<void, never, FibraeRuntime> =>
+const handleFiberSuspension = (fiber: Fiber): Effect.Effect<void, never, FibraeRuntime> =>
   Effect.gen(function* () {
     const boundaryOpt = findNearestSuspenseBoundary(fiber);
     if (Option.isNone(boundaryOpt)) {
@@ -166,9 +164,7 @@ const handleFiberSuspension = (
 Called when parked fiber finally gets its first emission:
 
 ```typescript
-const signalFiberReady = (
-  fiber: Fiber,
-): Effect.Effect<void, never, FibraeRuntime> =>
+const signalFiberReady = (fiber: Fiber): Effect.Effect<void, never, FibraeRuntime> =>
   Effect.gen(function* () {
     const boundaryOpt = findNearestSuspenseBoundary(fiber);
     if (Option.isNone(boundaryOpt)) return;
@@ -215,9 +211,7 @@ if (threshold > 0) {
       Deferred.await(firstValueDeferred).pipe(
         Effect.map((v) => ({ _tag: "value" as const, value: v })),
       ),
-      Effect.sleep(`${threshold} millis`).pipe(
-        Effect.map(() => ({ _tag: "timeout" as const })),
-      ),
+      Effect.sleep(`${threshold} millis`).pipe(Effect.map(() => ({ _tag: "timeout" as const }))),
     );
 
   if (result._tag === "timeout") {

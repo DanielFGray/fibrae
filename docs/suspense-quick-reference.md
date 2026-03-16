@@ -107,11 +107,7 @@ popSuspenseHandler();
 
 ```typescript
 function isWakeable(value: unknown): boolean {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    typeof value.then === "function"
-  );
+  return value !== null && typeof value === "object" && typeof value.then === "function";
 }
 ```
 

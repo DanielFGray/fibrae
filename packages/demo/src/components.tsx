@@ -3,7 +3,7 @@ import * as Stream from "effect/Stream";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import { pipe } from "effect/Function";
-import { h, Atom, AtomRegistry, Suspense, type VNode } from "fibrae";
+import { Atom, AtomRegistry, Suspense, type VNode } from "fibrae";
 
 // Effect pattern: define atoms at module level using Atom.family for parameterized state
 const counterAtom = Atom.family((_label: string) => Atom.make(0));
@@ -97,52 +97,40 @@ export const TodoItem = ({
     const isCompleted = yield* Atom.get(completed);
     const testValue = yield* Atom.get(testCount);
 
-    return h(
-      "li",
-      {
-        "data-cy": "todo-item",
-        style: "display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 0;",
-      },
-      [
-        h(
-          "input",
-          {
-            "data-cy": "todo-checkbox",
-            type: "checkbox",
-            checked: isCompleted,
-            onChange: () => registry.update(completed, (v: boolean) => !v),
-          },
-          [],
-        ),
-        h(
-          "span",
-          {
-            "data-cy": "todo-text",
-            style: isCompleted ? "text-decoration: line-through; color: #999;" : "",
-          },
-          [text],
-        ),
-        h(
-          "button",
-          {
-            "data-cy": "todo-test-button",
-            type: "button",
-            onClick: () => registry.update(testCount, (n: number) => n + 1),
-            style: "margin-left: 0.5rem; background: orange;",
-          },
-          [`Test: ${testValue}`],
-        ),
-        h(
-          "button",
-          {
-            "data-cy": "todo-remove",
-            type: "button",
-            onClick: () => onRemove(text),
-            style: "margin-left: auto;",
-          },
-          ["Remove"],
-        ),
-      ],
+    return (
+      <li
+        data-cy="todo-item"
+        style="display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 0;"
+      >
+        <input
+          data-cy="todo-checkbox"
+          type="checkbox"
+          checked={isCompleted}
+          onChange={() => registry.update(completed, (v: boolean) => !v)}
+        />
+        <span
+          data-cy="todo-text"
+          style={isCompleted ? "text-decoration: line-through; color: #999;" : ""}
+        >
+          {text}
+        </span>
+        <button
+          data-cy="todo-test-button"
+          type="button"
+          onClick={() => registry.update(testCount, (n: number) => n + 1)}
+          style="margin-left: 0.5rem; background: orange;"
+        >
+          Test: {testValue}
+        </button>
+        <button
+          data-cy="todo-remove"
+          type="button"
+          onClick={() => onRemove(text)}
+          style="margin-left: auto;"
+        >
+          Remove
+        </button>
+      </li>
     );
   });
 
@@ -166,12 +154,11 @@ export const TodoList = () =>
 
     const todoList = yield* Atom.get(todosAtom);
 
-    return h(
-      "form",
-      {
-        "data-cy": "todo-list",
-        style: "padding: 1rem; border: 2px solid #44aa44; border-radius: 8px; margin: 1rem 0;",
-        onSubmit: (e: Event) => {
+    return (
+      <form
+        data-cy="todo-list"
+        style="padding: 1rem; border: 2px solid #44aa44; border-radius: 8px; margin: 1rem 0;"
+        onSubmit={(e: Event) => {
           e.preventDefault();
           const form = e.currentTarget as HTMLFormElement;
           return pipe(
@@ -181,40 +168,27 @@ export const TodoList = () =>
             Effect.flatMap((parsed) => addTodo(parsed.todoInput)),
             Effect.tap(() => Effect.sync(() => form.reset())),
           );
-        },
-      },
-      [
-        h("h3", {}, ["Effect Todo List"]),
-        h("div", { style: "display: flex; gap: 0.5rem; margin-bottom: 1rem;" }, [
-          h(
-            "input",
-            {
-              "data-cy": "todo-input",
-              type: "text",
-              name: "todoInput",
-              placeholder: "What needs to be done?",
-              style: "flex: 1; padding: 0.5rem;",
-            },
-            [],
-          ),
-          h("button", { "data-cy": "todo-add", type: "submit" }, ["Add"]),
-        ]),
-        h(
-          "ul",
-          { style: "list-style: none; padding: 0;" },
-          todoList.map((todo: string) =>
-            h(
-              TodoItem,
-              {
-                key: todo,
-                text: todo,
-                onRemove: removeTodo,
-              },
-              [],
-            ),
-          ),
-        ),
-      ],
+        }}
+      >
+        <h3>Effect Todo List</h3>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+          <input
+            data-cy="todo-input"
+            type="text"
+            name="todoInput"
+            placeholder="What needs to be done?"
+            style="flex: 1; padding: 0.5rem;"
+          />
+          <button data-cy="todo-add" type="submit">
+            Add
+          </button>
+        </div>
+        <ul style="list-style: none; padding: 0;">
+          {todoList.map((todo: string) => (
+            <TodoItem key={todo} text={todo} onRemove={removeTodo} />
+          ))}
+        </ul>
+      </form>
     );
   });
 
