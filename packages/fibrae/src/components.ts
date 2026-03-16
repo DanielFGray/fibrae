@@ -1,7 +1,7 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 
-import { type ComponentError, type VElement } from "./shared.js";
+import { type ComponentError, type VChild, type VElement } from "./shared.js";
 
 // =============================================================================
 // Error Boundary Channel
@@ -45,7 +45,7 @@ export class ErrorBoundaryChannel extends Context.Tag("ErrorBoundaryChannel")<
 export const Suspense = (props: {
   fallback: VElement;
   threshold?: number;
-  children?: VElement | VElement[];
+  children?: VChild | VChild[];
 }): VElement => {
   const childrenArray = Array.isArray(props.children)
     ? props.children
@@ -58,12 +58,14 @@ export const Suspense = (props: {
   }
 
   // Return a special marker element that renderVElementToDOM will handle
+  // Cast: VChild[] → VElement[] at the type-erasure boundary;
+  // the fiber renderer resolves Effects/Streams during reconciliation.
   return {
     type: "SUSPENSE" as const,
     props: {
       fallback: props.fallback,
       threshold: props.threshold ?? 100,
-      children: childrenArray,
+      children: childrenArray as VElement[],
     },
   };
 };
@@ -78,8 +80,8 @@ let boundaryIdCounter = 0;
 /**
  * Normalize children to an array of VElements.
  */
-const normalizeChildren = (children: VElement | VElement[]): VElement[] =>
-  Array.isArray(children) ? children : [children];
+const normalizeChildren = (children: VChild | VChild[]): VElement[] =>
+  (Array.isArray(children) ? children : [children]) as VElement[];
 
 /**
  * Error boundary component — catches errors in its subtree and shows a fallback.
@@ -113,7 +115,7 @@ const normalizeChildren = (children: VElement | VElement[]): VElement[] =>
  */
 export const ErrorBoundary = (props: {
   fallback: (error: ComponentError) => VElement;
-  children?: VElement | VElement[];
+  children?: VChild | VChild[];
 }): VElement => {
   const childrenArray = props.children ? normalizeChildren(props.children) : [];
 

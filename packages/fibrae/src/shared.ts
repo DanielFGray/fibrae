@@ -81,9 +81,19 @@ export type Primitive =
 
 /**
  * What can appear as children in JSX (recursive type)
- * Includes primitives, VElements, and arrays thereof
+ * Includes primitives, VElements, Effects, Streams, and arrays thereof
  */
-export type VChild = VElement | string | number | bigint | boolean | null | undefined | VChild[];
+export type VChild =
+  | VElement
+  | Effect.Effect<VElement, any, any>
+  | Stream.Stream<VElement, any, any>
+  | string
+  | number
+  | bigint
+  | boolean
+  | null
+  | undefined
+  | VChild[];
 
 /**
  * What components can return - VElement or wrapped in Effect/Stream

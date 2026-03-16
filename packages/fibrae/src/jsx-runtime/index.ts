@@ -356,6 +356,35 @@ type LabelAttrs = {
   for?: string;
 };
 
+type MetaAttrs = {
+  charset?: string;
+  name?: string;
+  content?: string;
+  property?: string;
+  "http-equiv"?: string;
+};
+
+type ScriptAttrs = {
+  type?: string;
+  src?: string;
+  async?: boolean;
+  defer?: boolean;
+  crossOrigin?: string;
+  integrity?: string;
+  noModule?: boolean;
+};
+
+type LinkElementAttrs = {
+  href?: string;
+  rel?: string;
+  type?: string;
+  media?: string;
+  crossOrigin?: string;
+  integrity?: string;
+  as?: string;
+  sizes?: string;
+};
+
 /**
  * Map of elements that need extra attribute types beyond the base.
  */
@@ -369,6 +398,9 @@ type SpecificElements = {
   form: HTMLElementProps<HTMLFormElement> & FormAttrs;
   button: HTMLElementProps<HTMLButtonElement> & ButtonAttrs;
   label: HTMLElementProps<HTMLLabelElement> & LabelAttrs;
+  meta: HTMLElementProps<HTMLMetaElement> & MetaAttrs;
+  script: HTMLElementProps<HTMLScriptElement> & ScriptAttrs;
+  link: HTMLElementProps<HTMLLinkElement> & LinkElementAttrs;
 };
 
 /**
