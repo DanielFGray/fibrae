@@ -207,13 +207,11 @@ export function NavigatorLive(
             const nav = options.replace ? history.replace(url) : history.push(url);
 
             if (options.viewTransition && typeof document.startViewTransition === "function") {
-              Effect.runSync(nav);
-              Effect.sync(() => {
-                document.startViewTransition(async () => {
-                  await new Promise<void>((r) =>
-                    requestAnimationFrame(() => requestAnimationFrame(() => r())),
-                  );
-                });
+              yield* nav;
+              document.startViewTransition(async () => {
+                await new Promise<void>((r) =>
+                  requestAnimationFrame(() => requestAnimationFrame(() => r())),
+                );
               });
             } else {
               yield* nav;
