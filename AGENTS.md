@@ -39,7 +39,8 @@ Write idiomatic Effect code. See AGENTS.md for full coding guidelines.
 - Components return `VElement | Effect<VElement> | Stream<VElement>`
 - Fiber.componentScope is `Scope.Closeable` (not just `Scope`)
 - `FiberRef.currentContext` returns `Context<never>` — store and pass as `Context<never>`
-- Router/RouteGroup/Link accumulate route names as literal types — `<Link to="typo">` is a type error
+- Link uses real paths: `<Link href="/posts/42">` — type-safe via `RegisteredRouter` + `PatternToHref`
+- Router/RouteGroup accumulate route paths as literal types — `<Link href="/typo">` is a type error
 - `RouterBuilder.group()` takes RouteGroup directly (not string name) for type-safe `handle()`
 - `Route.match`/`interpolate` return Effects — `RouteError` for failures
 - `RouteHandler` stores Effects with R=never (type erasure boundary in `handle()`)

@@ -31,6 +31,7 @@ export class RouteError extends Schema.TaggedError<RouteError>()("RouteError", {
  */
 export interface Route<
   Name extends string = string,
+  Path extends string = never,
   PathParams extends Record<string, unknown> = Record<string, unknown>,
   SearchParams extends Record<string, unknown> = Record<string, unknown>,
 > {
@@ -57,7 +58,7 @@ export interface Route<
    */
   readonly setSearchParams: <NewSearch extends Record<string, unknown>>(
     schema: Schema.Schema<NewSearch>,
-  ) => Route<Name, PathParams, NewSearch>;
+  ) => Route<Name, Path, PathParams, NewSearch>;
 }
 
 /**
@@ -170,14 +171,26 @@ function interpolatePath(
  * Supports both static paths and template literal syntax.
  */
 export interface RouteConstructor {
-  <const Name extends string>(name: Name, path: string): Route<Name, {}, {}>;
+  /** Static path — captures Path as literal type. */
+  <const Name extends string, const Path extends string>(
+    name: Name,
+    path: Path,
+  ): Route<Name, Path, {}, {}>;
 
+  /** Static path with param schemas — captures Path + validates params. */
+  <const Name extends string, const Path extends string>(
+    name: Name,
+    path: Path,
+    params: Record<string, Schema.Schema.Any>,
+  ): Route<Name, Path, Record<string, unknown>, {}>;
+
+  /** Template literal syntax — Path is not tracked at the type level. */
   <const Name extends string>(
     name: Name,
   ): <const T extends readonly any[]>(
     segments: TemplateStringsArray,
     ...params: T
-  ) => Route<Name, Record<string, unknown>, {}>;
+  ) => Route<Name, never, Record<string, unknown>, {}>;
 }
 
 /**
@@ -185,6 +198,7 @@ export interface RouteConstructor {
  */
 function makeRoute<
   Name extends string,
+  Path extends string = never,
   PathParams extends Record<string, unknown> = {},
   SearchParams extends Record<string, unknown> = {},
 >(
@@ -192,7 +206,7 @@ function makeRoute<
   path: string,
   pathSchema: Option.Option<Schema.Schema<PathParams>> = Option.none(),
   searchSchema: Option.Option<Schema.Schema<SearchParams>> = Option.none(),
-): Route<Name, PathParams, SearchParams> {
+): Route<Name, Path, PathParams, SearchParams> {
   return {
     name: _name,
     path,
@@ -211,8 +225,22 @@ function makeRoute<
  * Create a route getter function supporting both static and template literal syntax.
  */
 function makeGetter(): RouteConstructor {
-  return ((name: string, path?: string) => {
-    // Static path case
+  return ((name: string, path?: string, params?: Record<string, Schema.Schema.Any>) => {
+    // Static path with param schemas
+    if (typeof path === "string" && params) {
+      const paramNames = Object.keys(params);
+      const pathSchema =
+        paramNames.length > 0
+          ? Option.some(Schema.Struct(params as Record<string, Schema.Schema.Any>))
+          : Option.none<Schema.Schema.Any>();
+      return makeRoute(
+        name,
+        path,
+        pathSchema as Option.Option<Schema.Schema<Record<string, unknown>>>,
+      );
+    }
+
+    // Static path case (no params)
     if (typeof path === "string") {
       return makeRoute(name, path);
     }

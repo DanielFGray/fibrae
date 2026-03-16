@@ -50,11 +50,14 @@ export { History as HistoryTag, BrowserHistoryLive, MemoryHistoryLive } from "./
 
 // Re-export Navigator types and service tag
 export type { CurrentRoute, NavigateOptions, NavigatorService } from "./Navigator.js";
-export { Navigator as NavigatorTag, NavigatorLive, createGo } from "./Navigator.js";
+export { Navigator as NavigatorTag, NavigatorLive } from "./Navigator.js";
 
-// Re-export Link component factory
+// Type registration for module augmentation
+export type { RegisteredRouter, ValidHref, PatternToHref } from "./register.js";
+
+// Re-export Link component (type-safe via RegisteredRouter)
 export type { LinkProps } from "./Link.js";
-export { createLink } from "./Link.js";
+export { Link } from "./Link.js";
 
 // Re-export RouterOutlet component
 export { RouterOutlet, OutletDepth } from "./RouterOutlet.js";

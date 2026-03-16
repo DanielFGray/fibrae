@@ -47,18 +47,12 @@ export interface HistoryService {
   /**
    * Navigate to a new location (push new entry).
    */
-  readonly push: (
-    path: string,
-    state?: unknown,
-  ) => Effect.Effect<void, never, AtomRegistry.AtomRegistry>;
+  readonly push: (path: string, state?: unknown) => Effect.Effect<void>;
 
   /**
    * Replace current location (same entry).
    */
-  readonly replace: (
-    path: string,
-    state?: unknown,
-  ) => Effect.Effect<void, never, AtomRegistry.AtomRegistry>;
+  readonly replace: (path: string, state?: unknown) => Effect.Effect<void>;
 
   /**
    * Go back in history.

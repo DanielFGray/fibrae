@@ -39,11 +39,17 @@ export class RouterError extends Schema.TaggedError<RouterError>()("RouterError"
  * Groups provide namespacing for handler implementation.
  * RouteNames accumulates route name literal types via .add() for type-safe navigation.
  */
-export interface RouteGroup<Name extends string = string, RouteNames extends string = never> {
+export interface RouteGroup<
+  Name extends string = string,
+  RouteNames extends string = never,
+  RoutePaths extends string = never,
+> {
   readonly _tag: "RouteGroup";
   readonly name: Name;
   readonly routes: readonly Route[];
-  readonly add: <RName extends string>(route: Route<RName>) => RouteGroup<Name, RouteNames | RName>;
+  readonly add: <RName extends string, RPath extends string>(
+    route: Route<RName, RPath>,
+  ) => RouteGroup<Name, RouteNames | RName, RoutePaths | RPath>;
 }
 
 /**
@@ -51,22 +57,28 @@ export interface RouteGroup<Name extends string = string, RouteNames extends str
  * The layout component should render <RouterOutlet /> for children.
  * RouteNames accumulates route name literal types via .add() for type-safe navigation.
  */
-export interface LayoutGroup<Name extends string = string, RouteNames extends string = never> {
+export interface LayoutGroup<
+  Name extends string = string,
+  RouteNames extends string = never,
+  RoutePaths extends string = never,
+> {
   readonly _tag: "LayoutGroup";
   readonly name: Name;
   readonly basePath: string;
   readonly routes: readonly Route[];
-  readonly add: <RName extends string>(
-    route: Route<RName>,
-  ) => LayoutGroup<Name, RouteNames | RName>;
+  readonly add: <RName extends string, RPath extends string>(
+    route: Route<RName, RPath>,
+  ) => LayoutGroup<Name, RouteNames | RName, RoutePaths | RPath>;
 }
 
 /**
  * Union of group types that can be added to a router.
  */
-export type AnyGroup<Name extends string = string, RouteNames extends string = never> =
-  | RouteGroup<Name, RouteNames>
-  | LayoutGroup<Name, RouteNames>;
+export type AnyGroup<
+  Name extends string = string,
+  RouteNames extends string = never,
+  RoutePaths extends string = never,
+> = RouteGroup<Name, RouteNames, RoutePaths> | LayoutGroup<Name, RouteNames, RoutePaths>;
 
 /**
  * Result of matching a route, including any layout wrappers.
@@ -83,12 +95,16 @@ export interface RouteMatch {
  * The complete router holding all route groups and enabling route matching.
  * RouteNames accumulates all route names from added groups for type-safe navigation.
  */
-export interface Router<Name extends string = string, RouteNames extends string = never> {
+export interface Router<
+  Name extends string = string,
+  RouteNames extends string = never,
+  RoutePaths extends string = never,
+> {
   readonly name: Name;
   readonly groups: readonly AnyGroup[];
-  readonly add: <GName extends string, GRouteNames extends string>(
-    group: AnyGroup<GName, GRouteNames>,
-  ) => Router<Name, RouteNames | GRouteNames>;
+  readonly add: <GName extends string, GRouteNames extends string, GRoutePaths extends string>(
+    group: AnyGroup<GName, GRouteNames, GRoutePaths>,
+  ) => Router<Name, RouteNames | GRouteNames, RoutePaths | GRoutePaths>;
 
   /**
    * Match a pathname against all routes in the router.
@@ -103,21 +119,22 @@ export interface Router<Name extends string = string, RouteNames extends string 
  * Routes are added via group.add(route).
  * Route names accumulate as literal types through the builder chain.
  */
-export function group<const Name extends string>(name: Name): RouteGroup<Name, never> {
-  return createRouteGroup<Name, never>(name, []);
+export function group<const Name extends string>(name: Name): RouteGroup<Name, never, never> {
+  return createRouteGroup<Name, never, never>(name, []);
 }
 
-/** Internal helper — creates a RouteGroup with accumulated RouteNames. */
-function createRouteGroup<Name extends string, RouteNames extends string>(
-  name: Name,
-  routes: readonly Route[],
-): RouteGroup<Name, RouteNames> {
+/** Internal helper — creates a RouteGroup with accumulated RouteNames and RoutePaths. */
+function createRouteGroup<
+  Name extends string,
+  RouteNames extends string,
+  RoutePaths extends string,
+>(name: Name, routes: readonly Route[]): RouteGroup<Name, RouteNames, RoutePaths> {
   return {
     _tag: "RouteGroup",
     name,
     routes,
-    add: <RName extends string>(route: Route<RName>) =>
-      createRouteGroup<Name, RouteNames | RName>(name, [...routes, route]),
+    add: <RName extends string, RPath extends string>(route: Route<RName, RPath>) =>
+      createRouteGroup<Name, RouteNames | RName, RoutePaths | RPath>(name, [...routes, route]),
   };
 }
 
@@ -146,27 +163,34 @@ function createRouteGroup<Name extends string, RouteNames extends string>(
 export function layout<const Name extends string>(
   name: Name,
   basePath: string,
-): LayoutGroup<Name, never> {
+): LayoutGroup<Name, never, never> {
   // Normalize basePath - ensure it starts with / and doesn't end with /
   const normalizedBase = basePath.startsWith("/") ? basePath : `/${basePath}`;
   const cleanBase = normalizedBase.endsWith("/") ? normalizedBase.slice(0, -1) : normalizedBase;
 
-  return createLayoutGroup<Name, never>(name, cleanBase, []);
+  return createLayoutGroup<Name, never, never>(name, cleanBase, []);
 }
 
-/** Internal helper — creates a LayoutGroup with accumulated RouteNames. */
-function createLayoutGroup<Name extends string, RouteNames extends string>(
+/** Internal helper — creates a LayoutGroup with accumulated RouteNames and RoutePaths. */
+function createLayoutGroup<
+  Name extends string,
+  RouteNames extends string,
+  RoutePaths extends string,
+>(
   name: Name,
   basePath: string,
   routes: readonly Route[],
-): LayoutGroup<Name, RouteNames> {
+): LayoutGroup<Name, RouteNames, RoutePaths> {
   return {
     _tag: "LayoutGroup",
     name,
     basePath,
     routes,
-    add: <RName extends string>(route: Route<RName>) =>
-      createLayoutGroup<Name, RouteNames | RName>(name, basePath, [...routes, route]),
+    add: <RName extends string, RPath extends string>(route: Route<RName, RPath>) =>
+      createLayoutGroup<Name, RouteNames | RName, RoutePaths | RPath>(name, basePath, [
+        ...routes,
+        route,
+      ]),
   };
 }
 
@@ -175,20 +199,22 @@ function createLayoutGroup<Name extends string, RouteNames extends string>(
  * Groups are added via router.add(group).
  * Route names accumulate from groups for type-safe navigation.
  */
-export function make<const Name extends string>(name: Name): Router<Name, never> {
-  return createRouter<Name, never>(name, []);
+export function make<const Name extends string>(name: Name): Router<Name, never, never> {
+  return createRouter<Name, never, never>(name, []);
 }
 
-/** Internal helper — creates a Router with accumulated RouteNames. */
-function createRouter<Name extends string, RouteNames extends string>(
+/** Internal helper — creates a Router with accumulated RouteNames and RoutePaths. */
+function createRouter<Name extends string, RouteNames extends string, RoutePaths extends string>(
   name: Name,
   groups: readonly AnyGroup[],
-): Router<Name, RouteNames> {
+): Router<Name, RouteNames, RoutePaths> {
   return {
     name,
     groups,
-    add: <GName extends string, GRouteNames extends string>(g: AnyGroup<GName, GRouteNames>) =>
-      createRouter<Name, RouteNames | GRouteNames>(name, [...groups, g]),
+    add: <GName extends string, GRouteNames extends string, GRoutePaths extends string>(
+      g: AnyGroup<GName, GRouteNames, GRoutePaths>,
+    ) =>
+      createRouter<Name, RouteNames | GRouteNames, RoutePaths | GRoutePaths>(name, [...groups, g]),
 
     matchRoute(pathname: string): Effect.Effect<Option.Option<RouteMatch>> {
       const tryMatchRoutes = (
@@ -400,6 +426,25 @@ export function serverLayer(
   return Layer.mergeAll(historyLayer, navigatorLayer, routeElementLayer);
 }
 
+/** Get current browser location. */
+const getBrowserLocation = (): HistoryLocation => ({
+  pathname: window.location.pathname,
+  search: window.location.search,
+  hash: window.location.hash,
+  state: window.history.state,
+});
+
+/** Parse path into location object. */
+const parseBrowserLocation = (href: string, state?: unknown): HistoryLocation => {
+  const url = href.startsWith("/") ? new URL(href, "http://localhost") : new URL(href);
+  return {
+    pathname: url.pathname,
+    search: url.search,
+    hash: url.hash,
+    state,
+  };
+};
+
 /**
  * Create a browser layer for client-side hydration.
  *
@@ -434,8 +479,6 @@ export function browserLayer(
 > {
   const { router, basePath = "" } = options;
 
-  // Import BrowserHistoryLive dynamically to avoid server-side issues
-  // For now, we'll use a scoped effect to create it
   const historyLayer = Layer.scoped(
     History,
     Effect.gen(function* () {
@@ -443,13 +486,6 @@ export function browserLayer(
       const { Atom } = yield* Effect.promise(() => import("@effect-atom/atom"));
 
       // Create location atom with initial browser location
-      const getBrowserLocation = (): HistoryLocation => ({
-        pathname: window.location.pathname,
-        search: window.location.search,
-        hash: window.location.hash,
-        state: window.history.state,
-      });
-
       const locationAtom = Atom.make<HistoryLocation>(getBrowserLocation());
 
       // Subscribe to popstate for browser back/forward
@@ -470,22 +506,12 @@ export function browserLayer(
       // Track history index for canGoBack
       let historyIndex = 0;
 
-      const parseLocation = (href: string, state?: unknown): HistoryLocation => {
-        const url = href.startsWith("/") ? new URL(href, "http://localhost") : new URL(href);
-        return {
-          pathname: url.pathname,
-          search: url.search,
-          hash: url.hash,
-          state,
-        };
-      };
-
       return {
         location: locationAtom,
 
         push: (path: string, state?: unknown) =>
           Effect.sync(() => {
-            const location = parseLocation(path, state);
+            const location = parseBrowserLocation(path, state);
             const fullPath = `${location.pathname}${location.search}${location.hash}`;
             window.history.pushState(state, "", fullPath);
             historyIndex++;
@@ -494,7 +520,7 @@ export function browserLayer(
 
         replace: (path: string, state?: unknown) =>
           Effect.sync(() => {
-            const location = parseLocation(path, state);
+            const location = parseBrowserLocation(path, state);
             const fullPath = `${location.pathname}${location.search}${location.hash}`;
             window.history.replaceState(state, "", fullPath);
             registry.set(locationAtom, { ...location, state });

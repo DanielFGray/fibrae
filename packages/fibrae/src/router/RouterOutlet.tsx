@@ -34,6 +34,8 @@
  * ```
  */
 
+// eslint-disable-next-line no-unused-vars -- jsx is used by the JSX transform (jsxFactory)
+import { jsx } from "../jsx-runtime/index.js";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import * as Option from "effect/Option";
@@ -119,17 +121,7 @@ export function RouterOutlet(): Stream.Stream<
             if (Option.isNone(currentRoute)) {
               // No route matched - clear router state and render 404
               registry.set(RouterStateAtom, Option.none());
-              return {
-                type: "div",
-                props: {
-                  children: [
-                    {
-                      type: "TEXT_ELEMENT",
-                      props: { nodeValue: "404 - Not Found", children: [] },
-                    },
-                  ],
-                },
-              } as VElement;
+              return <div>404 - Not Found</div>;
             }
 
             const { routeName, params, searchParams, layouts } = currentRoute.value;
@@ -141,20 +133,7 @@ export function RouterOutlet(): Stream.Stream<
               const layoutHandler = routerHandlers.getLayoutHandler(layoutName);
 
               if (Option.isNone(layoutHandler)) {
-                return {
-                  type: "div",
-                  props: {
-                    children: [
-                      {
-                        type: "TEXT_ELEMENT",
-                        props: {
-                          nodeValue: `No layout handler for: ${layoutName}`,
-                          children: [],
-                        },
-                      },
-                    ],
-                  },
-                } as VElement;
+                return <div>No layout handler for: {layoutName}</div>;
               }
 
               return layoutHandler.value.component();
@@ -164,20 +143,7 @@ export function RouterOutlet(): Stream.Stream<
             const handler = routerHandlers.getHandler(routeName);
             if (Option.isNone(handler)) {
               registry.set(RouterStateAtom, Option.none());
-              return {
-                type: "div",
-                props: {
-                  children: [
-                    {
-                      type: "TEXT_ELEMENT",
-                      props: {
-                        nodeValue: `No handler for route: ${routeName}`,
-                        children: [],
-                      },
-                    },
-                  ],
-                },
-              } as VElement;
+              return <div>No handler for route: {routeName}</div>;
             }
 
             let loaderData: unknown;
@@ -226,7 +192,7 @@ export function RouterOutlet(): Stream.Stream<
           }).pipe(
             // Catch per-route errors so the stream stays alive for navigation recovery.
             // Emit a component that re-throws during render — ErrorBoundary catches it.
-            Effect.catchAllCause((cause) => Effect.succeed(ErrorBubble(cause) as VElement)),
+            Effect.catchAllCause((cause) => Effect.succeed(ErrorBubble(cause))),
           ),
         ),
       );

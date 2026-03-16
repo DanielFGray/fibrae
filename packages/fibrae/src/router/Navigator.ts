@@ -1,14 +1,15 @@
 /**
- * Navigator service - type-safe route-aware navigation.
+ * Navigator service - path-based navigation.
  *
- * Provides route-aware navigation on top of History:
- * - nav.go("routeName", { path: {...}, searchParams: {...} })
+ * Provides navigation on top of History:
+ * - nav.go("/posts/42") — push to history
+ * - nav.go("/posts/42", { replace: true, search: { sort: "date" } })
  * - nav.back, nav.forward
- * - nav.isActive("routeName", params) for active link detection
  * - currentRoute Atom reflects matched route info
+ * - currentPathname for active link detection
  *
- * Design: Navigator uses History internally but provides route-aware API.
- * It knows about routes and can build URLs from route names.
+ * Design: Navigator uses History internally but provides a higher-level API.
+ * Route matching is reactive via History location subscription.
  */
 
 import * as Effect from "effect/Effect";
@@ -18,13 +19,7 @@ import * as Option from "effect/Option";
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import { History, type HistoryLocation } from "./History.js";
 import type { Router } from "./Router.js";
-import {
-  parseSearchParams,
-  buildSearchString,
-  stripBasePath,
-  findRouteByName,
-  groupBasePath,
-} from "./utils.js";
+import { parseSearchParams, buildSearchString, stripBasePath } from "./utils.js";
 
 // =============================================================================
 // Types
@@ -44,20 +39,23 @@ export interface CurrentRoute {
 /**
  * Navigation options for go().
  */
-export interface NavigateOptions<
-  PathParams extends Record<string, unknown> = Record<string, unknown>,
-  SearchParams extends Record<string, unknown> = Record<string, unknown>,
-> {
-  readonly path?: PathParams;
-  readonly searchParams?: SearchParams;
+export interface NavigateOptions {
+  readonly search?: Record<string, unknown>;
   readonly replace?: boolean;
+  /** Enable View Transitions API for this navigation (CSS-driven animations) */
+  readonly viewTransition?: boolean;
 }
 
 /**
  * Navigator service interface.
- * Provides type-safe navigation by route name.
+ * Provides path-based navigation.
  */
 export interface NavigatorService {
+  /**
+   * The router instance used for route matching.
+   */
+  readonly router: Router;
+
   /**
    * Base path prefix for all routes (e.g., "/ssr/router").
    * Used for apps mounted at non-root paths.
@@ -65,15 +63,20 @@ export interface NavigatorService {
   readonly basePath: string;
 
   /**
+   * Current pathname (without basePath). Updated on navigation.
+   */
+  readonly currentPathname: string;
+
+  /**
    * Current matched route info - updates on navigation.
    */
   readonly currentRoute: Atom.Writable<Option.Option<CurrentRoute>, Option.Option<CurrentRoute>>;
 
   /**
-   * Navigate to a route by name with optional params.
+   * Navigate to a path.
    */
   readonly go: (
-    routeName: string,
+    href: string,
     options?: NavigateOptions,
   ) => Effect.Effect<void, never, AtomRegistry.AtomRegistry>;
 
@@ -88,13 +91,9 @@ export interface NavigatorService {
   readonly forward: Effect.Effect<void, never, AtomRegistry.AtomRegistry>;
 
   /**
-   * Check if a route is currently active.
-   * Optionally match specific params.
+   * Check if a path is currently active.
    */
-  readonly isActive: (
-    routeName: string,
-    params?: Record<string, unknown>,
-  ) => Effect.Effect<boolean, never, AtomRegistry.AtomRegistry>;
+  readonly isActive: (href: string) => Effect.Effect<boolean, never, AtomRegistry.AtomRegistry>;
 }
 
 // =============================================================================
@@ -109,11 +108,6 @@ export class Navigator extends Context.Tag("fibrae/Navigator")<Navigator, Naviga
 // =============================================================================
 // Helpers
 // =============================================================================
-
-/**
- * Parse search params from URL search string.
- */
-// parseSearchParams, buildSearchString, stripBasePath imported from ./utils.js
 
 /**
  * Match current location against router and return CurrentRoute.
@@ -136,7 +130,9 @@ function matchLocation(
   );
 }
 
-// findRouteByName imported from ./utils.js
+// =============================================================================
+// View Transitions
+// =============================================================================
 
 // =============================================================================
 // Navigator Layer
@@ -154,8 +150,7 @@ export interface NavigatorOptions {
  * Create a Navigator layer for the given router.
  *
  * Features:
- * - Type-safe navigation by route name
- * - Automatic URL building via route.interpolate
+ * - Path-based navigation
  * - Tracks current matched route in an Atom
  * - Delegates to History for actual navigation
  * - Supports basePath for apps mounted at non-root paths
@@ -177,158 +172,64 @@ export function NavigatorLive(
       const initialRoute = yield* matchLocation(router, initialLocation, basePath);
       const currentRouteAtom = Atom.make(initialRoute);
 
+      // Track current pathname (mutable for synchronous access from Link)
+      let currentPathname = stripBasePath(initialLocation.pathname, basePath);
+
       // Subscribe to location changes to update currentRoute.
-      // This handles popstate events (browser back/forward) automatically.
       // Effect.runSync is safe here: matchPath is pure computation with no requirements.
       const unsubscribe = registry.subscribe(history.location, (location) => {
         const matched = Effect.runSync(matchLocation(router, location, basePath));
         registry.set(currentRouteAtom, matched);
+        currentPathname = stripBasePath(location.pathname, basePath);
       });
 
       // Cleanup subscription when scope closes
       yield* Effect.addFinalizer(() => Effect.sync(unsubscribe));
 
       const service: NavigatorService = {
+        router,
         basePath,
+        get currentPathname() {
+          return currentPathname;
+        },
         currentRoute: currentRouteAtom,
 
-        go: (routeName, navigateOptions = {}) =>
+        go: (href, options = {}) =>
           Effect.gen(function* () {
-            const found = findRouteByName(router, routeName);
-            if (Option.isNone(found)) {
-              yield* Effect.logWarning(`Route not found: ${routeName}`);
-              return;
+            // Validate route exists before navigating
+            const matched = yield* router.matchRoute(href);
+            if (Option.isNone(matched)) {
+              yield* Effect.logWarning(`No route matches path: ${href}`);
             }
 
-            const { route, group } = found.value;
-            const routeBasePath = groupBasePath(group);
+            const searchString = options.search ? buildSearchString(options.search) : "";
+            const url = `${basePath}${href}${searchString}`;
+            const nav = options.replace ? history.replace(url) : history.push(url);
 
-            // Build URL from route and params
-            const pathParams = navigateOptions.path ?? ({} as Record<string, unknown>);
-            const routePathname = yield* route.interpolate(pathParams);
-            // Prepend navigator basePath AND route's layout basePath
-            const pathname = basePath + routeBasePath + routePathname;
-            const search = navigateOptions.searchParams
-              ? buildSearchString(navigateOptions.searchParams)
-              : "";
-            const url = `${pathname}${search}`;
-
-            // Navigate - currentRoute updates automatically via derived atom
-            if (navigateOptions.replace) {
-              yield* history.replace(url);
+            if (options.viewTransition && typeof document.startViewTransition === "function") {
+              Effect.runSync(nav);
+              Effect.sync(() => {
+                document.startViewTransition(async () => {
+                  await new Promise<void>((r) =>
+                    requestAnimationFrame(() => requestAnimationFrame(() => r())),
+                  );
+                });
+              });
             } else {
-              yield* history.push(url);
+              yield* nav;
             }
-          }).pipe(
-            Effect.catchTag("RouteError", (e) =>
-              Effect.logWarning(`Navigation failed: ${e.message}`),
-            ),
-          ),
+          }),
 
         // Back/forward - currentRoute updates automatically when history.location
-        // changes (popstate handler updates locationAtom, derived atom recomputes)
+        // changes (popstate handler updates locationAtom, subscription recomputes)
         back: history.back,
 
         forward: history.forward,
 
-        isActive: (routeName, params) =>
-          Effect.gen(function* () {
-            const current = yield* Atom.get(currentRouteAtom);
-            if (Option.isNone(current)) {
-              return false;
-            }
-
-            if (current.value.routeName !== routeName) {
-              return false;
-            }
-
-            // If params provided, check they match
-            if (params) {
-              for (const [key, value] of Object.entries(params)) {
-                if (current.value.params[key] !== value) {
-                  return false;
-                }
-              }
-            }
-
-            return true;
-          }),
+        isActive: (href) => Effect.succeed(currentPathname === href),
       };
 
       return service;
     }),
   );
 }
-
-// =============================================================================
-// Convenience Accessors
-// =============================================================================
-
-/**
- * Create a typed go() function constrained to valid route names.
- *
- * Usage:
- * ```typescript
- * const go = createGo(AppRouter);
- * yield* go("posts");           // OK
- * yield* go("typo");            // compile-time error!
- * ```
- */
-export function createGo<RouteNames extends string>(
-  _router: Router<string, RouteNames>,
-): (
-  routeName: RouteNames,
-  options?: NavigateOptions,
-) => Effect.Effect<void, never, Navigator | AtomRegistry.AtomRegistry> {
-  return (routeName, options) =>
-    Effect.gen(function* () {
-      const nav = yield* Navigator;
-      yield* nav.go(routeName, options);
-    });
-}
-
-/**
- * Navigate to a route by name.
- */
-export const go = (
-  routeName: string,
-  options?: NavigateOptions,
-): Effect.Effect<void, never, Navigator | AtomRegistry.AtomRegistry> =>
-  Effect.gen(function* () {
-    const nav = yield* Navigator;
-    yield* nav.go(routeName, options);
-  });
-
-/**
- * Go back in history.
- */
-/* is-tree-shakable-suppress */
-export const back: Effect.Effect<void, never, Navigator | AtomRegistry.AtomRegistry> = Effect.gen(
-  function* () {
-    const nav = yield* Navigator;
-    yield* nav.back;
-  },
-);
-
-/**
- * Go forward in history.
- */
-/* is-tree-shakable-suppress */
-export const forward: Effect.Effect<void, never, Navigator | AtomRegistry.AtomRegistry> =
-  Effect.gen(function* () {
-    const nav = yield* Navigator;
-    yield* nav.forward;
-  });
-
-/**
- * Get current route info.
- */
-/* is-tree-shakable-suppress */
-export const getCurrentRoute: Effect.Effect<
-  Option.Option<CurrentRoute>,
-  never,
-  Navigator | AtomRegistry.AtomRegistry
-> = Effect.gen(function* () {
-  const nav = yield* Navigator;
-  return yield* Atom.get(nav.currentRoute);
-});
