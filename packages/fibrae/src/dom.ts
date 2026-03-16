@@ -87,9 +87,84 @@ const unitlessProperties = new Set([
 ]);
 
 /**
- * Set a DOM property using the appropriate method
+ * SVG namespace URI for createElementNS
  */
-export const setDomProperty = (el: HTMLElement, name: string, value: unknown): void => {
+export const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+
+/**
+ * Tags that must be created with SVG namespace.
+ * Derived from SVGElementTagNameMap minus tags that overlap with HTMLElementTagNameMap.
+ */
+export const SVG_TAGS = new Set([
+  "svg",
+  "animate",
+  "animateMotion",
+  "animateTransform",
+  "circle",
+  "clipPath",
+  "defs",
+  "desc",
+  "ellipse",
+  "feBlend",
+  "feColorMatrix",
+  "feComponentTransfer",
+  "feComposite",
+  "feConvolveMatrix",
+  "feDiffuseLighting",
+  "feDisplacementMap",
+  "feDistantLight",
+  "feDropShadow",
+  "feFlood",
+  "feFuncA",
+  "feFuncB",
+  "feFuncG",
+  "feFuncR",
+  "feGaussianBlur",
+  "feImage",
+  "feMerge",
+  "feMergeNode",
+  "feMorphology",
+  "feOffset",
+  "fePointLight",
+  "feSpecularLighting",
+  "feSpotLight",
+  "feTile",
+  "feTurbulence",
+  "filter",
+  "foreignObject",
+  "g",
+  "image",
+  "line",
+  "linearGradient",
+  "marker",
+  "mask",
+  "metadata",
+  "mpath",
+  "path",
+  "pattern",
+  "polygon",
+  "polyline",
+  "radialGradient",
+  "rect",
+  "set",
+  "stop",
+  "symbol",
+  "text",
+  "textPath",
+  "tspan",
+  "use",
+  "view",
+]);
+
+/**
+ * Set a DOM property using the appropriate method.
+ * Works for both HTML and SVG elements.
+ */
+export const setDomProperty = (
+  el: HTMLElement | SVGElement,
+  name: string,
+  value: unknown,
+): void => {
   if (name === "style") {
     if (value == null) {
       el.removeAttribute("style");
@@ -190,11 +265,11 @@ export const createEventWrapper =
  * in listenerStore so updateDom can remove them on re-render.
  */
 export const attachEventListeners = (
-  el: HTMLElement,
+  el: HTMLElement | SVGElement,
   props: Record<string, unknown>,
   runtime: FibraeRuntime,
   onError?: (error: EventHandlerError) => Effect.Effect<unknown, never, unknown>,
-  listenerStore?: WeakMap<HTMLElement, Record<string, EventListener>>,
+  listenerStore?: WeakMap<HTMLElement | SVGElement, Record<string, EventListener>>,
 ): void => {
   const store = listenerStore;
   const stored = store?.get(el) ?? {};

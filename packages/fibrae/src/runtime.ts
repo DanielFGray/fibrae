@@ -28,7 +28,7 @@ export interface FiberState {
   wipRoot: Option.Option<Fiber>;
   nextUnitOfWork: Option.Option<Fiber>;
   deletions: Fiber[];
-  listenerStore: WeakMap<HTMLElement, Record<string, EventListener>>;
+  listenerStore: WeakMap<HTMLElement | SVGElement, Record<string, EventListener>>;
 }
 
 export const makeFiberState = (): FiberState => ({

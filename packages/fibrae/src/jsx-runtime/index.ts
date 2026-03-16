@@ -381,6 +381,106 @@ type GenericElements = {
   >;
 };
 
+// =============================================================================
+// SVG Element Types
+// =============================================================================
+
+/**
+ * Common SVG presentation attributes shared across all SVG elements.
+ * Covers the most-used attributes; exotic ones fall through via [key: string].
+ */
+type BaseSVGProps = {
+  key?: string | number;
+  ref?: ((el: SVGElement) => void) | { current: SVGElement | null };
+  children?: VChild;
+  style?: string | Record<string, string | number>;
+  class?: string;
+  className?: string;
+  id?: string;
+  lang?: string;
+  tabIndex?: number;
+  // Presentation attributes
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: string | number;
+  strokeLinecap?: "butt" | "round" | "square";
+  strokeLinejoin?: "miter" | "round" | "bevel";
+  strokeDasharray?: string;
+  strokeDashoffset?: string | number;
+  strokeOpacity?: string | number;
+  fillOpacity?: string | number;
+  fillRule?: "nonzero" | "evenodd";
+  clipRule?: "nonzero" | "evenodd";
+  opacity?: string | number;
+  transform?: string;
+  // Geometry
+  viewBox?: string;
+  xmlns?: string;
+  width?: string | number;
+  height?: string | number;
+  x?: string | number;
+  y?: string | number;
+  cx?: string | number;
+  cy?: string | number;
+  r?: string | number;
+  rx?: string | number;
+  ry?: string | number;
+  x1?: string | number;
+  y1?: string | number;
+  x2?: string | number;
+  y2?: string | number;
+  // Path
+  d?: string;
+  pathLength?: string | number;
+  // Markers
+  markerStart?: string;
+  markerMid?: string;
+  markerEnd?: string;
+  // Gradients / patterns
+  gradientUnits?: string;
+  gradientTransform?: string;
+  spreadMethod?: string;
+  offset?: string | number;
+  stopColor?: string;
+  stopOpacity?: string | number;
+  // Text
+  textAnchor?: string;
+  dominantBaseline?: string;
+  dx?: string | number;
+  dy?: string | number;
+  fontSize?: string | number;
+  fontFamily?: string;
+  fontWeight?: string | number;
+  // Filters / clip / mask
+  clipPath?: string;
+  mask?: string;
+  filter?: string;
+  // Misc
+  preserveAspectRatio?: string;
+  href?: string;
+  xlinkHref?: string;
+  points?: string;
+  // Allow data-* and aria-* attributes
+  [key: `data-${string}`]: unknown;
+  [key: `aria-${string}`]: unknown;
+};
+
+/**
+ * SVG element props = common SVG attributes + event handlers.
+ * All SVG elements share the same prop type — no per-element specialization needed.
+ */
+type SVGElementProps = BaseSVGProps & EventHandlerProps;
+
+/**
+ * SVG elements derived from SVGElementTagNameMap.
+ * Excludes keys that overlap with HTMLElementTagNameMap (a, script, style, title)
+ * since those are already typed as HTML elements and the HTML versions are what
+ * JSX users expect in practice.
+ */
+type SVGElements = {
+  [K in Exclude<keyof SVGElementTagNameMap, keyof HTMLElementTagNameMap>]: SVGElementProps;
+};
+
 // Provide properly typed JSX namespace
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -394,8 +494,8 @@ declare global {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     type ElementType = keyof IntrinsicElements | ((props: any) => VNode);
 
-    // Typed HTML elements: specific overrides + generic fallback for all others
-    interface IntrinsicElements extends SpecificElements, GenericElements {}
+    // Typed HTML elements: specific overrides + generic fallback for all others + SVG
+    interface IntrinsicElements extends SpecificElements, GenericElements, SVGElements {}
 
     // Support an optional key prop
     interface IntrinsicAttributes {

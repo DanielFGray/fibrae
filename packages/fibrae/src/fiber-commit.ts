@@ -18,7 +18,7 @@ import * as Deferred from "effect/Deferred";
 import type { Fiber } from "./shared.js";
 import { isEvent, isProperty } from "./shared.js";
 import { FibraeRuntime } from "./runtime.js";
-import { setDomProperty, createEventWrapper } from "./dom.js";
+import { setDomProperty, createEventWrapper, SVG_NAMESPACE, SVG_TAGS } from "./dom.js";
 import { findDomParent } from "./fiber-tree.js";
 import { handleFiberError } from "./fiber-boundary.js";
 
@@ -35,7 +35,11 @@ export const createDom = (fiber: Fiber, runtime: FibraeRuntime) =>
           return Effect.die("createDom called on function component");
         }
         const node: Node =
-          type === "TEXT_ELEMENT" ? document.createTextNode("") : document.createElement(type);
+          type === "TEXT_ELEMENT"
+            ? document.createTextNode("")
+            : SVG_TAGS.has(type)
+              ? document.createElementNS(SVG_NAMESPACE, type)
+              : document.createElement(type);
         return Effect.succeed(node);
       },
     });
@@ -68,7 +72,7 @@ export const updateDom = (
 ) =>
   Effect.gen(function* () {
     const stateRef = runtime.fiberState;
-    const element = dom as HTMLElement | Text;
+    const element = dom as HTMLElement | SVGElement | Text;
 
     if (element instanceof Text) {
       if (nextProps.nodeValue !== prevProps.nodeValue) {
@@ -102,7 +106,7 @@ export const updateDom = (
       .filter(isProperty)
       .filter((key) => !(key in nextProps))
       .forEach((name) => {
-        if (el instanceof HTMLElement) {
+        if (el instanceof HTMLElement || el instanceof SVGElement) {
           setDomProperty(el, name, null);
         }
       });
@@ -110,7 +114,7 @@ export const updateDom = (
     // Handle dangerouslySetInnerHTML
     if (nextProps.dangerouslySetInnerHTML != null) {
       if (
-        el instanceof HTMLElement &&
+        (el instanceof HTMLElement || el instanceof SVGElement) &&
         nextProps.dangerouslySetInnerHTML !== prevProps.dangerouslySetInnerHTML
       ) {
         el.innerHTML = String(nextProps.dangerouslySetInnerHTML);
@@ -122,7 +126,7 @@ export const updateDom = (
       .filter(isProperty)
       .filter(isNew(prevProps, nextProps))
       .forEach((name) => {
-        if (el instanceof HTMLElement) {
+        if (el instanceof HTMLElement || el instanceof SVGElement) {
           setDomProperty(el, name, nextProps[name]);
         }
       });

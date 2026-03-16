@@ -453,7 +453,7 @@ const hydrateElement = (
       }
     } else {
       // Host element - adopt DOM node and hydrate children
-      const el = domNode as HTMLElement;
+      const el = domNode as HTMLElement | SVGElement;
       fiber.dom = Option.some(el);
 
       // Inherit renderContext from parent fiber (function components capture it during render)

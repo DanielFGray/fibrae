@@ -73,6 +73,7 @@ export class ComponentScope extends Context.Tag("fibrae/ComponentScope")<
  */
 export type Primitive =
   | keyof HTMLElementTagNameMap
+  | keyof SVGElementTagNameMap
   | "TEXT_ELEMENT"
   | "FRAGMENT"
   | "SUSPENSE"
