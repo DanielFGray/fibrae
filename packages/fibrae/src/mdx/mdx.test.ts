@@ -5,7 +5,7 @@ import * as Layer from "effect/Layer";
 import { h } from "../index.js";
 import { renderToString, renderToStringWith } from "../server.js";
 import { SSRAtomRegistryLayer } from "../server.js";
-import { MDX, MdxHighlighter, parseMdx } from "./index.js";
+import { MDX, MDXComponents, MdxHighlighter, parseMdx } from "./index.js";
 import type { MdxComponents } from "./index.js";
 
 const renderMdx = (content: string, components?: MdxComponents) =>
@@ -137,5 +137,43 @@ describe("MdxHighlighter", () => {
     );
     expect(html).toContain('class="custom"');
     expect(html).not.toContain("should-not-appear");
+  });
+});
+
+describe("MDXComponents service", () => {
+  test("applies service-level component overrides", async () => {
+    const layer = MDXComponents.make({
+      h1: ({ children, ...props }: any) =>
+        h("h1", { class: "service-heading", ...props }, children),
+    });
+    const { html } = await renderMdxWith("# Hello", undefined, layer);
+    expect(html).toContain('class="service-heading"');
+    expect(html).toContain("Hello");
+  });
+
+  test("props-level components override service-level", async () => {
+    const layer = MDXComponents.make({
+      h1: ({ children }: any) => h("h1", { class: "from-service" }, children),
+    });
+    const { html } = await renderMdxWith(
+      "# Hello",
+      { h1: ({ children }: any) => h("h1", { class: "from-props" }, children) },
+      layer,
+    );
+    expect(html).toContain('class="from-props"');
+    expect(html).not.toContain("from-service");
+  });
+
+  test("service and props components merge for different elements", async () => {
+    const layer = MDXComponents.make({
+      h1: ({ children, ...props }: any) => h("h1", { class: "styled-h1", ...props }, children),
+    });
+    const { html } = await renderMdxWith(
+      "# Title\n\nhello **bold**",
+      { strong: ({ children }: any) => h("b", { class: "styled-bold" }, children) },
+      layer,
+    );
+    expect(html).toContain('class="styled-h1"');
+    expect(html).toContain('class="styled-bold"');
   });
 });

@@ -93,6 +93,41 @@ export class MdxHighlighter extends Context.Tag("fibrae/MdxHighlighter")<
 }
 
 // =============================================================================
+// MDXComponents Service
+// =============================================================================
+
+/**
+ * Optional service for injecting default component overrides into MDX rendering.
+ *
+ * Provides app-wide component mappings (e.g. styled headings, custom links)
+ * without passing them as props to every `<MDX />` instance. Props-level
+ * `components` take priority over the service (more specific wins).
+ *
+ * @example
+ * ```tsx
+ * // Define app-wide overrides as a Layer
+ * const MdxComponentsLive = MDXComponents.make({
+ *   h1: ({ children, ...props }) => <h1 class="text-4xl" {...props}>{children}</h1>,
+ *   a: ({ href, children }) => <Link href={href}>{children}</Link>,
+ *   code: ({ children, ...props }) => <CodeBlock {...props}>{children}</CodeBlock>,
+ * })
+ *
+ * // Provide to your app — all <MDX /> instances pick up these overrides
+ * render(<App />, root).pipe(Effect.provide(MdxComponentsLive))
+ *
+ * // Per-instance props still override the service
+ * <MDX content={md} components={{ h1: ({ children }) => <h1 class="custom">{children}</h1> }} />
+ * ```
+ */
+export class MDXComponents extends Context.Tag("fibrae/MDXComponents")<
+  MDXComponents,
+  MdxComponents
+>() {
+  /** Create a Layer providing component overrides */
+  static readonly make = (components: MdxComponents) => Layer.succeed(MDXComponents, components);
+}
+
+// =============================================================================
 // MDX Component
 // =============================================================================
 
@@ -104,23 +139,29 @@ export interface MDXProps {
 /**
  * Render markdown content as fibrae VElements.
  *
- * Both `MdxProcessor` and `MdxHighlighter` are optional services.
- * Without them, uses default processor and no highlighting.
+ * All three services (`MdxProcessor`, `MdxHighlighter`, `MDXComponents`) are
+ * optional. Without them, uses default processor, no highlighting, and no
+ * component overrides.
+ *
+ * Component resolution order (most specific wins):
+ * 1. Props-level `components` passed to this instance
+ * 2. `MDXComponents` service (app-wide defaults)
+ * 3. Native HTML element
  *
  * @example
  * ```tsx
  * // Simplest usage — no services needed
  * <MDX content={markdownString} />
  *
- * // With component overrides
+ * // With component overrides via props
  * <MDX content={markdownString} components={{
  *   h1: ({ children, ...props }) => <h1 class="text-4xl" {...props}>{children}</h1>,
  *   a: ({ href, children }) => <Link href={href}>{children}</Link>,
  * }} />
  *
- * // With processor and highlighter services
+ * // With app-wide overrides via service
  * const MdxLive = Layer.mergeAll(
- *   MdxProcessor.make({ rehypePlugins: [[rehypeHighlight]] }),
+ *   MDXComponents.make({ h1: MyHeading, a: MyLink }),
  *   MdxHighlighter.make((code, lang) => <CodeBlock code={code} lang={lang} />),
  * )
  *
@@ -135,6 +176,14 @@ export const MDX = ({ content, components }: MDXProps) =>
       Effect.map(Option.getOrElse((): MdxProcessorShape => ({ parse: parseMdx }))),
     );
     const highlighterOption = yield* Effect.serviceOption(MdxHighlighter);
+    const serviceComponents = yield* pipe(
+      Effect.serviceOption(MDXComponents),
+      Effect.map(Option.getOrElse((): MdxComponents => ({}))),
+    );
+
+    // Merge: props override service-level defaults
+    const merged: MdxComponents = { ...serviceComponents, ...components };
+
     const parsed = processor.parse(content);
-    return parsed.render(components, Option.getOrUndefined(highlighterOption));
+    return parsed.render(merged, Option.getOrUndefined(highlighterOption));
   });
