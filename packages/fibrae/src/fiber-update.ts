@@ -265,13 +265,24 @@ export const updateFunctionComponent = (
         // Threshold expired - signal suspension to boundary
         yield* handleFiberSuspension(fiber);
 
-        // Fork background work: wait for value, then signal ready
+        // Fork background work: wait for value, subscribe atoms, then signal ready
         // This allows the render loop to continue and show fallback
         yield* Effect.forkIn(
           Effect.gen(function* () {
             const value = yield* Deferred.await(firstValueDeferred);
             const currentFiber = fiberRef.current;
             currentFiber.latestStreamValue = Option.some(value);
+            // Subscribe to atom changes — the Effect has completed by now,
+            // so accessedAtoms is fully populated from the tracking registry
+            yield* subscribeFiberAtoms(currentFiber, accessedAtoms, runtime);
+            if (accessedLiveAtoms.size > 0) {
+              yield* activateLiveAtoms(
+                accessedLiveAtoms,
+                currentContext,
+                runtime,
+                componentScopeService.scope,
+              );
+            }
             yield* signalFiberReady(currentFiber);
           }),
           componentScopeService.scope,
