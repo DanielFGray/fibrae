@@ -29,21 +29,18 @@ const postIdParam = HttpApiSchema.param("id", Schema.NumberFromString);
 // =============================================================================
 
 export class PostsApi extends HttpApiGroup.make("posts")
-  .add(
-    HttpApiEndpoint.get("list", "/")
-      .addSuccess(Schema.Array(Post))
-  )
+  .add(HttpApiEndpoint.get("list", "/").addSuccess(Schema.Array(Post)))
   .add(
     HttpApiEndpoint.get("findById")`/${postIdParam}`
       .addSuccess(Post)
-      .addError(PostNotFoundError, { status: 404 })
+      .addError(PostNotFoundError, { status: 404 }),
   )
   .add(
     HttpApiEndpoint.post("create", "/")
       .setPayload(CreatePostPayload)
       .addSuccess(Post, { status: 201 })
       .addError(ValidationError, { status: 400 })
-      .addError(UnauthorizedError, { status: 401 })
+      .addError(UnauthorizedError, { status: 401 }),
   )
   .add(
     HttpApiEndpoint.put("update")`/${postIdParam}`
@@ -51,16 +48,15 @@ export class PostsApi extends HttpApiGroup.make("posts")
       .addSuccess(Post)
       .addError(PostNotFoundError, { status: 404 })
       .addError(ValidationError, { status: 400 })
-      .addError(UnauthorizedError, { status: 401 })
+      .addError(UnauthorizedError, { status: 401 }),
   )
   .add(
     HttpApiEndpoint.del("delete")`/${postIdParam}`
       .addSuccess(Schema.Void)
       .addError(PostNotFoundError, { status: 404 })
-      .addError(UnauthorizedError, { status: 401 })
+      .addError(UnauthorizedError, { status: 401 }),
   )
-  .prefix("/api/posts")
-{}
+  .prefix("/api/posts") {}
 
 // =============================================================================
 // Auth API Group
@@ -71,25 +67,16 @@ export class AuthApi extends HttpApiGroup.make("auth")
     HttpApiEndpoint.post("login", "/login")
       .setPayload(LoginPayload)
       .addSuccess(User)
-      .addError(ValidationError, { status: 400 })
+      .addError(ValidationError, { status: 400 }),
   )
+  .add(HttpApiEndpoint.post("logout", "/logout").addSuccess(Schema.Void))
   .add(
-    HttpApiEndpoint.post("logout", "/logout")
-      .addSuccess(Schema.Void)
+    HttpApiEndpoint.get("me", "/me").addSuccess(User).addError(UnauthorizedError, { status: 401 }),
   )
-  .add(
-    HttpApiEndpoint.get("me", "/me")
-      .addSuccess(User)
-      .addError(UnauthorizedError, { status: 401 })
-  )
-  .prefix("/api/auth")
-{}
+  .prefix("/api/auth") {}
 
 // =============================================================================
 // Combined API
 // =============================================================================
 
-export class Api extends HttpApi.make("fibrae-notes")
-  .add(PostsApi)
-  .add(AuthApi)
-{}
+export class Api extends HttpApi.make("fibrae-notes").add(PostsApi).add(AuthApi) {}

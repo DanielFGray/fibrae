@@ -11,7 +11,7 @@
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as BrowserPlatform from "@effect/platform-browser";
-import { h, render } from "fibrae";
+import { render } from "fibrae";
 import { Router } from "fibrae/router";
 import { SSRRouter, App, RouterOutlet, createSSRRouterHandlers } from "./ssr-router-app.js";
 
@@ -39,10 +39,10 @@ const routerLayer = Layer.provideMerge(browserLayer, handlersLayer);
 console.log("[ssr-hydrate-router] Starting hydration");
 Effect.gen(function* () {
   // Create RouterOutlet - it will read from hydrated RouterStateAtom
-  const outlet = h(RouterOutlet, {});
+  const outlet = <RouterOutlet />;
 
   // Wrap in App shell
-  const app = h(App, {}, [outlet]);
+  const app = <App>{outlet}</App>;
 
   // Render (hydrate) the app with router layer
   // render() automatically provides FibraeRuntime + AtomRegistry

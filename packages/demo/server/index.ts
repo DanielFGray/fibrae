@@ -52,14 +52,14 @@ const SERVER_PORT = 3015;
 class ApiResponse extends Schema.Class<ApiResponse>("ApiResponse")({
   success: Schema.Boolean,
   error: Schema.optional(Schema.String),
-}) { }
+}) {}
 
 /**
  * Request body for saving todos
  */
 class SaveTodosRequest extends Schema.Class<SaveTodosRequest>("SaveTodosRequest")({
   todos: Schema.Array(Schema.String),
-}) { }
+}) {}
 
 // =============================================================================
 // HTML Page Builders
@@ -87,7 +87,7 @@ const buildPage = (
 // File System Operations
 // =============================================================================
 
-const loadTodos = Effect.gen(function*() {
+const loadTodos = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const exists = yield* fs.exists(TODOS_FILE);
   if (!exists) {
@@ -98,7 +98,7 @@ const loadTodos = Effect.gen(function*() {
 });
 
 const saveTodos = (todos: readonly string[]) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     yield* fs.writeFileString(TODOS_FILE, JSON.stringify(todos, null, 2));
   });
@@ -107,24 +107,24 @@ const saveTodos = (todos: readonly string[]) =>
 // SSR Page Handlers
 // =============================================================================
 
-const counterHandler = Effect.gen(function*() {
+const counterHandler = Effect.gen(function* () {
   const { html, dehydratedState } = yield* renderToString(h(CounterApp));
   return HttpServerResponse.html(buildPage(html, dehydratedState, "ssr-hydrate-counter.tsx"));
 });
 
-const todoHandler = Effect.gen(function*() {
+const todoHandler = Effect.gen(function* () {
   const todos = yield* loadTodos;
   setInitialTodos(todos);
   const { html, dehydratedState } = yield* renderToString(h(TodoApp));
   return HttpServerResponse.html(buildPage(html, dehydratedState, "ssr-hydrate-todo.tsx"));
 });
 
-const suspenseHandler = Effect.gen(function*() {
+const suspenseHandler = Effect.gen(function* () {
   const { html, dehydratedState } = yield* renderToString(h(SuspenseApp));
   return HttpServerResponse.html(buildPage(html, dehydratedState, "ssr-hydrate-suspense.tsx"));
 });
 
-const slowSuspenseHandler = Effect.gen(function*() {
+const slowSuspenseHandler = Effect.gen(function* () {
   const { html, dehydratedState } = yield* renderToString(h(SlowSuspenseApp));
   return HttpServerResponse.html(buildPage(html, dehydratedState, "ssr-hydrate-suspense-slow.tsx"));
 });
@@ -136,7 +136,7 @@ const slowSuspenseHandler = Effect.gen(function*() {
 const ssrRouterHandlersLayer = createSSRRouterHandlers(true);
 
 const ssrRouterHandler = (ssrPathname: string) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const serverLayer = Router.serverLayer({
       router: SSRRouter,
       pathname: ssrPathname,
@@ -150,7 +150,7 @@ const ssrRouterHandler = (ssrPathname: string) =>
     );
 
     // RouterStateAtom is set by serverLayer and included in dehydratedState
-    const { html, dehydratedState } = yield* Effect.gen(function*() {
+    const { html, dehydratedState } = yield* Effect.gen(function* () {
       const { element } = yield* Router.CurrentRouteElement;
       const app = h(App, {}, [element]);
       return yield* renderToStringWith(app);
@@ -170,7 +170,7 @@ const ssrRouterHandler = (ssrPathname: string) =>
 // =============================================================================
 
 const ssrNotesHandler = (ssrPathname: string) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const serverLayer = Router.serverLayer({
       router: AppRouter,
       pathname: ssrPathname,
@@ -180,14 +180,11 @@ const ssrNotesHandler = (ssrPathname: string) =>
 
     const fullLayer = Layer.provideMerge(
       serverLayer,
-      Layer.merge(
-        Layer.merge(AppHandlersServerLive, SSRAtomRegistryLayer),
-        ApiClientLive,
-      ),
+      Layer.merge(Layer.merge(AppHandlersServerLive, SSRAtomRegistryLayer), ApiClientLive),
     );
 
     // RouterStateAtom is set by serverLayer and included in dehydratedState
-    const { html, dehydratedState } = yield* Effect.gen(function*() {
+    const { html, dehydratedState } = yield* Effect.gen(function* () {
       const { element } = yield* Router.CurrentRouteElement;
       const app = h("div", { class: "app-container", "data-cy": "ssr-notes-app" }, [
         h("header", {}, [h("h1", {}, ["Fibrae Notes"])]),
@@ -220,7 +217,7 @@ const liveClockHandler = LiveSync.serve(ClockChannel, {
   interval: "1 second",
 });
 
-const livePageHandler = Effect.gen(function*() {
+const livePageHandler = Effect.gen(function* () {
   const { html, dehydratedState } = yield* renderToString(h(LiveApp));
   return HttpServerResponse.html(buildPage(html, dehydratedState, "ssr-hydrate-live.tsx"));
 });
@@ -250,7 +247,7 @@ const liveTestMultiHandler = LiveSync.serveGroup({
   retryInterval: "3 seconds",
 });
 
-const liveTestPageHandler = Effect.gen(function*() {
+const liveTestPageHandler = Effect.gen(function* () {
   const { html, dehydratedState } = yield* renderToString(h(LiveTestApp));
   return HttpServerResponse.html(buildPage(html, dehydratedState, "ssr-hydrate-live-test.tsx"));
 });
@@ -263,7 +260,7 @@ const liveTestPageHandler = Effect.gen(function*() {
  * Reset todos endpoint - clears all todos
  * POST /ssr/todo/reset
  */
-const todoResetHandler = Effect.gen(function*() {
+const todoResetHandler = Effect.gen(function* () {
   yield* saveTodos([]);
   return yield* HttpServerResponse.json(new ApiResponse({ success: true }));
 }).pipe(
@@ -283,7 +280,7 @@ const todoResetHandler = Effect.gen(function*() {
  * POST /ssr/todo/save
  * Body: { todos: string[] }
  */
-const todoSaveHandler = Effect.gen(function*() {
+const todoSaveHandler = Effect.gen(function* () {
   const body = yield* HttpServerRequest.schemaBodyJson(SaveTodosRequest);
   yield* saveTodos(body.todos);
   return yield* HttpServerResponse.json(new ApiResponse({ success: true }));
@@ -356,7 +353,7 @@ const router = HttpRouter.empty.pipe(
   // API routes - mount all /api/* paths
   HttpRouter.all(
     "/api/*",
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const request = yield* HttpServerRequest.HttpServerRequest;
       const response = yield* Effect.promise(() => apiHandler(request.source as Request));
       // Forward the response body and status

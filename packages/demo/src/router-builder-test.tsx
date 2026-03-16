@@ -112,7 +112,9 @@ const AppRoutesLive = RouterBuilder.group(AppRouter, AppRoutes, (handlers) =>
             content: `Content for post ${id}`,
           });
         },
-        component: (props) => <PostPage loaderData={props.loaderData} path={props.path as { id: number }} />,
+        component: (props) => (
+          <PostPage loaderData={props.loaderData} path={props.path as { id: number }} />
+        ),
       }),
   ),
 );

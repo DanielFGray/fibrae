@@ -37,7 +37,9 @@ function HomePage(): VElement {
         <li>Server-side rendering with hydration</li>
       </ul>
       <p>
-        <Link to="posts" data-cy="get-started-link">Get Started - View Posts</Link>
+        <Link href="/posts" data-cy="get-started-link">
+          Get Started - View Posts
+        </Link>
       </p>
     </div>
   );
@@ -140,8 +142,7 @@ export const AppHandlersClientLive = createAppHandlers(false);
 /**
  * Combined layer with API client dependency
  */
-export const AppHandlersLive = (isServer: boolean) =>
-  createAppHandlers(isServer);
+export const AppHandlersLive = (isServer: boolean) => createAppHandlers(isServer);
 
 // =============================================================================
 // Type Safety Assertions (compile-time tests)

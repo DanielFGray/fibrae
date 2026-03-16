@@ -22,12 +22,12 @@ const StreamFailerImmediate = () => {
 };
 
 const App = () => (
-   <div>
-     <h2>Test: Stream fails before first emission</h2>
-     <ErrorBoundary fallback={() => <div data-cy="fallback">Error caught! Fallback rendered.</div>}>
-       <StreamFailerImmediate />
-     </ErrorBoundary>
-   </div>
+  <div>
+    <h2>Test: Stream fails before first emission</h2>
+    <ErrorBoundary fallback={() => <div data-cy="fallback">Error caught! Fallback rendered.</div>}>
+      <StreamFailerImmediate />
+    </ErrorBoundary>
+  </div>
 );
 
 Effect.gen(function* () {

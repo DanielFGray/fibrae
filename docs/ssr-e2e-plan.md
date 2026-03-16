@@ -233,9 +233,7 @@ declare global {
 }
 
 const container = document.getElementById("root") as HTMLElement;
-const initialState = window.__FIBRAE_STATE__ as
-  | ReadonlyArray<unknown>
-  | undefined;
+const initialState = window.__FIBRAE_STATE__ as ReadonlyArray<unknown> | undefined;
 
 Effect.gen(function* () {
   yield* Effect.fork(render(<App />, container, { initialState }));

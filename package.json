@@ -26,6 +26,8 @@
     "test:open": "bun --filter demo cypress:open --e2e --browser=chromium",
     "cypress:run": "cd packages/demo && bun cypress:run",
     "cypress:open": "cd packages/demo && bun cypress:open",
+    "format": "oxfmt --write packages",
+    "prebuild": "run-s format lint",
     "build": "run-s build:core",
     "build:watch": "bun --filter fibrae build:watch",
     "build:core": "bun --filter fibrae build",
@@ -51,6 +53,7 @@
     "@size-limit/esbuild": "^12.0.1",
     "@size-limit/file": "^12.0.1",
     "cypress": "^15.12.0",
+    "fibrae": "workspace:*",
     "jiti": "^2.6.1",
     "oxfmt": "^0.40.0",
     "oxlint": "^1.55.0",
@@ -66,26 +69,41 @@
         "packages/fibrae/dist/index.js": "{ render, h, Suspense, ErrorBoundary }"
       },
       "limit": "10 kB",
-      "ignore": ["effect", "effect/*", "@effect/*", "@effect-atom/*"]
+      "ignore": [
+        "effect",
+        "effect/*",
+        "@effect/*",
+        "@effect-atom/*"
+      ]
     },
     {
       "name": "fibrae + router",
       "import": {
         "packages/fibrae/dist/index.js": "{ render, h, Suspense, ErrorBoundary }",
-        "packages/fibrae/dist/router/index.js": "{ Router, RouterBuilder, createLink }"
+        "packages/fibrae/dist/router/index.js": "{ Router, RouterBuilder, Link }"
       },
       "limit": "15 kB",
-      "ignore": ["effect", "effect/*", "@effect/*", "@effect-atom/*"]
+      "ignore": [
+        "effect",
+        "effect/*",
+        "@effect/*",
+        "@effect-atom/*"
+      ]
     },
     {
       "name": "fibrae + router + live",
       "import": {
         "packages/fibrae/dist/index.js": "{ render, h, Suspense, ErrorBoundary }",
-        "packages/fibrae/dist/router/index.js": "{ Router, RouterBuilder, createLink }",
+        "packages/fibrae/dist/router/index.js": "{ Router, RouterBuilder, Link }",
         "packages/fibrae/dist/live/index.js": "{ live, LiveConfig }"
       },
       "limit": "18 kB",
-      "ignore": ["effect", "effect/*", "@effect/*", "@effect-atom/*"]
+      "ignore": [
+        "effect",
+        "effect/*",
+        "@effect/*",
+        "@effect-atom/*"
+      ]
     }
   ]
 }

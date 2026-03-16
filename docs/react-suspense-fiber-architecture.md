@@ -50,10 +50,7 @@
 - In BeginWork (line 2356):
   ```javascript
   const didSuspend = (workInProgress.flags & DidCapture) !== NoFlags;
-  if (
-    didSuspend ||
-    shouldRemainOnFallback(current, workInProgress, renderLanes)
-  ) {
+  if (didSuspend || shouldRemainOnFallback(current, workInProgress, renderLanes)) {
     showFallback = true;
     workInProgress.flags &= ~DidCapture;
   }

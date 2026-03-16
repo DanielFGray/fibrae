@@ -14,11 +14,17 @@ import { ThemeAtom, CurrentUserAtom } from "../atoms.js";
 export function Navigation(): VElement {
   return (
     <nav data-cy="main-nav">
-      <a href="/" data-cy="nav-home">Home</a>
+      <a href="/" data-cy="nav-home">
+        Home
+      </a>
       {" | "}
-      <a href="/posts" data-cy="nav-posts">Posts</a>
+      <a href="/posts" data-cy="nav-posts">
+        Posts
+      </a>
       {" | "}
-      <a href="/posts/new" data-cy="nav-new-post">New Post</a>
+      <a href="/posts/new" data-cy="nav-new-post">
+        New Post
+      </a>
     </nav>
   );
 }
@@ -62,12 +68,15 @@ export function UserDisplay(): Effect.Effect<VElement, never, AtomRegistry.AtomR
       <div data-cy="user-display">
         {username !== null ? (
           <span>
-            <span data-cy="username">{username}</span>
-            {" "}
-            <button data-cy="logout-btn" onclick={logout}>Logout</button>
+            <span data-cy="username">{username}</span>{" "}
+            <button data-cy="logout-btn" onclick={logout}>
+              Logout
+            </button>
           </span>
         ) : (
-          <a href="/login" data-cy="login-link">Login</a>
+          <a href="/login" data-cy="login-link">
+            Login
+          </a>
         )}
       </div>
     );
@@ -78,7 +87,9 @@ export function UserDisplay(): Effect.Effect<VElement, never, AtomRegistry.AtomR
 // Layout
 // =============================================================================
 
-export function Layout(props: { children: VElement }): Effect.Effect<VElement, never, AtomRegistry.AtomRegistry> {
+export function Layout(props: {
+  children: VElement;
+}): Effect.Effect<VElement, never, AtomRegistry.AtomRegistry> {
   return Effect.gen(function* () {
     const theme = yield* Atom.get(ThemeAtom);
 
@@ -92,9 +103,7 @@ export function Layout(props: { children: VElement }): Effect.Effect<VElement, n
           </div>
         </header>
         <Navigation />
-        <main data-cy="app-main">
-          {props.children}
-        </main>
+        <main data-cy="app-main">{props.children}</main>
       </div>
     );
   });

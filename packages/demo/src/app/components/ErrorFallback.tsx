@@ -48,7 +48,9 @@ export function NotFound(): VElement {
     <div class="not-found" data-cy="not-found">
       <h1>404 - Page Not Found</h1>
       <p>The page you're looking for doesn't exist.</p>
-      <a href="/" data-cy="home-link">Go Home</a>
+      <a href="/" data-cy="home-link">
+        Go Home
+      </a>
     </div>
   );
 }

@@ -2,20 +2,14 @@
  * App Router - route definitions for the Notes demo app.
  *
  * Pattern follows fibrae router conventions:
- * - Route.get(name, pattern) for route declaration
- * - Route.param(name, Schema) for typed path params
+ * - Route.get(name, path) for static routes
+ * - Route.get(name, path, { params }) for dynamic routes
  * - Router.group(name) to group routes
  * - Router.make(name).add(group) to create router
  */
 
 import * as Schema from "effect/Schema";
-import { Route, Router, createLink, RouterOutlet } from "fibrae/router";
-
-// =============================================================================
-// Path Parameters
-// =============================================================================
-
-const idParam = Route.param("id", Schema.NumberFromString);
+import { Route, Router, RouterOutlet, Link } from "fibrae/router";
 
 // =============================================================================
 // Route Definitions
@@ -33,8 +27,8 @@ export const AppRoutes = Router.group("app")
   .add(Route.get("home", "/"))
   .add(Route.get("posts", "/posts"))
   .add(Route.get("postNew", "/posts/new"))
-  .add(Route.get("postEdit")`/posts/${idParam}/edit`)
-  .add(Route.get("post")`/posts/${idParam}`);
+  .add(Route.get("postEdit", "/posts/:id/edit", { id: Schema.NumberFromString }))
+  .add(Route.get("post", "/posts/:id", { id: Schema.NumberFromString }));
 
 // =============================================================================
 // Router
@@ -46,19 +40,20 @@ export const AppRoutes = Router.group("app")
 export const AppRouter = Router.make("AppRouter").add(AppRoutes);
 
 // =============================================================================
-// Typed Navigation Components
+// Register routes for type-safe Link href
 // =============================================================================
 
-/**
- * Type-safe Link component for the app router.
- * Usage: <Link to="post" params={{ id: 1 }}>View Post</Link>
- */
-export const Link = createLink(AppRouter);
+declare module "fibrae/router" {
+  interface RegisteredRouter {
+    AppRouter: typeof AppRouter;
+  }
+}
 
-/**
- * Re-export RouterOutlet for app shell.
- */
-export { RouterOutlet };
+// =============================================================================
+// Navigation Components
+// =============================================================================
+
+export { Link, RouterOutlet };
 
 // =============================================================================
 // Route Names (inferred from router — no manual type needed)
@@ -71,13 +66,14 @@ export type AppRouteName = typeof AppRouter extends Router.Router<string, infer 
 // Type Safety Assertions (compile-time tests)
 // =============================================================================
 
-// Valid route names compile fine:
-void Link({ to: "home" });
-void Link({ to: "posts" });
-void Link({ to: "post" });
+// Valid hrefs compile fine:
+void Link({ href: "/" });
+void Link({ href: "/posts" });
+void Link({ href: "/posts/42" });
+void Link({ href: "/posts/42/edit" });
 
-// @ts-expect-error — "typo" is not a valid route name
-void Link({ to: "typo" });
+// @ts-expect-error — "/typo" is not a valid href
+void Link({ href: "/typo" });
 
-// @ts-expect-error — empty string is not a valid route name
-void Link({ to: "" });
+// @ts-expect-error — empty string is not a valid href
+void Link({ href: "" });

@@ -160,7 +160,9 @@ describe("Core Features", () => {
         });
 
         cy.getCy("stream-ok", { timeout: 5000 }).should("exist").and("contain", "Stream OK once");
-        cy.getCy("fallback-stream", { timeout: 5000 }).should("exist").and("contain", "Stream Error");
+        cy.getCy("fallback-stream", { timeout: 5000 })
+          .should("exist")
+          .and("contain", "Stream Error");
         cy.getCy("stream-ok").should("not.exist");
       });
 
@@ -228,9 +230,7 @@ describe("Core Features", () => {
         cy.getCy("cleanup-component").should("not.exist");
         cy.getCy("component-removed").should("exist");
 
-        cy.window()
-          .its("cleanupLog")
-          .should("include", "CleanupComponent unmounted");
+        cy.window().its("cleanupLog").should("include", "CleanupComponent unmounted");
       });
 
       it("cleanup runs when parent re-renders with different children", () => {
@@ -285,9 +285,7 @@ describe("Core Features", () => {
         cy.getCy("toggle-mounted").click();
         cy.getCy("mounted-component").should("exist");
 
-        cy.window()
-          .its("cleanupLog")
-          .should("include", "mounted: DOM element exists");
+        cy.window().its("cleanupLog").should("include", "mounted: DOM element exists");
       });
 
       it("mounted cleanup runs on unmount", () => {
@@ -297,9 +295,7 @@ describe("Core Features", () => {
 
         cy.getCy("mounted-component").should("not.exist");
 
-        cy.window()
-          .its("cleanupLog")
-          .should("include", "mounted cleanup");
+        cy.window().its("cleanupLog").should("include", "mounted cleanup");
       });
     });
   });

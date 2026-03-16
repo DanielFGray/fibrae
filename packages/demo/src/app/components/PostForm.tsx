@@ -37,7 +37,9 @@ export interface PostFormProps {
  * PostForm - create or edit a post.
  * Uses Effect event handlers for form submission.
  */
-export function PostForm(props: PostFormProps): Effect.Effect<VElement, never, AtomRegistry.AtomRegistry | PostsClient> {
+export function PostForm(
+  props: PostFormProps,
+): Effect.Effect<VElement, never, AtomRegistry.AtomRegistry | PostsClient> {
   const { post } = props;
   const isEdit = post !== undefined;
 
@@ -95,12 +97,16 @@ export function PostForm(props: PostFormProps): Effect.Effect<VElement, never, A
 
         // Navigate to posts list using router
         const navigator = yield* NavigatorTag;
-        yield* navigator.go("posts");
+        yield* navigator.go("/posts");
       });
 
     const statusEl = Result.builder(submitResult)
       .onWaiting(() => <span class="status">Saving...</span>)
-      .onError((err) => <div class="error" data-cy="form-error">{err}</div>)
+      .onError((err) => (
+        <div class="error" data-cy="form-error">
+          {err}
+        </div>
+      ))
       .onSuccess((savedPost) => <span class="success">Saved: {savedPost.title}</span>)
       .orNull();
 
@@ -140,7 +146,9 @@ export function PostForm(props: PostFormProps): Effect.Effect<VElement, never, A
           <button type="submit" disabled={isSubmitting} data-cy="submit-btn">
             {isSubmitting ? "Saving..." : isEdit ? "Update Post" : "Create Post"}
           </button>
-          <Link to="posts" data-cy="cancel-link">Cancel</Link>
+          <Link href="/posts" data-cy="cancel-link">
+            Cancel
+          </Link>
         </div>
       </form>
     );

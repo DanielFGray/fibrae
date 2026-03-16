@@ -14,11 +14,7 @@ import * as Layer from "effect/Layer";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
 import { render, Suspense, ErrorBoundary, type ComponentError } from "fibrae";
-import {
-  BrowserHistoryLive,
-  NavigatorLive,
-  RouterOutlet,
-} from "fibrae/router";
+import { BrowserHistoryLive, NavigatorLive, RouterOutlet } from "fibrae/router";
 
 import { AppRouter, AppHandlersClientLive, Link } from "./app/index.js";
 import { ApiClientLive } from "./api/index.js";
@@ -29,15 +25,15 @@ import { ApiClientLive } from "./api/index.js";
 
 const NavBar = () => (
   <nav data-cy="main-nav">
-    <Link data-cy="nav-home" to="home">
+    <Link data-cy="nav-home" href="/">
       Home
     </Link>
     {" | "}
-    <Link data-cy="nav-posts" to="posts">
+    <Link data-cy="nav-posts" href="/posts">
       Posts
     </Link>
     {" | "}
-    <Link data-cy="nav-new-post" to="postNew">
+    <Link data-cy="nav-new-post" href="/posts/new">
       New Post
     </Link>
   </nav>
@@ -96,10 +92,7 @@ const routerLayer = pipe(
 );
 
 // Combined layer with API client
-const appLayer = pipe(
-  routerLayer,
-  Layer.provideMerge(ApiClientLive),
-);
+const appLayer = pipe(routerLayer, Layer.provideMerge(ApiClientLive));
 
 // =============================================================================
 // Bootstrap
@@ -110,7 +103,7 @@ if (window.location.pathname === "/notes.html") {
   window.history.replaceState(null, "", "/");
 }
 
-Effect.gen(function*() {
+Effect.gen(function* () {
   const root = pipe(document.getElementById("root"), Option.fromNullable, Option.getOrThrow);
 
   return yield* render(<App />, root, { layer: appLayer });

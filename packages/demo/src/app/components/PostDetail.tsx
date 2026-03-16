@@ -36,11 +36,11 @@ export function PostDetail(props: PostDetailProps): VElement {
         {post.content}
       </div>
       <footer class="post-actions">
-        <Link to="postEdit" params={{ id: post.id }} data-cy="edit-post-link">
+        <Link href={`/posts/${post.id}/edit`} data-cy="edit-post-link">
           Edit
         </Link>
         {" | "}
-        <Link to="posts" data-cy="back-to-posts">
+        <Link href="/posts" data-cy="back-to-posts">
           Back to Posts
         </Link>
       </footer>

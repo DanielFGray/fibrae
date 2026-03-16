@@ -8,28 +8,29 @@
 
 import * as Schema from "effect/Schema";
 import type { VElement } from "fibrae";
-import { Route, Router, RouterBuilder, createLink, RouterOutlet } from "fibrae/router";
+import { Route, Router, RouterBuilder, RouterOutlet, Link } from "fibrae/router";
 
 // =============================================================================
 // Route Definitions
 // =============================================================================
 
-const idParam = Route.param("id", Schema.NumberFromString);
-
 // Define routes with schema-validated params
 export const SSRRouterRoutes = Router.group("ssr")
   .add(Route.get("home", "/"))
   .add(Route.get("posts", "/posts"))
-  .add(Route.get("post")`/posts/${idParam}`);
+  .add(Route.get("post", "/posts/:id", { id: Schema.NumberFromString }));
 
 // Create router from groups
 export const SSRRouter = Router.make("SSRRouter").add(SSRRouterRoutes);
 
-// Create Link component for this router
-export const Link = createLink(SSRRouter);
+// Register route names for type-safe Link
+declare module "fibrae/router" {
+  interface RegisteredRouter {
+    SSRRouter: typeof SSRRouter;
+  }
+}
 
-// Re-export RouterOutlet for use in App
-export { RouterOutlet };
+export { Link, RouterOutlet };
 
 // =============================================================================
 // Components
@@ -64,7 +65,7 @@ export function PostsPage(props: {
       <ul>
         {props.loaderData.posts.map((post) => (
           <li key={post.id}>
-            <Link to="post" params={{ id: post.id }} data-cy={`post-link-${post.id}`}>
+            <Link href={`/posts/${post.id}`} data-cy={`post-link-${post.id}`}>
               {post.title}
             </Link>
           </li>
@@ -99,11 +100,11 @@ export function PostPage(props: {
 export function Navigation(): VElement {
   return (
     <nav>
-      <Link to="home" data-cy="nav-link-home">
+      <Link href="/" data-cy="nav-link-home">
         Home
       </Link>
       {" | "}
-      <Link to="posts" data-cy="nav-link-posts">
+      <Link href="/posts" data-cy="nav-link-posts">
         Posts
       </Link>
     </nav>

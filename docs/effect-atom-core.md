@@ -41,9 +41,7 @@ const derivedAtom = Atom.make((get) => {
 });
 
 // Atom family for parameterized atoms
-const userAtom = Atom.family((id: string) =>
-  Atom.make(Effect.succeed({ id, name: "User" + id })),
-);
+const userAtom = Atom.family((id: string) => Atom.make(Effect.succeed({ id, name: "User" + id })));
 ```
 
 ### Atom Transformations
@@ -53,9 +51,7 @@ const userAtom = Atom.family((id: string) =>
 const map: {
   <R extends Atom<any>, B>(
     f: (_: Type<R>) => B,
-  ): (
-    self: R,
-  ) => [R] extends [Writable<infer _, infer RW>] ? Writable<B, RW> : Atom<B>;
+  ): (self: R) => [R] extends [Writable<infer _, infer RW>] ? Writable<B, RW> : Atom<B>;
   <R extends Atom<any>, B>(
     self: R,
     f: (_: Type<R>) => B,
@@ -64,10 +60,7 @@ const map: {
 
 // Example usage
 const priceAtom = Atom.make(100);
-const formattedPriceAtom = Atom.map(
-  priceAtom,
-  (price) => `$${price.toFixed(2)}`,
-);
+const formattedPriceAtom = Atom.map(priceAtom, (price) => `$${price.toFixed(2)}`);
 ```
 
 ### Atom Configuration
@@ -96,13 +89,8 @@ const keepAlive: <A extends Atom<any>>(self: A) => A;
 
 // Debounce atom updates
 const debounce: {
-  (
-    duration: Duration.DurationInput,
-  ): <A extends Atom<any>>(self: A) => WithoutSerializable<A>;
-  <A extends Atom<any>>(
-    self: A,
-    duration: Duration.DurationInput,
-  ): WithoutSerializable<A>;
+  (duration: Duration.DurationInput): <A extends Atom<any>>(self: A) => WithoutSerializable<A>;
+  <A extends Atom<any>>(self: A, duration: Duration.DurationInput): WithoutSerializable<A>;
 };
 ```
 
@@ -238,13 +226,8 @@ const toStream: {
 
 // Convert Result atom to stream
 const toStreamResult: {
-  <A, E>(
-    atom: Atom.Atom<Result.Result<A, E>>,
-  ): (self: Registry) => Stream.Stream<A, E>;
-  <A, E>(
-    self: Registry,
-    atom: Atom.Atom<Result.Result<A, E>>,
-  ): Stream.Stream<A, E>;
+  <A, E>(atom: Atom.Atom<Result.Result<A, E>>): (self: Registry) => Stream.Stream<A, E>;
+  <A, E>(self: Registry, atom: Atom.Atom<Result.Result<A, E>>): Stream.Stream<A, E>;
 };
 
 // Get result from Result atom
@@ -358,9 +341,7 @@ The `AtomRuntime` provides integration with Effect services and layers.
 ### Runtime Interface
 
 ```typescript
-export interface AtomRuntime<R, ER = never> extends Atom<
-  Result.Result<Runtime.Runtime<R>, ER>
-> {
+export interface AtomRuntime<R, ER = never> extends Atom<Result.Result<Runtime.Runtime<R>, ER>> {
   readonly factory: RuntimeFactory;
   readonly layer: Atom<Layer.Layer<R, ER>>;
 
@@ -369,20 +350,12 @@ export interface AtomRuntime<R, ER = never> extends Atom<
     <A, E>(
       create: (
         get: Context,
-      ) => Effect.Effect<
-        A,
-        E,
-        Scope.Scope | R | AtomRegistry | Reactivity.Reactivity
-      >,
+      ) => Effect.Effect<A, E, Scope.Scope | R | AtomRegistry | Reactivity.Reactivity>,
       options?: { readonly initialValue?: A },
     ): Atom<Result.Result<A, E | ER>>;
 
     <A, E>(
-      effect: Effect.Effect<
-        A,
-        E,
-        Scope.Scope | R | AtomRegistry | Reactivity.Reactivity
-      >,
+      effect: Effect.Effect<A, E, Scope.Scope | R | AtomRegistry | Reactivity.Reactivity>,
       options?: { readonly initialValue?: A },
     ): Atom<Result.Result<A, E | ER>>;
   };
@@ -393,11 +366,7 @@ export interface AtomRuntime<R, ER = never> extends Atom<
       fn: (
         arg: Arg,
         get: FnContext,
-      ) => Effect.Effect<
-        A,
-        E,
-        Scope.Scope | AtomRegistry | Reactivity.Reactivity | R
-      >,
+      ) => Effect.Effect<A, E, Scope.Scope | AtomRegistry | Reactivity.Reactivity | R>,
       options?: {
         readonly initialValue?: A;
         readonly reactivityKeys?:
@@ -411,9 +380,7 @@ export interface AtomRuntime<R, ER = never> extends Atom<
   // Pull subscriptions
   readonly pull: <A, E>(
     create:
-      | ((
-          get: Context,
-        ) => Stream.Stream<A, E, R | AtomRegistry | Reactivity.Reactivity>)
+      | ((get: Context) => Stream.Stream<A, E, R | AtomRegistry | Reactivity.Reactivity>)
       | Stream.Stream<A, E, R | AtomRegistry | Reactivity.Reactivity>,
     options?: {
       readonly disableAccumulation?: boolean;
@@ -448,9 +415,7 @@ export interface RuntimeFactory {
   <R, E>(
     create:
       | Layer.Layer<R, E, AtomRegistry | Reactivity.Reactivity>
-      | ((
-          get: Context,
-        ) => Layer.Layer<R, E, AtomRegistry | Reactivity.Reactivity>),
+      | ((get: Context) => Layer.Layer<R, E, AtomRegistry | Reactivity.Reactivity>),
   ): AtomRuntime<R, E>;
 
   readonly memoMap: Layer.MemoMap;
@@ -458,9 +423,7 @@ export interface RuntimeFactory {
     layer: Layer.Layer<A, E, AtomRegistry | Reactivity.Reactivity>,
   ) => void;
   readonly withReactivity: (
-    keys:
-      | ReadonlyArray<unknown>
-      | ReadonlyRecord<string, ReadonlyArray<unknown>>,
+    keys: ReadonlyArray<unknown> | ReadonlyRecord<string, ReadonlyArray<unknown>>,
   ) => <A extends Atom<any>>(atom: A) => A;
 }
 
@@ -514,9 +477,7 @@ import { Atom } from "@effect-atom/atom";
 import { ConfigProvider, Layer } from "effect";
 
 // Add global layers
-Atom.runtime.addGlobalLayer(
-  Layer.setConfigProvider(ConfigProvider.fromJson(import.meta.env)),
-);
+Atom.runtime.addGlobalLayer(Layer.setConfigProvider(ConfigProvider.fromJson(import.meta.env)));
 ```
 
 ## Context Interface
