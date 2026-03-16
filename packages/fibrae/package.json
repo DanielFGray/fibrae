@@ -53,6 +53,10 @@
     "./vite": {
       "types": "./dist/cli/vite-plugin.d.ts",
       "import": "./dist/cli/vite-plugin.js"
+    },
+    "./mdx": {
+      "types": "./dist/mdx/index.d.ts",
+      "import": "./dist/mdx/index.js"
     }
   },
   "scripts": {
@@ -69,6 +73,8 @@
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",
+    "@types/hast": "^3.0.4",
+    "@types/mdast": "^4.0.0",
     "@types/node": "^24.10.0",
     "@typescript/native-preview": "^7.0.0-dev.20260314.1",
     "typescript": "catalog:",
@@ -83,7 +89,14 @@
     "@effect/platform-browser": "catalog:",
     "@effect/platform-bun": "catalog:",
     "@effect/platform-node": "catalog:",
-    "vite": "*"
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.0",
+    "remark-mdx": "^3.0.0",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.2",
+    "unified": "^11.0.0",
+    "vite": "*",
+    "yaml": "^2.0.0"
   },
   "overrides": {
     "effect": "catalog:"
