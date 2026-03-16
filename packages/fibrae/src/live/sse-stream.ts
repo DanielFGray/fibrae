@@ -29,9 +29,9 @@ export const sseStream = <A, I>(options: {
       }
     });
 
-    es.onerror = () => {
+    es.addEventListener("error", () => {
       // EventSource auto-reconnects; don't end the stream
-    };
+    });
 
     return Effect.sync(() => es.close());
   });

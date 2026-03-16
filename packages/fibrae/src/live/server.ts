@@ -164,8 +164,8 @@ export const serveGroup = <
   Channels[number] extends ServeGroupChannelOptions<any, any, infer R> ? R : never
 > =>
   Effect.gen(function* () {
-    type R = Channels[number] extends ServeGroupChannelOptions<any, any, infer R> ? R : never;
-    const context = yield* Effect.context<R>();
+    type Deps = Channels[number] extends ServeGroupChannelOptions<any, any, infer R> ? R : never;
+    const context = yield* Effect.context<Deps>();
     const heartbeatInterval = options.heartbeatInterval ?? "30 seconds";
     const idRef = yield* Ref.make(0);
 

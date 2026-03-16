@@ -7,7 +7,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Data from "effect/Data";
 import type { HttpServerResponse } from "@effect/platform";
-import { Atom, Result } from "@effect-atom/atom";
+import { Atom, Result, Registry } from "@effect-atom/atom";
 import { live, isLiveAtom } from "./atom.js";
 import { encodeSSE, encodeComment, encodeRetry, SSE_HEADERS } from "./codec.js";
 import { channel } from "./types.js";
@@ -17,24 +17,27 @@ import { sseStream } from "./sse-stream.js";
 const decoder = new TextDecoder();
 
 /** Extract the Effect Stream from an HttpServerResponse with a streaming body. */
+const bodyStream = (response: HttpServerResponse.HttpServerResponse): Stream.Stream<Uint8Array> =>
+  (response.body as any).stream;
+
+/** ReadableStream for manual reader tests (dedup timeout races). */
 const bodyToReadable = (
   response: HttpServerResponse.HttpServerResponse,
-): ReadableStream<Uint8Array> => Stream.toReadableStream((response.body as any).stream);
+): ReadableStream<Uint8Array> => Stream.toReadableStream(bodyStream(response));
 
 /**
- * Read `n` SSE frames from a ReadableStream, then cancel.
+ * Read `n` SSE frames from a response body stream, then stop.
  */
-const readEvents = async (body: ReadableStream<Uint8Array>, n: number): Promise<string[]> => {
-  const reader = body.getReader();
-  const events: string[] = [];
-  while (events.length < n) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    events.push(decoder.decode(value));
-  }
-  await reader.cancel();
-  return events;
-};
+const readEvents = (
+  response: HttpServerResponse.HttpServerResponse,
+  n: number,
+): Effect.Effect<string[]> =>
+  bodyStream(response).pipe(
+    Stream.map((chunk) => decoder.decode(chunk)),
+    Stream.take(n),
+    Stream.runCollect,
+    Effect.map((chunk) => Array.from(chunk)),
+  );
 
 // =============================================================================
 // Codec
@@ -130,8 +133,7 @@ describe("serve", () => {
       }),
     );
 
-    const body = bodyToReadable(response);
-    const events = await readEvents(body, 3);
+    const events = await Effect.runPromise(readEvents(response, 3));
 
     expect(events.length).toBe(3);
     expect(events[0]).toContain("id: 0");
@@ -228,8 +230,7 @@ describe("serve", () => {
       }),
     );
 
-    const body = bodyToReadable(response);
-    const events = await readEvents(body, 6);
+    const events = await Effect.runPromise(readEvents(response, 6));
 
     const allText = events.join("");
     expect(allText).toContain(": ping");
@@ -253,8 +254,7 @@ describe("serve", () => {
       }),
     );
 
-    const body = bodyToReadable(response);
-    const events = await readEvents(body, 3);
+    const events = await Effect.runPromise(readEvents(response, 3));
 
     const allText = events.join("");
     expect(allText).toContain("retry: 5000");
@@ -277,8 +277,7 @@ describe("serve", () => {
       }),
     );
 
-    const body = bodyToReadable(response);
-    const events = await readEvents(body, 3);
+    const events = await Effect.runPromise(readEvents(response, 3));
 
     expect(events.length).toBe(3);
     expect(events[0]).toContain("event: count");
@@ -322,8 +321,7 @@ describe("serveGroup", () => {
       }),
     );
 
-    const body = bodyToReadable(response);
-    const events = await readEvents(body, 4);
+    const events = await Effect.runPromise(readEvents(response, 4));
 
     const allText = events.join("");
     expect(allText).toContain("event: nums");
@@ -359,8 +357,7 @@ describe("serveGroup", () => {
       }),
     );
 
-    const body = bodyToReadable(response);
-    const events = await readEvents(body, 4);
+    const events = await Effect.runPromise(readEvents(response, 4));
 
     const allText = events.join("");
     expect(allText).toContain("event: nums");
@@ -389,8 +386,7 @@ describe("serveGroup", () => {
       }),
     );
 
-    const body = bodyToReadable(response);
-    const events = await readEvents(body, 3);
+    const events = await Effect.runPromise(readEvents(response, 3));
 
     const allText = events.join("");
     expect(allText).toContain("retry: 3000");
@@ -472,12 +468,19 @@ describe("live atom", () => {
     expect((clock as any)[Atom.SerializableTypeId].key).toBe("my-clock");
   });
 
-  test("initial value is Result.initial()", () => {
+  test("initial value is Result.initial() via registry", () => {
     const clock = live("clock", { schema: Schema.String });
-    // We need to get the value. Since it's a Writable atom, read its default.
-    // Atom.make(defaultValue) — the atom's value starts as the default.
-    // Access via the internal _read or use a registry.
-    // Simplest: just verify it works by checking the type
-    expect(Result.isInitial(Result.initial())).toBe(true);
+    const registry = Registry.make();
+    expect(Result.isInitial(registry.get(clock))).toBe(true);
+  });
+
+  test("simulated SSE update sets Result.success(decoded)", () => {
+    const clock = live("clock", { schema: Schema.String });
+    const registry = Registry.make();
+    // Simulate what activateLiveAtoms does: decode + wrap in Result.success
+    const decode = Schema.decodeUnknownSync(Schema.parseJson(Schema.String));
+    registry.set(clock, Result.success(decode(JSON.stringify("12:00"))));
+    const value = registry.get(clock);
+    expect(Result.isSuccess(value)).toBe(true);
   });
 });

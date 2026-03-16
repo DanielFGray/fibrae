@@ -73,13 +73,13 @@ export const connect = <A, I>(
       }
     });
 
-    es.onerror = () => {
+    es.addEventListener("error", () => {
       run(
         Effect.logWarning("LiveSync connection error").pipe(
           Effect.annotateLogs("channel", channel.name),
         ),
       );
-    };
+    });
 
     yield* Scope.addFinalizer(
       scope,
@@ -125,13 +125,13 @@ export const connectGroup = (
       });
     }
 
-    es.onerror = () => {
+    es.addEventListener("error", () => {
       run(
         Effect.logWarning("LiveSync connection error").pipe(
           Effect.annotateLogs("channels", channels.map((c) => c.name).join(",")),
         ),
       );
-    };
+    });
 
     yield* Scope.addFinalizer(
       scope,
