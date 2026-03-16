@@ -43,7 +43,7 @@ const renderDevPage = (opts: {
     );
 
     const { html, dehydratedState, head } = yield* Effect.gen(function* () {
-      const { head } = yield* Router.CurrentRouteElement;
+      const { head: routeHead } = yield* Router.CurrentRouteElement;
       const renderResult = opts.App
         ? yield* renderToStringWith<never>(opts.App())
         : yield* Effect.gen(function* () {
@@ -51,7 +51,7 @@ const renderDevPage = (opts: {
             const app = opts.appShell ? opts.appShell(element) : element;
             return yield* renderToStringWith<never>(app);
           });
-      return { ...renderResult, head };
+      return { ...renderResult, head: routeHead };
     }).pipe(Effect.provide(fullLayer));
 
     return yield* buildPage({

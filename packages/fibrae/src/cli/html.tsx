@@ -4,6 +4,8 @@
  * Uses fibrae JSX to generate full HTML documents wrapping
  * pre-rendered content with dehydrated state and client scripts.
  */
+// eslint-disable-next-line no-unused-vars -- jsx is used by the JSX transform (jsxFactory)
+import { jsx } from "../jsx-runtime/index.js";
 import { h } from "../h.js";
 import type { HeadData, MetaDescriptor } from "../router/RouterBuilder.js";
 import { renderToString } from "../server.js";
@@ -24,21 +26,22 @@ export interface PageOptions {
 
 const metaToElement = (meta: MetaDescriptor): Option.Option<VElement> => {
   if ("title" in meta) return Option.none();
-  if ("charset" in meta) return Option.some(h("meta", { charset: meta.charset }));
+  if ("charset" in meta) return Option.some(<meta charset={meta.charset} />);
   if ("script:ld+json" in meta)
     return Option.some(
-      h("script", {
-        type: "application/ld+json",
-        dangerouslySetInnerHTML: JSON.stringify(meta["script:ld+json"]),
-      }),
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={JSON.stringify(meta["script:ld+json"])}
+      />,
     );
-  if ("name" in meta) return Option.some(h("meta", { name: meta.name, content: meta.content }));
+  if ("name" in meta) return Option.some(<meta name={meta.name} content={meta.content} />);
   if ("property" in meta)
-    return Option.some(h("meta", { property: meta.property, content: meta.content }));
+    return Option.some(<meta property={meta.property} content={meta.content} />);
   if ("httpEquiv" in meta)
-    return Option.some(h("meta", { "http-equiv": meta.httpEquiv, content: meta.content }));
+    return Option.some(<meta http-equiv={meta.httpEquiv} content={meta.content} />);
   if ("tagName" in meta) {
     const { tagName, ...attrs } = meta;
+    // Dynamic tag name -- JSX requires literal tags, so use h() directly
     return Option.some(h(tagName, attrs));
   }
   return Option.none();
@@ -90,37 +93,38 @@ const buildHeadChildren = (
   const allScripts = [...(headTags?.scripts ?? []), ...(headData?.scripts ?? [])];
 
   return [
-    h("meta", { charset: "UTF-8" }),
-    h("meta", { name: "viewport", content: "width=device-width, initial-scale=1.0" }),
+    <meta charset="UTF-8" />,
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />,
     ...Option.match(Option.fromNullable(pageTitle), {
       onNone: () => [] as VElement[],
-      onSome: (t) => [h("title", {}, [t])],
+      onSome: (t) => [<title>{t}</title>],
     }),
     ...Array.filterMap(allMeta, metaToElement),
-    ...allLinks.map((attrs) => h("link", attrs)),
+    ...allLinks.map((attrs) => <link {...attrs} />),
     ...allScripts.flatMap((script) =>
       script.src
-        ? [h("script", { type: script.type, src: script.src })]
+        ? [<script type={script.type} src={script.src} />]
         : script.content
-          ? [h("script", { type: script.type, dangerouslySetInnerHTML: script.content })]
+          ? [<script type={script.type} dangerouslySetInnerHTML={script.content} />]
           : [],
     ),
   ];
 };
 
-const PageShell = (props: PageOptions) =>
-  h("html", { lang: "en" }, [
-    h("head", {}, buildHeadChildren(props.title, props.head, props.headTags)),
-    h("body", {}, [
-      h("div", { id: "root", dangerouslySetInnerHTML: props.html }),
-      h("script", {
-        type: "application/json",
-        id: "__fibrae-state__",
-        dangerouslySetInnerHTML: JSON.stringify(props.dehydratedState),
-      }),
-      ...(props.clientScript ? [h("script", { type: "module", src: props.clientScript })] : []),
-    ]),
-  ]);
+const PageShell = (props: PageOptions) => (
+  <html lang="en">
+    <head>{buildHeadChildren(props.title, props.head, props.headTags)}</head>
+    <body>
+      <div id="root" dangerouslySetInnerHTML={props.html} />
+      <script
+        type="application/json"
+        id="__fibrae-state__"
+        dangerouslySetInnerHTML={JSON.stringify(props.dehydratedState)}
+      />
+      {props.clientScript ? <script type="module" src={props.clientScript} /> : null}
+    </body>
+  </html>
+);
 
 export const buildPage = (options: PageOptions): Effect.Effect<string, unknown> =>
   renderToString(PageShell(options)).pipe(Effect.map(({ html }) => `<!DOCTYPE html>\n${html}`));

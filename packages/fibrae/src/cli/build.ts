@@ -40,9 +40,9 @@ const renderRoute = (config: {
     );
 
     const { html, dehydratedState, head } = yield* Effect.gen(function* () {
-      const { element, head } = yield* Router.CurrentRouteElement;
+      const { element, head: routeHead } = yield* Router.CurrentRouteElement;
       const renderResult = yield* renderToStringWith<never>(config.appShell(element));
-      return { ...renderResult, head };
+      return { ...renderResult, head: routeHead };
     }).pipe(Effect.provide(fullLayer));
 
     return yield* buildPage({

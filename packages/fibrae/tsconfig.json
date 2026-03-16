@@ -5,7 +5,11 @@
     "rootDir": "./src",
     "declaration": true,
     "emitDeclarationOnly": false,
-    "sourceMap": true
+    "sourceMap": true,
+    "jsx": "react",
+    "jsxFactory": "jsx",
+    "jsxFragmentFactory": "Fragment",
+    "erasableSyntaxOnly": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.*"]
