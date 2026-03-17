@@ -21,6 +21,7 @@ const updatePostMutation = NotesApi.mutation("posts", "update");
 
 export const PostFormTitleAtom = Atom.make("");
 export const PostFormContentAtom = Atom.make("");
+const PostFormErrorAtom = Atom.make<string | null>(null);
 
 // =============================================================================
 // PostForm Component
@@ -46,10 +47,12 @@ export function PostForm(props: PostFormProps) {
     const content = yield* Atom.get(PostFormContentAtom);
     const submitResult = yield* Atom.get(mutationAtom);
     const isSubmitting = Result.isWaiting(submitResult);
+    const validationError = yield* Atom.get(PostFormErrorAtom);
 
     const handleTitleChange = (e: Event) => {
       const target = e.target as HTMLInputElement;
       registry.set(PostFormTitleAtom, target.value);
+      if (target.value.trim()) registry.set(PostFormErrorAtom, null);
     };
 
     const handleContentChange = (e: Event) => {
@@ -64,7 +67,11 @@ export function PostForm(props: PostFormProps) {
         const currentTitle = registry.get(PostFormTitleAtom);
         const currentContent = registry.get(PostFormContentAtom);
 
-        if (!currentTitle.trim()) return;
+        if (!currentTitle.trim()) {
+          registry.set(PostFormErrorAtom, "Title is required");
+          return;
+        }
+        registry.set(PostFormErrorAtom, null);
 
         // Trigger mutation by writing the request payload to the mutation atom
         if (isEdit && post) {
@@ -90,6 +97,10 @@ export function PostForm(props: PostFormProps) {
         yield* navigator.go("/posts");
       });
 
+    const validationEl = validationError
+      ? <div class="error" data-cy="form-error">{validationError}</div>
+      : null;
+
     const statusEl = Result.builder(submitResult)
       .onWaiting(() => <span class="status">Saving...</span>)
       .onError(() => <div class="error" data-cy="form-error">Failed to save post</div>)
@@ -100,6 +111,7 @@ export function PostForm(props: PostFormProps) {
       <form data-cy="post-form" onsubmit={handleSubmit}>
         <h2>{isEdit ? "Edit Post" : "New Post"}</h2>
 
+        {validationEl}
         {statusEl}
 
         <div class="form-field">
