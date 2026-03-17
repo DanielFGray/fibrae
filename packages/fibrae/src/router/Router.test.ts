@@ -1,7 +1,11 @@
 import { describe, test, expect } from "bun:test";
+import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Route from "./Route.js";
 import * as Router from "./Router.js";
+
+const runMatch = (router: Router.Router, pathname: string) =>
+  Effect.runSync(router.matchRoute(pathname));
 
 describe("Router module", () => {
   describe("route groups", () => {
@@ -55,10 +59,12 @@ describe("Router module", () => {
       const group = Router.group("app").add(home);
       const router = Router.make("root").add(group);
 
-      const match = router.matchRoute("/");
+      const match = runMatch(router, "/");
       expect(Option.isSome(match)).toBe(true);
-      expect(match.value.route.name).toBe("home");
-      expect(match.value.groupName).toBe("app");
+      if (Option.isSome(match)) {
+        expect(match.value.route.name).toBe("home");
+        expect(match.value.groupName).toBe("app");
+      }
     });
 
     test("router.matchRoute returns None for unmatched paths", () => {
@@ -66,7 +72,7 @@ describe("Router module", () => {
       const group = Router.group("app").add(home);
       const router = Router.make("root").add(group);
 
-      const match = router.matchRoute("/unknown");
+      const match = runMatch(router, "/unknown");
       expect(Option.isNone(match)).toBe(true);
     });
 
@@ -77,9 +83,11 @@ describe("Router module", () => {
       const group = Router.group("app").add(home).add(about).add(posts);
       const router = Router.make("root").add(group);
 
-      const match = router.matchRoute("/about");
+      const match = runMatch(router, "/about");
       expect(Option.isSome(match)).toBe(true);
-      expect(match.value.route.name).toBe("about");
+      if (Option.isSome(match)) {
+        expect(match.value.route.name).toBe("about");
+      }
     });
 
     test("router.matchRoute extracts params", () => {
@@ -87,9 +95,11 @@ describe("Router module", () => {
       const group = Router.group("app").add(post);
       const router = Router.make("root").add(group);
 
-      const match = router.matchRoute("/posts/123");
+      const match = runMatch(router, "/posts/123");
       expect(Option.isSome(match)).toBe(true);
-      expect(match.value.params.id).toBe("123");
+      if (Option.isSome(match)) {
+        expect(match.value.params.id).toBe("123");
+      }
     });
 
     test("router.matchRoute searches across multiple groups", () => {
@@ -99,15 +109,19 @@ describe("Router module", () => {
       const apiGroup = Router.group("api").add(users);
       const router = Router.make("root").add(appGroup).add(apiGroup);
 
-      const match1 = router.matchRoute("/");
+      const match1 = runMatch(router, "/");
       expect(Option.isSome(match1)).toBe(true);
-      expect(match1.value.route.name).toBe("home");
-      expect(match1.value.groupName).toBe("app");
+      if (Option.isSome(match1)) {
+        expect(match1.value.route.name).toBe("home");
+        expect(match1.value.groupName).toBe("app");
+      }
 
-      const match2 = router.matchRoute("/api/users");
+      const match2 = runMatch(router, "/api/users");
       expect(Option.isSome(match2)).toBe(true);
-      expect(match2.value.route.name).toBe("users");
-      expect(match2.value.groupName).toBe("api");
+      if (Option.isSome(match2)) {
+        expect(match2.value.route.name).toBe("users");
+        expect(match2.value.groupName).toBe("api");
+      }
     });
   });
 
@@ -140,22 +154,24 @@ describe("Router module", () => {
       const dashboardLayout = Router.layout("dashboard", "/dashboard").add(overview).add(settings);
       const router = Router.make("root").add(dashboardLayout);
 
-      // Should match /dashboard/overview
-      const match1 = router.matchRoute("/dashboard/overview");
+      const match1 = runMatch(router, "/dashboard/overview");
       expect(Option.isSome(match1)).toBe(true);
-      expect(match1.value.route.name).toBe("overview");
-      expect(match1.value.groupName).toBe("dashboard");
-      expect(match1.value.layouts.length).toBe(1);
-      expect(match1.value.layouts[0].name).toBe("dashboard");
+      if (Option.isSome(match1)) {
+        expect(match1.value.route.name).toBe("overview");
+        expect(match1.value.groupName).toBe("dashboard");
+        expect(match1.value.layouts.length).toBe(1);
+        expect(match1.value.layouts[0].name).toBe("dashboard");
+      }
 
-      // Should match /dashboard/settings
-      const match2 = router.matchRoute("/dashboard/settings");
+      const match2 = runMatch(router, "/dashboard/settings");
       expect(Option.isSome(match2)).toBe(true);
-      expect(match2.value.route.name).toBe("settings");
-      expect(match2.value.layouts.length).toBe(1);
+      if (Option.isSome(match2)) {
+        expect(match2.value.route.name).toBe("settings");
+        expect(match2.value.layouts.length).toBe(1);
+      }
 
       // Should NOT match /overview (without /dashboard prefix)
-      const noMatch = router.matchRoute("/overview");
+      const noMatch = runMatch(router, "/overview");
       expect(Option.isNone(noMatch)).toBe(true);
     });
 
@@ -164,17 +180,17 @@ describe("Router module", () => {
       const group = Router.group("app").add(home);
       const router = Router.make("root").add(group);
 
-      const match = router.matchRoute("/");
+      const match = runMatch(router, "/");
       expect(Option.isSome(match)).toBe(true);
-      expect(match.value.layouts.length).toBe(0);
+      if (Option.isSome(match)) {
+        expect(match.value.layouts.length).toBe(0);
+      }
     });
 
     test("layout basePath is normalized", () => {
-      // Without leading slash
       const layout1 = Router.layout("admin", "admin");
       expect(layout1.basePath).toBe("/admin");
 
-      // With trailing slash
       const layout2 = Router.layout("admin", "/admin/");
       expect(layout2.basePath).toBe("/admin");
     });
