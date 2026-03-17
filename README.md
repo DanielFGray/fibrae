@@ -269,6 +269,7 @@ Handler config options:
 | `head`           | `(ctx) => HeadData \| Effect<HeadData>`      | Optional. Per-route `<head>` metadata                          |
 | `prerender`      | `boolean`                                    | Optional. Mark route for static pre-rendering                  |
 | `getStaticPaths` | `() => PathParams[] \| Effect<PathParams[]>` | Optional. Enumerate params for prerender                       |
+| `action`         | `ActionConfig`                               | Optional. Form mutation handler (schema + handler Effect)      |
 
 ### Link Component
 
@@ -313,29 +314,77 @@ const App = () => (
 
 `OutletDepth` is a context tag that tracks nesting level, managed automatically by the renderer.
 
+### Form Component
+
+`Form` provides declarative form submission with schema-decoded payloads. It connects to the current route's `action` by default, or accepts an explicit action for fetcher-style usage.
+
+```tsx
+import * as Schema from "effect/Schema";
+import { Form } from "fibrae/router";
+
+// Route with an action
+handlers.handle("createPost", {
+  action: {
+    schema: Schema.Struct({ title: Schema.String, body: Schema.String }),
+    handler: ({ payload }) => createPost(payload),
+  },
+  component: () => (
+    <Form>
+      <input name="title" />
+      <textarea name="body" />
+      <button type="submit">Create</button>
+    </Form>
+  ),
+});
+```
+
+Submission lifecycle:
+1. Serialize `FormData` into a plain record
+2. Decode via the action's schema -- validation errors skip the action
+3. Invoke the action Effect with the decoded payload
+4. State transitions: `Idle` → `Pending` → `Success` / `Failure`
+5. Navigate after success (unless `navigate={false}`)
+
+| Prop          | Type          | Description                                              |
+| ------------- | ------------- | -------------------------------------------------------- |
+| `action`      | `RouteAction` | Explicit action (overrides route action)                 |
+| `schema`      | `Schema.Any`  | Schema to decode FormData (required with explicit action) |
+| `navigate`    | `boolean`     | Skip navigation after success when `false`               |
+| `navigateTo`  | `string`      | Path to navigate to after success                        |
+| `onSuccess`   | `(data) => void` | Callback on successful submission                     |
+| `onError`     | `(error) => void` | Callback on failed submission                        |
+
+The `FormState` service is available inside `Form` children to read `SubmissionState` (`Idle`, `Pending`, `Success`, `Failure`).
+
 ### Programmatic Navigation
 
-The `Navigator` service provides route-aware navigation:
+The `Navigator` service provides path-based navigation:
 
 ```tsx
 const GoHomeButton = () =>
   Effect.gen(function* () {
     const navigator = yield* Navigator;
-    return <button onClick={() => navigator.go("home")}>Go Home</button>;
+    return <button onClick={() => navigator.go("/")}>Go Home</button>;
   });
 
-// With params
-navigator.go("post", { path: { id: 42 } });
+// Navigate to a path
+navigator.go("/posts/42");
+
+// With search params
+navigator.go("/search", { search: { q: "effect" } });
 
 // Replace instead of push
-navigator.go("settings", { replace: true });
+navigator.go("/settings", { replace: true });
+
+// View Transitions API
+navigator.go("/posts", { viewTransition: true });
 
 // Back / forward
 navigator.back;
 navigator.forward;
 
 // Check active state
-const active = yield * navigator.isActive("home");
+const active = yield* navigator.isActive("/posts");
 ```
 
 ### Wiring It Up
@@ -775,6 +824,126 @@ const routerLayer = pipe(
 render(<App />, document.getElementById("root")!, { layer: routerLayer });
 ```
 
+## MDX
+
+The `fibrae/mdx` module renders markdown content as fibrae VElements. All services are optional -- it works out of the box with no configuration.
+
+```tsx
+import { MDX, MdxProcessor, MdxHighlighter, MDXComponents } from "fibrae/mdx";
+
+// Simplest usage — no services needed
+const Docs = () => <MDX content={markdownString} />;
+
+// With component overrides via props
+const Styled = () => (
+  <MDX
+    content={markdownString}
+    components={{
+      h1: ({ children, ...props }) => <h1 class="text-4xl" {...props}>{children}</h1>,
+      a: ({ href, children }) => <Link href={href}>{children}</Link>,
+    }}
+  />
+);
+```
+
+### Services
+
+| Service          | Description                                                    |
+| ---------------- | -------------------------------------------------------------- |
+| `MdxProcessor`   | Configurable markdown processor (default: remark-parse + gfm)  |
+| `MdxHighlighter` | BYO code highlighter for syntax-highlighted code blocks        |
+| `MDXComponents`  | App-wide component overrides (props-level takes priority)      |
+
+```tsx
+// Custom processor with plugins
+const processorLayer = MdxProcessor.make({
+  remarkPlugins: [remarkMath],
+  rehypePlugins: [rehypeKatex],
+});
+
+// App-wide component overrides
+const componentsLayer = MDXComponents.make({
+  h1: ({ children, ...props }) => <h1 class="heading" {...props}>{children}</h1>,
+  a: ({ href, children }) => <Link href={href}>{children}</Link>,
+});
+
+// Code highlighter
+const highlighterLayer = MdxHighlighter.make((code, lang) =>
+  <pre class={`language-${lang}`}><code innerHTML={highlight(code, lang)} /></pre>
+);
+
+render(<App />, root, { layer: Layer.mergeAll(processorLayer, componentsLayer, highlighterLayer) });
+```
+
+## SVG Support
+
+JSX supports SVG elements natively. SVG-specific attributes (`viewBox`, `fill`, `stroke`, `d`, etc.) are typed and handled correctly:
+
+```tsx
+const Icon = () => (
+  <svg viewBox="0 0 24 24" width={24} height={24}>
+    <path d="M12 2L2 22h20L12 2z" fill="currentColor" />
+  </svg>
+);
+```
+
+## AtomHttpApi
+
+`AtomHttpApi` connects `@effect/platform` HTTP APIs to reactive atoms. Define an API schema once, then derive query and mutation atoms automatically:
+
+```tsx
+import { AtomHttpApi } from "fibrae";
+import * as HttpApi from "@effect/platform/HttpApi";
+import * as FetchHttpClient from "@effect/platform/FetchHttpClient";
+
+// Define your API
+const Api = HttpApi.make("notes").add(/* ... endpoints ... */);
+
+// Create a tagged service with query/mutation atom factories
+const NotesApi = AtomHttpApi.Tag<NotesApi>()("NotesApi", {
+  api: Api,
+  httpClient: FetchHttpClient.layer,
+});
+
+// In components — derive reactive atoms from API endpoints
+const postListQuery = NotesApi.query("posts", "list");
+const createPostMutation = NotesApi.mutation("posts", "create");
+```
+
+Query atoms automatically cache, deduplicate, and re-fetch. Mutation atoms manage submission state and invalidate related queries.
+
+## Component-Scoped Atom Utilities
+
+`subscribeAtom` and `mountAtom` tie atom subscriptions and setup effects to the component lifecycle, cleaning up automatically on unmount:
+
+```tsx
+import { subscribeAtom, mountAtom } from "fibrae";
+
+const Logger = () =>
+  Effect.gen(function* () {
+    // Subscribe for the component's lifetime
+    yield* subscribeAtom(countAtom, (value) => {
+      console.log("count changed:", value);
+    });
+    return <div>Logging active</div>;
+  });
+
+const Editor = () =>
+  Effect.gen(function* () {
+    const ref = { current: null as HTMLDivElement | null };
+
+    // Run setup after mount, clean up on unmount
+    yield* mountAtom(
+      Effect.gen(function* () {
+        const editor = monaco.create(ref.current!);
+        yield* Effect.addFinalizer(() => Effect.sync(() => editor.dispose()));
+      }),
+    );
+
+    return <div ref={(el) => (ref.current = el)} />;
+  });
+```
+
 ## API Quick Reference
 
 ### Core Exports (`fibrae`)
@@ -789,7 +958,10 @@ render(<App />, document.getElementById("root")!, { layer: routerLayer });
 | `ErrorBoundary`                                     | Catches errors in subtree, shows fallback, supports navigation recovery |
 | `ComponentScope`                                    | Service providing `{ scope, mounted }` for lifecycle management         |
 | `HydrationState`                                    | Service for dehydrated state (auto-discovered from DOM)                 |
-| `RenderError` / `StreamError` / `EventHandlerError` | Tagged error types                                                      |
+| `AtomHttpApi`                                        | HTTP API to reactive atom bridge                                        |
+| `mountAtom(effect)`                                  | Run setup effect after mount, scoped to component lifetime              |
+| `subscribeAtom(atom, callback)`                      | Subscribe to atom for component lifetime, auto-cleanup on unmount       |
+| `RenderError` / `StreamError` / `EventHandlerError`  | Tagged error types                                                      |
 
 ### Server Exports (`fibrae/server`)
 
@@ -817,6 +989,9 @@ render(<App />, document.getElementById("root")!, { layer: routerLayer });
 | `RouterOutlet`                                | Renders matched route component                              |
 | `OutletDepth`                                 | Context tag for nested outlet depth                          |
 | `Navigator` / `NavigatorLive(router)`         | Programmatic navigation service                              |
+| `Form`                                        | Declarative form with schema decode + route action           |
+| `FormState`                                   | Service for reading submission state inside Form children    |
+| `FormValidationError`                         | Tagged error for schema decode failures on form data         |
 | `BrowserHistoryLive`                          | Browser history layer                                        |
 | `MemoryHistoryLive(options?)`                 | In-memory history layer                                      |
 
@@ -828,3 +1003,14 @@ render(<App />, document.getElementById("root")!, { layer: routerLayer });
 | `serve(atom, options)`     | SSE endpoint for a single live atom         |
 | `serveGroup({ channels })` | Multiplexed SSE endpoint for multiple atoms |
 | `LiveConfig`               | Client-side SSE connection configuration    |
+
+### MDX Exports (`fibrae/mdx`)
+
+| Export                       | Description                                        |
+| ---------------------------- | -------------------------------------------------- |
+| `MDX`                        | Component that renders markdown as VElements       |
+| `MdxProcessor`               | Configurable markdown processor service            |
+| `MdxHighlighter`             | BYO code highlighter service                       |
+| `MDXComponents`              | App-wide component override service                |
+| `parseMdx(content)`          | Parse markdown to MDAST (low-level)                |
+| `renderMdast` / `renderHast` | Render MDAST/HAST trees to VElements (low-level)   |
