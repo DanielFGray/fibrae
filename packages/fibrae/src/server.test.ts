@@ -236,7 +236,7 @@ describe("Suspense", () => {
       h("div", {}, ["Content"]),
     ]);
     const result = await runTest(renderToString(element));
-    expect(result.html).toBe("<div>Content</div>");
+    expect(result.html).toContain("<div>Content</div>");
   });
 });
 

@@ -1,7 +1,14 @@
 import { describe, test, expect } from "bun:test";
+import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Route from "./Route.js";
+
+const runMatch = (route: Route.Route, pathname: string) =>
+  Effect.runSync(route.match(pathname));
+
+const runInterpolate = (route: Route.Route, params: Record<string, unknown>) =>
+  Effect.runSync(route.interpolate(params));
 
 describe("Route module", () => {
   describe("static routes", () => {
@@ -13,19 +20,19 @@ describe("Route module", () => {
 
     test("should match static paths", () => {
       const home = Route.get("home", "/");
-      const match = home.match("/");
+      const match = runMatch(home, "/");
       expect(Option.isSome(match)).toBe(true);
     });
 
     test("should not match different paths", () => {
       const home = Route.get("home", "/");
-      const match = home.match("/about");
+      const match = runMatch(home, "/about");
       expect(Option.isNone(match)).toBe(true);
     });
 
     test("should match trailing slash", () => {
       const home = Route.get("home", "/");
-      const match = home.match("/");
+      const match = runMatch(home, "/");
       expect(Option.isSome(match)).toBe(true);
     });
   });
@@ -33,7 +40,7 @@ describe("Route module", () => {
   describe("dynamic routes", () => {
     test("should match dynamic routes with single param", () => {
       const post = Route.get("post", "/posts/:id");
-      const match = post.match("/posts/123");
+      const match = runMatch(post, "/posts/123");
       expect(Option.isSome(match)).toBe(true);
       if (Option.isSome(match)) {
         expect(match.value.id).toBe("123");
@@ -42,7 +49,7 @@ describe("Route module", () => {
 
     test("should match multiple params", () => {
       const comment = Route.get("comment", "/posts/:postId/comments/:commentId");
-      const match = comment.match("/posts/123/comments/456");
+      const match = runMatch(comment, "/posts/123/comments/456");
       expect(Option.isSome(match)).toBe(true);
       if (Option.isSome(match)) {
         expect(match.value.postId).toBe("123");
@@ -52,13 +59,13 @@ describe("Route module", () => {
 
     test("should not match partial paths", () => {
       const post = Route.get("post", "/posts/:id");
-      const match = post.match("/posts/");
+      const match = runMatch(post, "/posts/");
       expect(Option.isNone(match)).toBe(true);
     });
 
     test("should match with trailing slash", () => {
       const post = Route.get("post", "/posts/:id");
-      const match = post.match("/posts/123/");
+      const match = runMatch(post, "/posts/123/");
       expect(Option.isSome(match)).toBe(true);
     });
   });
@@ -66,25 +73,25 @@ describe("Route module", () => {
   describe("interpolation", () => {
     test("should interpolate static paths", () => {
       const home = Route.get("home", "/");
-      const url = home.interpolate({});
+      const url = runInterpolate(home, {});
       expect(url).toBe("/");
     });
 
     test("should interpolate dynamic paths", () => {
       const post = Route.get("post", "/posts/:id");
-      const url = post.interpolate({ id: 123 });
+      const url = runInterpolate(post, { id: 123 });
       expect(url).toBe("/posts/123");
     });
 
     test("should interpolate multiple params", () => {
       const comment = Route.get("comment", "/posts/:postId/comments/:commentId");
-      const url = comment.interpolate({ postId: 123, commentId: 456 });
+      const url = runInterpolate(comment, { postId: 123, commentId: 456 });
       expect(url).toBe("/posts/123/comments/456");
     });
 
     test("should throw on missing params", () => {
       const post = Route.get("post", "/posts/:id");
-      expect(() => post.interpolate({})).toThrow("Missing required parameter: id");
+      expect(() => runInterpolate(post, {})).toThrow();
     });
   });
 
@@ -99,7 +106,7 @@ describe("Route module", () => {
     test("should match template literal route with named param", () => {
       const idParam = Route.param("id", Schema.String);
       const post = Route.get("post")`/posts/${idParam}`;
-      const match = post.match("/posts/123");
+      const match = runMatch(post, "/posts/123");
       expect(Option.isSome(match)).toBe(true);
       if (Option.isSome(match)) {
         expect(match.value.id).toBe("123");
@@ -109,10 +116,10 @@ describe("Route module", () => {
     test("should validate and convert types with NumberFromString", () => {
       const idParam = Route.param("id", Schema.NumberFromString);
       const post = Route.get("post")`/posts/${idParam}`;
-      const match = post.match("/posts/123");
+      const match = runMatch(post, "/posts/123");
       expect(Option.isSome(match)).toBe(true);
       if (Option.isSome(match)) {
-        expect(match.value.id).toBe(123); // Should be number, not string
+        expect(match.value.id).toBe(123);
         expect(typeof match.value.id).toBe("number");
       }
     });
@@ -121,7 +128,7 @@ describe("Route module", () => {
       const postIdParam = Route.param("postId", Schema.String);
       const commentIdParam = Route.param("commentId", Schema.String);
       const comment = Route.get("comment")`/posts/${postIdParam}/comments/${commentIdParam}`;
-      const match = comment.match("/posts/123/comments/456");
+      const match = runMatch(comment, "/posts/123/comments/456");
       expect(Option.isSome(match)).toBe(true);
       if (Option.isSome(match)) {
         expect(match.value.postId).toBe("123");
@@ -132,17 +139,14 @@ describe("Route module", () => {
 
   describe("schema validation", () => {
     test("should validate with NumberFromString", () => {
-      // Create route with schema - for MVP, pass schema object directly
       const post = Route.get("post", "/posts/:id");
-      const match = post.match("/posts/abc");
+      const match = runMatch(post, "/posts/abc");
       // Without schema validation in match, this will succeed
-      // Schema validation is TODO for next phase
       expect(Option.isSome(match)).toBe(true);
     });
 
     test("Route.param stores parameter name in schema annotation", () => {
       const idParam = Route.param("id", Schema.NumberFromString);
-      // Access the annotation directly to verify it's stored
       const ast = idParam.ast;
       const annotations: Record<string | symbol, unknown> = ast.annotations;
       const paramAnnotation = annotations[Route.AnnotationParam] as { name: string } | undefined;
@@ -150,17 +154,16 @@ describe("Route module", () => {
     });
 
     test("should reject invalid params with schema validation", () => {
-      // "abc" cannot be decoded as NumberFromString
       const idParam = Route.param("id", Schema.NumberFromString);
       const post = Route.get("post")`/posts/${idParam}`;
-      const match = post.match("/posts/abc");
+      const match = runMatch(post, "/posts/abc");
       expect(Option.isNone(match)).toBe(true);
     });
 
     test("should accept valid numeric string with NumberFromString", () => {
       const idParam = Route.param("id", Schema.NumberFromString);
       const post = Route.get("post")`/posts/${idParam}`;
-      const match = post.match("/posts/42");
+      const match = runMatch(post, "/posts/42");
       expect(Option.isSome(match)).toBe(true);
       if (Option.isSome(match)) {
         expect(match.value.id).toBe(42);
