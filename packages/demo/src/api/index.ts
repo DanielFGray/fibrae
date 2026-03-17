@@ -17,5 +17,5 @@ export {
 // API definition (used by server handlers and client)
 export { Api, PostsApi, AuthApi } from "./endpoints.js";
 
-// Client services (used by components)
-export { PostsClient, AuthClient, ApiClientLive } from "./client.js";
+// Client (AtomHttpApi-based)
+export { NotesApi } from "./client.js";

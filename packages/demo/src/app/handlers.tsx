@@ -12,7 +12,7 @@ import * as Effect from "effect/Effect";
 import type { VElement } from "fibrae";
 import { AtomRegistry, Suspense } from "fibrae";
 import { RouterBuilder } from "fibrae/router";
-import { PostsClient, type Post } from "../api/index.js";
+import { NotesApi, type Post } from "../api/index.js";
 import { AppRouter, AppRoutes, Link } from "./routes.js";
 import { PostDetail } from "./components/PostDetail.js";
 import { PostForm, PostFormTitleAtom, PostFormContentAtom } from "./components/PostForm.js";
@@ -97,9 +97,9 @@ export function createAppHandlers(isServer: boolean) {
       .handle("postEdit", {
         loader: ({ path }) =>
           Effect.gen(function* () {
-            const client = yield* PostsClient;
+            const api = yield* NotesApi;
             const registry = yield* AtomRegistry.AtomRegistry;
-            const post = yield* client.findById(path.id as number);
+            const post = yield* api.posts.findById({ path: { id: path.id as number } });
 
             // Initialize form atoms with post data
             registry.set(PostFormTitleAtom, post.title);
@@ -117,8 +117,8 @@ export function createAppHandlers(isServer: boolean) {
       .handle("post", {
         loader: ({ path }) =>
           Effect.gen(function* () {
-            const client = yield* PostsClient;
-            const post = yield* client.findById(path.id as number);
+            const api = yield* NotesApi;
+            const post = yield* api.posts.findById({ path: { id: path.id as number } });
             return post;
           }),
         component: (props) => {
