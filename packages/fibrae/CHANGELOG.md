@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.1](https://github.com/DanielFGray/fibrae/compare/fibrae-v0.3.0...fibrae-v0.3.1) (2026-03-17)
+
+
+### Features
+
+* **jsx:** add meta/script/link element types and broaden VChild ([1d7abf0](https://github.com/DanielFGray/fibrae/commit/1d7abf047b33439fdb12d0a38b36ea4f67b8cdbc))
+* **jsx:** add SVG element support to IntrinsicElements and runtime ([80500ed](https://github.com/DanielFGray/fibrae/commit/80500edf0bd4bf8ab398297796ae54059c873d8a))
+* **mdx:** add MDXComponents service for app-wide component injection ([d795694](https://github.com/DanielFGray/fibrae/commit/d79569496b439cdd71f43acd7a1d9678269d1de7))
+* **mdx:** add remark/rehype MDX-to-VElement rendering pipeline ([9b44867](https://github.com/DanielFGray/fibrae/commit/9b44867fccbde4c520c54556efd12607a88fcc04))
+* re-export AtomHttpApi/AtomRpc and add component-scoped atom utils ([12b64ae](https://github.com/DanielFGray/fibrae/commit/12b64ae48cba150a14a83a81e24c575ed0cffc12))
+* **router:** add route actions and Form component ([fa4d5bd](https://github.com/DanielFGray/fibrae/commit/fa4d5bdedefdd9b69bb43a450b4ac0f39cf5b718))
+
+
+### Bug Fixes
+
+* **router:** yield nav Effect and call startViewTransition directly ([2803fa1](https://github.com/DanielFGray/fibrae/commit/2803fa193021be610c50d69443fb92e673afd6bb))
+* subscribe atoms after Suspense threshold expiry ([a19bf3e](https://github.com/DanielFGray/fibrae/commit/a19bf3ee985f6e59740c1324149a8ebcaa3458e1))
+* **tests:** unwrap Effect returns in Route/Router tests, update Suspense assertion ([407e3ae](https://github.com/DanielFGray/fibrae/commit/407e3aefeabd4cd993870dbcef4629d4687d4596))
+
 ## [0.3.0](https://github.com/DanielFGray/fibrae/compare/fibrae-v0.2.3...fibrae-v0.3.0) (2026-03-15)
 
 ### Features
