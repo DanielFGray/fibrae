@@ -1,7 +1,5 @@
 /**
- * PostForm component - create/edit posts with Effect event handlers
- *
- * Uses Result<Post, string> to unify loading/error/success state into a single atom.
+ * PostForm component - create/edit posts via mutation atoms
  */
 
 import { Atom, AtomRegistry, Result } from "fibrae";
@@ -11,15 +9,18 @@ import { NotesApi, type Post } from "../../api/index.js";
 import { Link } from "../routes.js";
 
 // =============================================================================
+// Mutation Atoms
+// =============================================================================
+
+const createPostMutation = NotesApi.mutation("posts", "create");
+const updatePostMutation = NotesApi.mutation("posts", "update");
+
+// =============================================================================
 // Form Atoms
 // =============================================================================
 
-/**
- * Form state atoms
- */
 export const PostFormTitleAtom = Atom.make("");
 export const PostFormContentAtom = Atom.make("");
-export const PostFormResultAtom = Atom.make<Result.Result<Post, string>>(Result.initial());
 
 // =============================================================================
 // PostForm Component
@@ -28,26 +29,22 @@ export const PostFormResultAtom = Atom.make<Result.Result<Post, string>>(Result.
 export interface PostFormProps {
   /** Post to edit (undefined for create mode) */
   post?: Post;
-  /** Callback after successful submit - receives created/updated post */
-  onSuccess?: (post: Post) => void;
 }
 
 /**
- * PostForm - create or edit a post.
- * Uses Effect event handlers for form submission.
+ * PostForm - create or edit a post via mutation atoms.
  */
-export function PostForm(
-  props: PostFormProps,
-) {
+export function PostForm(props: PostFormProps) {
   const { post } = props;
   const isEdit = post !== undefined;
+  const mutationAtom = isEdit ? updatePostMutation : createPostMutation;
 
   return Effect.gen(function* () {
     const registry = yield* AtomRegistry.AtomRegistry;
 
     const title = yield* Atom.get(PostFormTitleAtom);
     const content = yield* Atom.get(PostFormContentAtom);
-    const submitResult = yield* Atom.get(PostFormResultAtom);
+    const submitResult = yield* Atom.get(mutationAtom);
     const isSubmitting = Result.isWaiting(submitResult);
 
     const handleTitleChange = (e: Event) => {
@@ -64,49 +61,39 @@ export function PostForm(
       Effect.gen(function* () {
         e.preventDefault();
 
-        const current = registry.get(PostFormResultAtom);
-        registry.set(PostFormResultAtom, Result.waiting(current));
-
         const currentTitle = registry.get(PostFormTitleAtom);
         const currentContent = registry.get(PostFormContentAtom);
 
-        if (!currentTitle.trim()) {
-          registry.set(PostFormResultAtom, Result.fail("Title is required"));
-          return;
+        if (!currentTitle.trim()) return;
+
+        // Trigger mutation by writing the request payload to the mutation atom
+        if (isEdit && post) {
+          registry.set(updatePostMutation, {
+            path: { id: post.id },
+            payload: { title: currentTitle, content: currentContent },
+          });
+        } else {
+          registry.set(createPostMutation, {
+            payload: { title: currentTitle, content: currentContent },
+          });
         }
 
-        const api = yield* NotesApi;
+        // Wait for mutation result
+        const result = yield* Atom.getResult(mutationAtom);
 
-        const result = yield* Effect.either(
-          isEdit && post
-            ? api.posts.update({ path: { id: post.id }, payload: { title: currentTitle, content: currentContent } })
-            : api.posts.create({ payload: { title: currentTitle, content: currentContent } }),
-        );
-
-        if (result._tag === "Left") {
-          registry.set(PostFormResultAtom, Result.fail("Failed to save post"));
-          return;
-        }
-
-        registry.set(PostFormResultAtom, Result.success(result.right));
-
-        // Clear form on success
+        // Clear form and navigate on success
         registry.set(PostFormTitleAtom, "");
         registry.set(PostFormContentAtom, "");
 
-        // Navigate to posts list using router
+        void result; // result is the saved Post
         const navigator = yield* NavigatorTag;
         yield* navigator.go("/posts");
       });
 
     const statusEl = Result.builder(submitResult)
       .onWaiting(() => <span class="status">Saving...</span>)
-      .onError((err) => (
-        <div class="error" data-cy="form-error">
-          {err}
-        </div>
-      ))
-      .onSuccess((savedPost) => <span class="success">Saved: {savedPost.title}</span>)
+      .onError(() => <div class="error" data-cy="form-error">Failed to save post</div>)
+      .onSuccess((savedPost: Post) => <span class="success">Saved: {savedPost.title}</span>)
       .orNull();
 
     return (
