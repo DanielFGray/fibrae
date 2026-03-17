@@ -397,10 +397,16 @@ export function serverLayer(
       const loaderCtx = { path: params, searchParams };
       const loaderData = yield* handler.value.loader(loaderCtx);
 
+      const noopFormAction = () =>
+        Effect.fail({ _tag: "ActionError", message: "Actions not available during SSR" });
+
       const element = handler.value.component({
         loaderData,
         path: params,
         searchParams,
+        actionData: Option.none(),
+        formAction: noopFormAction,
+        submissionState: { _tag: "Idle" },
       });
 
       const state: DehydratedRouterState = {
@@ -568,10 +574,16 @@ export function browserLayer(
         }
 
         // Render component with SSR loader data (skip loader)
+        const noopFormAction = () =>
+          Effect.fail({ _tag: "ActionError", message: "Actions not available during SSR" });
+
         const element = handler.value.component({
           loaderData: state.loaderData,
           path: state.params,
           searchParams: state.searchParams,
+          actionData: Option.none(),
+          formAction: noopFormAction,
+          submissionState: { _tag: "Idle" },
         });
 
         // Cast RouterState to DehydratedRouterState (same shape)
@@ -621,10 +633,16 @@ export function browserLayer(
       const loaderCtx = { path: params, searchParams };
       const loaderData = yield* handler.value.loader(loaderCtx);
 
+      const noopAction = () =>
+        Effect.fail({ _tag: "ActionError", message: "Actions not available during SSR" });
+
       const element = handler.value.component({
         loaderData,
         path: params,
         searchParams,
+        actionData: Option.none(),
+        formAction: noopAction,
+        submissionState: { _tag: "Idle" },
       });
 
       const state: DehydratedRouterState = {
