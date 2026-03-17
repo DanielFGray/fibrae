@@ -49,7 +49,6 @@ function HomePage(): VElement {
  * Posts list page - wrapper for PostList component with Suspense
  */
 function PostsPage(): VElement {
-  // PostList is an Effect, so wrap in Suspense to show loading state.
   return (
     <div data-cy="posts-page">
       <h2>All Posts</h2>
@@ -69,9 +68,7 @@ function PostsPage(): VElement {
  *
  * @param isServer - Whether running on server (affects loader behavior)
  */
-export function createAppHandlers(isServer: boolean) {
-  const source = isServer ? "server" : "client";
-
+export function createAppHandlers(_isServer: boolean) {
   return RouterBuilder.group(AppRouter, AppRoutes, (handlers) =>
     handlers
       // Home page - no loader needed
@@ -79,17 +76,14 @@ export function createAppHandlers(isServer: boolean) {
         component: () => <HomePage />,
       })
 
-      // Posts list - PostList component handles its own data fetching
+      // Posts list - PostList reads its own query atom
       .handle("posts", {
         component: () => <PostsPage />,
       })
 
       // Create new post - initialize form atoms
       .handle("postNew", {
-        loader: () => {
-          // Form will be blank for new posts
-          return { source };
-        },
+        loader: () => null,
         component: () => <PostForm />,
       })
 
@@ -105,12 +99,9 @@ export function createAppHandlers(isServer: boolean) {
             registry.set(PostFormTitleAtom, post.title);
             registry.set(PostFormContentAtom, post.content);
 
-            return { post, source };
+            return post;
           }),
-        component: (props) => {
-          const loaderData = props.loaderData as { post: Post; source: string };
-          return <PostForm post={loaderData.post} />;
-        },
+        component: (props) => <PostForm post={props.loaderData as Post} />,
       })
 
       // Post detail - load single post
@@ -118,12 +109,11 @@ export function createAppHandlers(isServer: boolean) {
         loader: ({ path }) =>
           Effect.gen(function* () {
             const api = yield* NotesApi;
-            const post = yield* api.posts.findById({ path: { id: path.id as number } });
-            return post;
+            return yield* api.posts.findById({ path: { id: path.id as number } });
           }),
         component: (props) => {
           const pathParams = { id: props.path.id as number };
-          return <PostDetail loaderData={props.loaderData} path={pathParams} />;
+          return <PostDetail loaderData={props.loaderData as Post} path={pathParams} />;
         },
       }),
   );

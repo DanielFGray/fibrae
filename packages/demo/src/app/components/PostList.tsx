@@ -1,25 +1,29 @@
 /**
- * PostList component - displays list of posts with Suspense
+ * PostList component - displays list of posts via query atom
  */
 
 import * as Effect from "effect/Effect";
-import * as Stream from "effect/Stream";
-import { NotesApi, type Post } from "../../api/index.js";
+import { Atom } from "fibrae";
+import { NotesApi } from "../../api/index.js";
 import { Link } from "../routes.js";
 
 // =============================================================================
-// PostList with Suspense (Effect-based)
+// Query Atom — auto-fetches, cached, suspends while loading
+// =============================================================================
+
+export const postsAtom = NotesApi.query("posts", "list", {});
+
+// =============================================================================
+// PostList (reads query atom via Atom.getResult — suspends in Suspense)
 // =============================================================================
 
 /**
- * PostList - fetches posts from API and renders as list.
- * Returns an Effect that yields a VElement.
+ * PostList - reads posts from query atom.
  * Wrap in Suspense for loading state.
  */
 export function PostList() {
   return Effect.gen(function* () {
-    const api = yield* NotesApi;
-    const posts = yield* api.posts.list({});
+    const posts = yield* Atom.getResult(postsAtom);
 
     return (
       <div data-cy="post-list">
@@ -41,39 +45,4 @@ export function PostList() {
       </div>
     );
   });
-}
-
-// =============================================================================
-// PostList with Stream (for demonstrating progressive loading)
-// =============================================================================
-
-/**
- * PostListStream - returns a Stream that progressively emits posts.
- * Useful for demonstrating Suspense with incremental updates.
- */
-export function PostListStream() {
-  return Stream.unwrap(
-    Effect.gen(function* () {
-      const api = yield* NotesApi;
-      const posts = yield* api.posts.list({});
-
-      // Emit posts one at a time with delay for demo purposes
-      return Stream.fromIterable(posts).pipe(
-        Stream.scan([] as readonly Post[], (acc, post) => [...acc, post]),
-        Stream.tap(() => Effect.sleep("200 millis")),
-        Stream.map((currentPosts) => (
-          <div data-cy="post-list-stream">
-            <h2>Posts (streaming...)</h2>
-            <ul data-cy="posts-ul">
-              {currentPosts.map((post) => (
-                <li key={post.id} data-cy={`post-item-${post.id}`}>
-                  <Link href={`/posts/${post.id}`}>{post.title}</Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )),
-      );
-    }),
-  );
 }
