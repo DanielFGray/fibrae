@@ -40,10 +40,11 @@ import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import * as Option from "effect/Option";
 import * as Context from "effect/Context";
+import * as Schema from "effect/Schema";
 import * as Cause from "effect/Cause";
 import { Registry as AtomRegistry } from "@effect-atom/atom";
 import { Navigator } from "./Navigator.js";
-import { RouterHandlers } from "./RouterBuilder.js";
+import { RouterHandlers, type SubmissionState } from "./RouterBuilder.js";
 import { RouterStateAtom, type RouterState } from "./RouterState.js";
 import type { VElement } from "../shared.js";
 
@@ -94,6 +95,10 @@ export function RouterOutlet(): Stream.Stream<
   // Track if this is the first render (for SSR hydration)
   let isFirstRender = true;
 
+  // Mutable action state — shared across route renders, reset on navigation
+  let actionData: Option.Option<unknown> = Option.none();
+  let submissionState: SubmissionState = { _tag: "Idle" };
+
   return Stream.unwrap(
     Effect.gen(function* () {
       const navigator = yield* Navigator;
@@ -118,6 +123,10 @@ export function RouterOutlet(): Stream.Stream<
       return routeStream.pipe(
         Stream.mapEffect((currentRoute) =>
           Effect.gen(function* () {
+            // Reset action state on navigation
+            actionData = Option.none();
+            submissionState = { _tag: "Idle" };
+
             if (Option.isNone(currentRoute)) {
               // No route matched - clear router state and render 404
               registry.set(RouterStateAtom, Option.none());
@@ -179,13 +188,50 @@ export function RouterOutlet(): Stream.Stream<
             // Mark first render complete
             isFirstRender = false;
 
+            // Build formAction — decodes payload via action schema and invokes action handler.
+            // If route has no action, formAction returns a failing Effect.
+            const formAction = (
+              payload: Record<string, unknown>,
+            ): Effect.Effect<unknown, unknown> =>
+              Option.match(handler.value.action, {
+                onNone: () =>
+                  Effect.fail({
+                    _tag: "ActionError",
+                    message: `No action defined for route: ${routeName}`,
+                  }),
+                onSome: (routeAction) =>
+                  (
+                    Schema.decodeUnknown(routeAction.schema)(payload) as Effect.Effect<
+                      unknown,
+                      unknown
+                    >
+                  ).pipe(
+                    Effect.flatMap((decoded) => routeAction.handler({ payload: decoded })),
+                    Effect.tap((result) =>
+                      Effect.sync(() => {
+                        actionData = Option.some(result);
+                        submissionState = { _tag: "Success", data: result };
+                      }),
+                    ),
+                    Effect.tapErrorCause((cause) =>
+                      Effect.sync(() => {
+                        submissionState = { _tag: "Failure", error: Cause.squash(cause) };
+                      }),
+                    ),
+                  ),
+              });
+
             // Render the component with both props patterns:
             // 1. Traditional props (loaderData, path, searchParams)
-            // 2. Components can also access via RouterStateAtom/RouterStateService
+            // 2. Action context (actionData, formAction, submissionState)
+            // 3. Components can also access via RouterStateAtom/RouterStateService
             const element = handler.value.component({
               loaderData,
               path: params,
               searchParams,
+              actionData,
+              formAction,
+              submissionState,
             });
 
             return element;

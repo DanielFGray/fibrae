@@ -15,6 +15,7 @@ import type { Router, RouteGroup, LayoutGroup, AnyGroup } from "./Router.js";
 import { RouterError } from "./Router.js";
 import type { Route } from "./Route.js";
 import type { VElement } from "../shared.js";
+import type * as Schema from "effect/Schema";
 
 /**
  * Context for loader/component execution.
@@ -29,7 +30,17 @@ export interface LoaderContext<
 }
 
 /**
- * Component props including loader data and route parameters.
+ * Submission state for a form action.
+ * Transitions: idle → pending → success/failure → idle (on next navigation).
+ */
+export type SubmissionState =
+  | { readonly _tag: "Idle" }
+  | { readonly _tag: "Pending" }
+  | { readonly _tag: "Success"; readonly data: unknown }
+  | { readonly _tag: "Failure"; readonly error: unknown };
+
+/**
+ * Component props including loader data, route parameters, and action context.
  */
 export interface ComponentProps<
   LoaderData = unknown,
@@ -39,6 +50,12 @@ export interface ComponentProps<
   readonly loaderData: LoaderData;
   readonly path: PathParams;
   readonly searchParams: SearchParams;
+  /** Result of the last action invocation (Option.None until an action completes). */
+  readonly actionData: Option.Option<unknown>;
+  /** Invoke the route's action with a payload record. Returns an Effect. */
+  readonly formAction: (payload: Record<string, unknown>) => Effect.Effect<unknown, unknown>;
+  /** Current submission state (idle/pending/success/failure). */
+  readonly submissionState: SubmissionState;
 }
 
 /**
@@ -50,6 +67,21 @@ export type LoaderResult<T, E = never, R = never> = T | Effect.Effect<T, E, R>;
 /** Normalize a LoaderResult (value or Effect) into an Effect. No type erasure. */
 const liftLoader = <A, E, R>(value: LoaderResult<A, E, R>): Effect.Effect<A, E, R> =>
   Effect.isEffect(value) ? value : Effect.succeed(value);
+
+/** Normalize an ActionResult (value or Effect) into an Effect. No type erasure. */
+const liftAction = <A, E, R>(value: ActionResult<A, E, R>): Effect.Effect<A, E, R> =>
+  Effect.isEffect(value) ? value : Effect.succeed(value);
+
+/**
+ * Build a type-erased RouteAction from an ActionConfig.
+ * Type-erasure boundary: the action handler's R is captured by the Layer,
+ * so we store it with R = never.
+ */
+const buildRouteAction = (config: ActionConfig): RouteAction => ({
+  schema: config.schema,
+  handler: (ctx: ActionContext): Effect.Effect<unknown, unknown> =>
+    liftAction(config.handler(ctx)) as Effect.Effect<unknown, unknown>,
+});
 
 /**
  * Per-route metadata for the document `<head>`.
@@ -89,11 +121,37 @@ export interface HeadContext<
 }
 
 /**
+ * Context for action execution.
+ * Provides the decoded payload from form submission.
+ */
+export interface ActionContext<Payload = unknown> {
+  readonly payload: Payload;
+}
+
+/**
+ * Action return type - can be a plain value or an Effect.
+ * Plain values are automatically wrapped in Effect.succeed.
+ */
+export type ActionResult<T, E = never, R = never> = T | Effect.Effect<T, E, R>;
+
+/**
+ * Configuration for a route action (mutation handler).
+ * The schema decodes FormData into a typed payload before the action runs.
+ */
+export interface ActionConfig<Payload = unknown, ActionData = unknown, E = never, R = never> {
+  /** Schema to decode FormData into typed payload. */
+  readonly schema: Schema.Schema<Payload>;
+  /** The action Effect that processes the decoded payload. */
+  readonly handler: (ctx: ActionContext<Payload>) => ActionResult<ActionData, E, R>;
+}
+
+/**
  * Handler configuration for a route.
  * Loader fetches data, component renders with that data.
  *
  * - loader is optional - defaults to returning null
  * - loader can return a plain value or an Effect (plain values auto-wrapped)
+ * - action is optional - handles form mutations with schema-decoded payloads
  */
 export interface HandlerConfig<
   LoaderData = unknown,
@@ -101,6 +159,9 @@ export interface HandlerConfig<
   SearchParams extends Record<string, unknown> = Record<string, unknown>,
   R = never,
   E = never,
+  ActionData = unknown,
+  ActionR = never,
+  ActionE = never,
 > {
   readonly loader?: (
     ctx: LoaderContext<PathParams, SearchParams>,
@@ -116,6 +177,13 @@ export interface HandlerConfig<
     ctx: HeadContext<LoaderData, PathParams, SearchParams>,
   ) => HeadData | Effect.Effect<HeadData>;
 
+  /**
+   * Route action for mutations (form submissions).
+   * Receives schema-decoded payload, returns action result.
+   * Action data is passed to the component via `actionData` prop.
+   */
+  readonly action?: ActionConfig<unknown, ActionData, ActionE, ActionR>;
+
   /** When true, this route will be pre-rendered to static HTML at build time. */
   readonly prerender?: boolean;
 
@@ -129,6 +197,17 @@ export interface HandlerConfig<
 }
 
 /**
+ * Type-erased action handler stored in RouteHandler.
+ * Schema and handler are stored separately so Form can decode then invoke.
+ */
+export interface RouteAction {
+  /** Schema to decode FormData record into typed payload. */
+  readonly schema: Schema.Schema.Any;
+  /** Type-erased action handler. R = never because requirements are captured by the Layer. */
+  readonly handler: (ctx: ActionContext) => Effect.Effect<unknown, unknown>;
+}
+
+/**
  * A registered route handler (type-erased for storage).
  * Use executeRoute for type-safe execution.
  */
@@ -139,6 +218,8 @@ export interface RouteHandler {
   readonly loader: (ctx: LoaderContext) => Effect.Effect<unknown, unknown>;
   readonly component: (props: ComponentProps) => VElement;
   readonly head: Option.Option<(ctx: HeadContext) => Effect.Effect<HeadData, unknown>>;
+  /** Type-erased action for form mutations. */
+  readonly action: Option.Option<RouteAction>;
   readonly prerender: boolean;
   readonly getStaticPaths: Option.Option<
     () => Effect.Effect<ReadonlyArray<Record<string, unknown>>, unknown>
@@ -174,7 +255,7 @@ export interface GroupHandlers<
   /**
    * Register a handler for a route in this group.
    * RouteName is constrained to the group's valid route names.
-   * Accumulates the loader's service requirements into the group's R.
+   * Accumulates the loader's and action's service requirements into the group's R.
    */
   readonly handle: <
     RouteName extends RouteNames,
@@ -183,10 +264,22 @@ export interface GroupHandlers<
     SearchParams extends Record<string, unknown> = Record<string, unknown>,
     R2 = never,
     E = never,
+    ActionData = unknown,
+    ActionR = never,
+    ActionE = never,
   >(
     routeName: RouteName,
-    config: HandlerConfig<LoaderData, PathParams, SearchParams, R2, E>,
-  ) => GroupHandlers<GroupName, RouteNames, R | R2>;
+    config: HandlerConfig<
+      LoaderData,
+      PathParams,
+      SearchParams,
+      R2,
+      E,
+      ActionData,
+      ActionR,
+      ActionE
+    >,
+  ) => GroupHandlers<GroupName, RouteNames, R | R2 | ActionR>;
 }
 
 /**
@@ -214,7 +307,7 @@ export interface LayoutGroupHandlers<
   /**
    * Register a handler for a route in this layout group.
    * RouteName is constrained to the group's valid route names.
-   * Accumulates the loader's service requirements into the group's R.
+   * Accumulates the loader's and action's service requirements into the group's R.
    */
   readonly handle: <
     RouteName extends RouteNames,
@@ -223,10 +316,22 @@ export interface LayoutGroupHandlers<
     SearchParams extends Record<string, unknown> = Record<string, unknown>,
     R2 = never,
     E = never,
+    ActionData = unknown,
+    ActionR = never,
+    ActionE = never,
   >(
     routeName: RouteName,
-    config: HandlerConfig<LoaderData, PathParams, SearchParams, R2, E>,
-  ) => LayoutGroupHandlers<GroupName, RouteNames, R | R2>;
+    config: HandlerConfig<
+      LoaderData,
+      PathParams,
+      SearchParams,
+      R2,
+      E,
+      ActionData,
+      ActionR,
+      ActionE
+    >,
+  ) => LayoutGroupHandlers<GroupName, RouteNames, R | R2 | ActionR>;
 }
 
 /**
@@ -265,7 +370,22 @@ function makeGroupHandlers<GroupName extends string, RouteNames extends string>(
       SearchParams extends Record<string, unknown>,
       R2,
       E,
-    >(routeName: RouteName, config: HandlerConfig<LoaderData, PathParams, SearchParams, R2, E>) {
+      ActionData,
+      ActionR,
+      ActionE,
+    >(
+      routeName: RouteName,
+      config: HandlerConfig<
+        LoaderData,
+        PathParams,
+        SearchParams,
+        R2,
+        E,
+        ActionData,
+        ActionR,
+        ActionE
+      >,
+    ) {
       const maybeRoute = Option.fromNullable(routesByName.get(routeName));
       if (Option.isNone(maybeRoute)) {
         throw new RouterError({
@@ -303,12 +423,19 @@ function makeGroupHandlers<GroupName extends string, RouteNames extends string>(
         }),
       );
 
+      // Type-erasure boundary for action: ActionR/ActionE are captured by the Layer's R type.
+      // Cast to base ActionConfig to erase generic parameters, same pattern as loader/head.
+      const action = Option.fromNullable(config.action as ActionConfig | undefined).pipe(
+        Option.map(buildRouteAction),
+      );
+
       const handler: RouteHandler = {
         routeName,
         route,
         loader,
         component: config.component as (props: ComponentProps) => VElement,
         head,
+        action,
         prerender: config.prerender ?? false,
         getStaticPaths,
       };
@@ -352,7 +479,22 @@ function makeLayoutGroupHandlers<GroupName extends string, RouteNames extends st
       SearchParams extends Record<string, unknown>,
       R2,
       E,
-    >(routeName: RouteName, config: HandlerConfig<LoaderData, PathParams, SearchParams, R2, E>) {
+      ActionData,
+      ActionR,
+      ActionE,
+    >(
+      routeName: RouteName,
+      config: HandlerConfig<
+        LoaderData,
+        PathParams,
+        SearchParams,
+        R2,
+        E,
+        ActionData,
+        ActionR,
+        ActionE
+      >,
+    ) {
       const maybeRoute = Option.fromNullable(routesByName.get(routeName));
       if (Option.isNone(maybeRoute)) {
         throw new RouterError({
@@ -390,12 +532,19 @@ function makeLayoutGroupHandlers<GroupName extends string, RouteNames extends st
         }),
       );
 
+      // Type-erasure boundary for action: ActionR/ActionE are captured by the Layer's R type.
+      // Cast to base ActionConfig to erase generic parameters, same pattern as loader/head.
+      const action = Option.fromNullable(config.action as ActionConfig | undefined).pipe(
+        Option.map(buildRouteAction),
+      );
+
       const handler: RouteHandler = {
         routeName,
         route,
         loader,
         component: config.component as (props: ComponentProps) => VElement,
         head,
+        action,
         prerender: config.prerender ?? false,
         getStaticPaths,
       };
@@ -618,10 +767,15 @@ export function executeRoute(
 ): Effect.Effect<VElement, unknown> {
   return Effect.gen(function* () {
     const loaderData = yield* handler.loader(ctx);
+    const noopFormAction = () =>
+      Effect.fail({ _tag: "ActionError", message: "Actions not available in executeRoute" });
     return handler.component({
       loaderData,
       path: ctx.path,
       searchParams: ctx.searchParams,
+      actionData: Option.none(),
+      formAction: noopFormAction,
+      submissionState: { _tag: "Idle" },
     });
   });
 }

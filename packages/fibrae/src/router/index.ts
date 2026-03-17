@@ -33,6 +33,11 @@ export type {
   ComponentProps,
   HandlerConfig,
   RouteHandler,
+  RouteAction,
+  ActionConfig,
+  ActionContext,
+  ActionResult,
+  SubmissionState,
   GroupHandlers,
   LayoutGroupHandlers,
   LayoutHandler,
@@ -43,6 +48,10 @@ export type {
 } from "./RouterBuilder.js";
 
 export { RouterHandlers, getPrerenderRoutes } from "./RouterBuilder.js";
+
+// Form component
+export type { FormProps } from "./Form.js";
+export { Form, FormValidationError, FormState } from "./Form.js";
 
 // Re-export History types and service tag
 export type { HistoryLocation, HistoryService } from "./History.js";
