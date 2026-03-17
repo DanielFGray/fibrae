@@ -31,7 +31,7 @@ import {
 } from "../src/ssr-live-test-app.js";
 import { SSRRouter, App, createSSRRouterHandlers } from "../src/ssr-router-app.js";
 import { AppRouter, AppHandlersServerLive } from "../src/app/index.js";
-import { Api, ApiClientLive } from "../src/api/index.js";
+import { Api, NotesApi } from "../src/api/index.js";
 import { PostsHandlersLive, AuthHandlersLive } from "./handlers/index.js";
 
 // =============================================================================
@@ -180,7 +180,7 @@ const ssrNotesHandler = (ssrPathname: string) =>
 
     const fullLayer = Layer.provideMerge(
       serverLayer,
-      Layer.merge(Layer.merge(AppHandlersServerLive, SSRAtomRegistryLayer), ApiClientLive),
+      Layer.merge(Layer.merge(AppHandlersServerLive, SSRAtomRegistryLayer), NotesApi.layer),
     );
 
     // RouterStateAtom is set by serverLayer and included in dehydratedState
