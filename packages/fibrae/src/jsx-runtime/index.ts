@@ -385,22 +385,217 @@ type LinkElementAttrs = {
   sizes?: string;
 };
 
+// --- Media elements ---
+
+type MediaAttrs = {
+  src?: string;
+  controls?: boolean;
+  autoplay?: boolean;
+  loop?: boolean;
+  muted?: boolean;
+  preload?: "none" | "metadata" | "auto" | "";
+  crossOrigin?: string;
+};
+
+type VideoAttrs = MediaAttrs & {
+  width?: string | number;
+  height?: string | number;
+  poster?: string;
+  playsInline?: boolean;
+  disablePictureInPicture?: boolean;
+};
+
+type SourceAttrs = {
+  src?: string;
+  srcset?: string;
+  type?: string;
+  media?: string;
+  sizes?: string;
+  width?: string | number;
+  height?: string | number;
+};
+
+type TrackAttrs = {
+  src?: string;
+  kind?: "subtitles" | "captions" | "descriptions" | "chapters" | "metadata";
+  srclang?: string;
+  label?: string;
+  default?: boolean;
+};
+
+// --- Embedded content ---
+
+type CanvasAttrs = {
+  width?: string | number;
+  height?: string | number;
+};
+
+type IframeAttrs = {
+  src?: string;
+  srcdoc?: string;
+  name?: string;
+  width?: string | number;
+  height?: string | number;
+  sandbox?: string;
+  allow?: string;
+  allowFullscreen?: boolean;
+  loading?: "lazy" | "eager";
+  referrerPolicy?: string;
+};
+
+type EmbedAttrs = {
+  src?: string;
+  type?: string;
+  width?: string | number;
+  height?: string | number;
+};
+
+type ObjectAttrs = {
+  data?: string;
+  type?: string;
+  width?: string | number;
+  height?: string | number;
+  name?: string;
+};
+
+// --- Interactive elements ---
+
+type DialogAttrs = {
+  open?: boolean;
+};
+
+type DetailsAttrs = {
+  open?: boolean;
+  name?: string;
+};
+
+// --- Table elements ---
+
+type TableAttrs = {
+  cellPadding?: string | number;
+  cellSpacing?: string | number;
+};
+
+type TdThAttrs = {
+  colSpan?: number;
+  rowSpan?: number;
+  headers?: string;
+  scope?: string;
+};
+
+type ColAttrs = {
+  span?: number;
+};
+
+// --- Misc elements ---
+
+type MeterAttrs = {
+  value?: number;
+  min?: number;
+  max?: number;
+  low?: number;
+  high?: number;
+  optimum?: number;
+};
+
+type ProgressAttrs = {
+  value?: number;
+  max?: number;
+};
+
+type OutputAttrs = {
+  htmlFor?: string;
+  for?: string;
+  name?: string;
+  form?: string;
+};
+
+type TimeAttrs = {
+  dateTime?: string;
+};
+
+type DataAttrs = {
+  value?: string;
+};
+
+type FieldsetAttrs = {
+  disabled?: boolean;
+  name?: string;
+  form?: string;
+};
+
+type OptgroupAttrs = {
+  disabled?: boolean;
+  label?: string;
+};
+
+type MapAttrs = {
+  name?: string;
+};
+
+type AreaAttrs = {
+  alt?: string;
+  coords?: string;
+  download?: string | boolean;
+  href?: string;
+  shape?: string;
+  target?: string;
+  rel?: string;
+};
+
+type SlotAttrs = {
+  name?: string;
+};
+
 /**
  * Map of elements that need extra attribute types beyond the base.
  */
 type SpecificElements = {
+  // Form elements
   input: HTMLElementProps<HTMLInputElement> & InputAttrs;
   select: HTMLElementProps<HTMLSelectElement> & SelectAttrs;
   textarea: HTMLElementProps<HTMLTextAreaElement> & TextareaAttrs;
   option: HTMLElementProps<HTMLOptionElement> & OptionAttrs;
-  a: HTMLElementProps<HTMLAnchorElement> & AnchorAttrs;
-  img: HTMLElementProps<HTMLImageElement> & ImgAttrs;
-  form: HTMLElementProps<HTMLFormElement> & FormAttrs;
+  optgroup: HTMLElementProps<HTMLOptGroupElement> & OptgroupAttrs;
+  fieldset: HTMLElementProps<HTMLFieldSetElement> & FieldsetAttrs;
+  output: HTMLElementProps<HTMLOutputElement> & OutputAttrs;
   button: HTMLElementProps<HTMLButtonElement> & ButtonAttrs;
   label: HTMLElementProps<HTMLLabelElement> & LabelAttrs;
+  form: HTMLElementProps<HTMLFormElement> & FormAttrs;
+  // Links and navigation
+  a: HTMLElementProps<HTMLAnchorElement> & AnchorAttrs;
+  area: HTMLElementProps<HTMLAreaElement> & AreaAttrs;
+  // Media
+  audio: HTMLElementProps<HTMLAudioElement> & MediaAttrs;
+  video: HTMLElementProps<HTMLVideoElement> & VideoAttrs;
+  source: HTMLElementProps<HTMLSourceElement> & SourceAttrs;
+  track: HTMLElementProps<HTMLTrackElement> & TrackAttrs;
+  img: HTMLElementProps<HTMLImageElement> & ImgAttrs;
+  // Embedded content
+  canvas: HTMLElementProps<HTMLCanvasElement> & CanvasAttrs;
+  iframe: HTMLElementProps<HTMLIFrameElement> & IframeAttrs;
+  embed: HTMLElementProps<HTMLEmbedElement> & EmbedAttrs;
+  object: HTMLElementProps<HTMLObjectElement> & ObjectAttrs;
+  // Document metadata
   meta: HTMLElementProps<HTMLMetaElement> & MetaAttrs;
   script: HTMLElementProps<HTMLScriptElement> & ScriptAttrs;
   link: HTMLElementProps<HTMLLinkElement> & LinkElementAttrs;
+  // Interactive
+  dialog: HTMLElementProps<HTMLDialogElement> & DialogAttrs;
+  details: HTMLElementProps<HTMLDetailsElement> & DetailsAttrs;
+  slot: HTMLElementProps<HTMLSlotElement> & SlotAttrs;
+  // Table
+  table: HTMLElementProps<HTMLTableElement> & TableAttrs;
+  td: HTMLElementProps<HTMLTableCellElement> & TdThAttrs;
+  th: HTMLElementProps<HTMLTableCellElement> & TdThAttrs;
+  col: HTMLElementProps<HTMLTableColElement> & ColAttrs;
+  colgroup: HTMLElementProps<HTMLTableColElement> & ColAttrs;
+  // Data/time
+  meter: HTMLElementProps<HTMLMeterElement> & MeterAttrs;
+  progress: HTMLElementProps<HTMLProgressElement> & ProgressAttrs;
+  time: HTMLElementProps<HTMLTimeElement> & TimeAttrs;
+  data: HTMLElementProps<HTMLDataElement> & DataAttrs;
+  map: HTMLElementProps<HTMLMapElement> & MapAttrs;
 };
 
 /**
