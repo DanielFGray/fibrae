@@ -3,7 +3,7 @@
  *
  * This is the main SPA entry that:
  * 1. Sets up router with BrowserHistoryLive and NavigatorLive
- * 2. Provides ApiClientLive for API calls
+ * 2. Provides NotesApi for API calls
  * 3. Provides AtomRegistry for reactive state
  * 4. Renders the app shell with RouterOutlet
  */
@@ -17,7 +17,7 @@ import { render, Suspense, ErrorBoundary, type ComponentError } from "fibrae";
 import { BrowserHistoryLive, NavigatorLive, RouterOutlet } from "fibrae/router";
 
 import { AppRouter, AppHandlersClientLive, Link } from "./app/index.js";
-import { ApiClientLive } from "./api/index.js";
+import { NotesApi } from "./api/index.js";
 
 // =============================================================================
 // Navigation Bar (uses router Link)
@@ -92,7 +92,7 @@ const routerLayer = pipe(
 );
 
 // Combined layer with API client
-const appLayer = pipe(routerLayer, Layer.provideMerge(ApiClientLive));
+const appLayer = pipe(routerLayer, Layer.provideMerge(NotesApi.layer));
 
 // =============================================================================
 // Bootstrap

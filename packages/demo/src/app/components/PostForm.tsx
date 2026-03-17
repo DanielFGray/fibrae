@@ -4,11 +4,10 @@
  * Uses Result<Post, string> to unify loading/error/success state into a single atom.
  */
 
-import type { VElement } from "fibrae";
 import { Atom, AtomRegistry, Result } from "fibrae";
 import { NavigatorTag } from "fibrae/router";
 import * as Effect from "effect/Effect";
-import { PostsClient, type Post } from "../../api/index.js";
+import { NotesApi, type Post } from "../../api/index.js";
 import { Link } from "../routes.js";
 
 // =============================================================================
@@ -39,7 +38,7 @@ export interface PostFormProps {
  */
 export function PostForm(
   props: PostFormProps,
-): Effect.Effect<VElement, never, AtomRegistry.AtomRegistry | PostsClient> {
+) {
   const { post } = props;
   const isEdit = post !== undefined;
 
@@ -76,12 +75,12 @@ export function PostForm(
           return;
         }
 
-        const client = yield* PostsClient;
+        const api = yield* NotesApi;
 
         const result = yield* Effect.either(
           isEdit && post
-            ? client.update(post.id, { title: currentTitle, content: currentContent })
-            : client.create({ title: currentTitle, content: currentContent }),
+            ? api.posts.update({ path: { id: post.id }, payload: { title: currentTitle, content: currentContent } })
+            : api.posts.create({ payload: { title: currentTitle, content: currentContent } }),
         );
 
         if (result._tag === "Left") {

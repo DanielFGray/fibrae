@@ -2,10 +2,9 @@
  * PostList component - displays list of posts with Suspense
  */
 
-import type { VElement } from "fibrae";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
-import { PostsClient, type Post } from "../../api/index.js";
+import { NotesApi, type Post } from "../../api/index.js";
 import { Link } from "../routes.js";
 
 // =============================================================================
@@ -17,10 +16,10 @@ import { Link } from "../routes.js";
  * Returns an Effect that yields a VElement.
  * Wrap in Suspense for loading state.
  */
-export function PostList(): Effect.Effect<VElement, never, PostsClient> {
+export function PostList() {
   return Effect.gen(function* () {
-    const client = yield* PostsClient;
-    const posts = yield* client.list();
+    const api = yield* NotesApi;
+    const posts = yield* api.posts.list({});
 
     return (
       <div data-cy="post-list">
@@ -52,11 +51,11 @@ export function PostList(): Effect.Effect<VElement, never, PostsClient> {
  * PostListStream - returns a Stream that progressively emits posts.
  * Useful for demonstrating Suspense with incremental updates.
  */
-export function PostListStream(): Stream.Stream<VElement, never, PostsClient> {
+export function PostListStream() {
   return Stream.unwrap(
     Effect.gen(function* () {
-      const client = yield* PostsClient;
-      const posts = yield* client.list();
+      const api = yield* NotesApi;
+      const posts = yield* api.posts.list({});
 
       // Emit posts one at a time with delay for demo purposes
       return Stream.fromIterable(posts).pipe(

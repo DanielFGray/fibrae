@@ -12,7 +12,7 @@ import { render } from "fibrae";
 import { Router, RouterOutlet } from "fibrae/router";
 
 import { AppRouter, AppHandlersClientLive, Link } from "./app/index.js";
-import { ApiClientLive } from "./api/index.js";
+import { NotesApi } from "./api/index.js";
 
 // =============================================================================
 // App Shell (same as SPA but for hydration)
@@ -48,7 +48,7 @@ const browserLayer = Router.browserLayer({
 // Combined layer: RouterHandlers -> browserLayer -> ApiClient
 const routerLayer = Layer.provideMerge(
   Layer.provideMerge(browserLayer, AppHandlersClientLive),
-  ApiClientLive,
+  NotesApi.layer,
 );
 
 // Get container
