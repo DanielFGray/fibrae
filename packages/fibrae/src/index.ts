@@ -28,7 +28,15 @@ export { ComponentScope } from "./shared.js";
 export { HydrationState, HydrationStateLive, HydrationStateEmpty } from "./hydration-state.js";
 
 // Re-export upstream Effect Atom APIs for consumers
-export { Atom, AtomHttpApi, AtomRef, AtomRpc, Hydration, Registry as AtomRegistry, Result } from "@effect-atom/atom";
+export {
+  Atom,
+  AtomHttpApi,
+  AtomRef,
+  AtomRpc,
+  Hydration,
+  Registry as AtomRegistry,
+  Result,
+} from "@effect-atom/atom";
 
 // Component-scoped atom utilities
 export { mountAtom, subscribeAtom } from "./atom-utils.js";

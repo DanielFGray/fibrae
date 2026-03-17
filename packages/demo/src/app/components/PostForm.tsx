@@ -97,13 +97,19 @@ export function PostForm(props: PostFormProps) {
         yield* navigator.go("/posts");
       });
 
-    const validationEl = validationError
-      ? <div class="error" data-cy="form-error">{validationError}</div>
-      : null;
+    const validationEl = validationError ? (
+      <div class="error" data-cy="form-error">
+        {validationError}
+      </div>
+    ) : null;
 
     const statusEl = Result.builder(submitResult)
       .onWaiting(() => <span class="status">Saving...</span>)
-      .onError(() => <div class="error" data-cy="form-error">Failed to save post</div>)
+      .onError(() => (
+        <div class="error" data-cy="form-error">
+          Failed to save post
+        </div>
+      ))
       .onSuccess((savedPost: Post) => <span class="success">Saved: {savedPost.title}</span>)
       .orNull();
 

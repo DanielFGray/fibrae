@@ -4,8 +4,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Route from "./Route.js";
 
-const runMatch = (route: Route.Route, pathname: string) =>
-  Effect.runSync(route.match(pathname));
+const runMatch = (route: Route.Route, pathname: string) => Effect.runSync(route.match(pathname));
 
 const runInterpolate = (route: Route.Route, params: Record<string, unknown>) =>
   Effect.runSync(route.interpolate(params));
