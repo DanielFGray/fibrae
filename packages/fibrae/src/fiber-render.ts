@@ -41,7 +41,7 @@ import {
   activateLiveAtoms,
   reconcileChildren,
 } from "./fiber-update.js";
-import { commitRoot } from "./fiber-commit.js";
+import { commitRoot, setRef } from "./fiber-commit.js";
 
 // =============================================================================
 // Work Loop
@@ -471,11 +471,8 @@ const hydrateElement = (
         stateSnapshot.listenerStore,
       );
 
-      // Handle ref
-      const ref = vElement.props.ref;
-      if (ref && typeof ref === "object" && "current" in ref) {
-        (ref as { current: unknown }).current = el;
-      }
+      // Handle ref (object or function)
+      setRef(vElement.props.ref, el);
 
       // Hydrate children using cursor-based walking
       const firstChildCursor = getFirstHydratableChild(el);

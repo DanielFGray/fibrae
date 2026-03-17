@@ -100,7 +100,7 @@ const MultiFinalizer = () =>
 const MountedComponent = () =>
   Effect.gen(function* () {
     const { scope, mounted } = yield* ComponentScope;
-    // Use object ref (fibrae doesn't support function refs)
+    // Object ref pattern (function refs also supported)
     const containerRef: { current: HTMLDivElement | null } = { current: null };
 
     // Fork an effect that waits for mount, then checks DOM is available

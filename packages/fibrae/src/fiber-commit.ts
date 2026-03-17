@@ -23,6 +23,67 @@ import { findDomParent } from "./fiber-tree.js";
 import { handleFiberError } from "./fiber-boundary.js";
 
 // =============================================================================
+// DOM Positioning
+// =============================================================================
+
+/**
+ * Get the first DOM node from a fiber, descending into children for
+ * function components that don't have their own DOM node.
+ */
+const getFirstDomNode = (fiber: Fiber): Node | null => {
+  if (Option.isSome(fiber.dom)) return fiber.dom.value;
+  let child = fiber.child;
+  while (Option.isSome(child)) {
+    const dom = getFirstDomNode(child.value);
+    if (dom) return dom;
+    child = child.value.sibling;
+  }
+  return null;
+};
+
+/**
+ * Find the first DOM node that should come after this fiber in the DOM.
+ *
+ * Walks the sibling chain looking for a fiber with a DOM node. If no sibling
+ * has one, walks up to the parent (only through non-DOM fibers like function
+ * components and fragments) and continues from the parent's siblings. Stops
+ * when hitting a fiber that owns a DOM node (that's a different DOM parent).
+ *
+ * Returns null when no subsequent sibling has a DOM node (insertBefore with
+ * null ref is equivalent to appendChild).
+ */
+const findNextSiblingDom = (fiber: Fiber): Node | null => {
+  let current: Fiber | undefined = fiber;
+  while (current) {
+    let sibling: Option.Option<Fiber> = current.sibling;
+    while (Option.isSome(sibling)) {
+      const dom = getFirstDomNode(sibling.value);
+      if (dom) return dom;
+      sibling = sibling.value.sibling;
+    }
+    // Walk up through non-DOM parents (function components, fragments)
+    // Stop at fibers with DOM nodes — those are different DOM parents
+    const parent: Fiber | undefined = Option.getOrUndefined(current.parent);
+    if (!parent || Option.isSome(parent.dom)) break;
+    current = parent;
+  }
+  return null;
+};
+
+// =============================================================================
+// Ref Handling
+// =============================================================================
+
+/** Set a ref (object or function) to a DOM node, or null on cleanup. */
+export const setRef = (ref: unknown, value: Node | null): void => {
+  if (typeof ref === "function") {
+    (ref as (node: Node | null) => void)(value);
+  } else if (ref && typeof ref === "object" && "current" in ref) {
+    (ref as { current: unknown }).current = value;
+  }
+};
+
+// =============================================================================
 // Create DOM
 // =============================================================================
 
@@ -46,11 +107,8 @@ export const createDom = (fiber: Fiber, runtime: FibraeRuntime) =>
 
     yield* updateDom(dom, {}, fiber.props, fiber, runtime);
 
-    // Handle ref
-    const ref = fiber.props.ref;
-    if (ref && typeof ref === "object" && "current" in ref) {
-      (ref as { current: unknown }).current = dom;
-    }
+    // Handle ref (object or function)
+    setRef(fiber.props.ref, dom);
 
     return dom;
   });
@@ -177,6 +235,7 @@ export const commitDeletion = (fiber: Fiber, domParent: Node): Effect.Effect<voi
   Option.match(fiber.dom, {
     onSome: (dom) =>
       Effect.sync(() => {
+        setRef(fiber.props.ref, null);
         domParent.removeChild(dom);
       }),
     onNone: () =>
@@ -273,9 +332,14 @@ export const commitWork = (
     // Process effect tag
     const tag = fiber.effectTag.pipe(Option.getOrUndefined);
     if (tag === "PLACEMENT") {
-      // Append DOM node
+      // Insert DOM node at the correct position
       if (Option.isSome(fiber.dom)) {
-        domParent.appendChild(fiber.dom.value);
+        const refNode = findNextSiblingDom(fiber);
+        // refNode must be a direct child of domParent for insertBefore
+        domParent.insertBefore(
+          fiber.dom.value,
+          refNode && refNode.parentNode === domParent ? refNode : null,
+        );
       }
 
       // Signal first child committed (for Suspense)
@@ -296,6 +360,16 @@ export const commitWork = (
       );
       if (Option.isSome(fiber.dom)) {
         yield* updateDom(fiber.dom.value, prevProps, fiber.props, fiber, runtime);
+
+        // Keyed fibers matched by key may have changed position.
+        // Reposition DOM node to match the new fiber order.
+        if (fiber.props.key != null) {
+          const refNode = findNextSiblingDom(fiber);
+          domParent.insertBefore(
+            fiber.dom.value,
+            refNode && refNode.parentNode === domParent ? refNode : null,
+          );
+        }
       }
     } else if (tag === "DELETION") {
       yield* commitDeletion(fiber, domParent);
