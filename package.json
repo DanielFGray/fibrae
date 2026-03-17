@@ -14,6 +14,7 @@
       "@effect/platform-bun": "^0.83.0",
       "@effect/platform-node": "^0.100.0",
       "effect": "^3.19.15",
+      "@typescript/native-preview": "^7.0.0-dev.20260314.1",
       "typescript": "^5.9.3"
     }
   },
