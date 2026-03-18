@@ -85,8 +85,8 @@ export type Primitive =
  */
 export type VChild =
   | VElement
-  | Effect.Effect<VElement, any, any>
-  | Stream.Stream<VElement, any, any>
+  | Effect.Effect<VElement, unknown, unknown>
+  | Stream.Stream<VElement, unknown, unknown>
   | string
   | number
   | bigint
@@ -100,8 +100,9 @@ export type VChild =
  */
 export type VNode =
   | VElement
-  | Effect.Effect<VElement, any, any>
-  | Stream.Stream<VElement, any, any>;
+  | null
+  | Effect.Effect<VElement | null, unknown, unknown>
+  | Stream.Stream<VElement, unknown, unknown>;
 
 /**
  * Element type can be a primitive or a component function
