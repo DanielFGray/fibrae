@@ -42,6 +42,7 @@ import {
   reconcileChildren,
 } from "./fiber-update.js";
 import { commitRoot, setRef } from "./fiber-commit.js";
+import { checkTagMismatch, checkTextMismatch, checkAttributeMismatches } from "./hydration-dev.js";
 
 // =============================================================================
 // Work Loop
@@ -323,30 +324,9 @@ const hydrateElement = (
   runtime: FibraeRuntime,
 ): Effect.Effect<{ fiber: Fiber; nextCursor: Option.Option<Node> }, never, FibraeRuntime> =>
   Effect.gen(function* () {
-    // Detect hydration mismatch: VElement type vs DOM node tag
-    if (
-      typeof vElement.type === "string" &&
-      vElement.type !== "TEXT_ELEMENT" &&
-      vElement.type !== "FRAGMENT" &&
-      vElement.type !== "SUSPENSE" &&
-      vElement.type !== "BOUNDARY"
-    ) {
-      if (domNode.nodeType === Node.ELEMENT_NODE) {
-        const expected = vElement.type.toUpperCase();
-        const actual = (domNode as Element).tagName;
-        if (expected !== actual) {
-          yield* Effect.logError(
-            `Hydration mismatch: expected <${vElement.type}> but found <${actual.toLowerCase()}>. ` +
-              `SSR and client component trees differ.`,
-          );
-        }
-      } else if (domNode.nodeType === Node.TEXT_NODE) {
-        yield* Effect.logError(
-          `Hydration mismatch: expected <${vElement.type}> but found text node "${domNode.textContent?.substring(0, 30)}". ` +
-            `SSR and client component trees differ.`,
-        );
-      }
-    }
+    // Dev-only: detect hydration mismatches (tag name, text, attributes)
+    yield* checkTagMismatch(vElement, domNode);
+
     const fiber = createFiber(
       Option.some(vElement.type),
       vElement.props,
@@ -362,6 +342,7 @@ const hydrateElement = (
       nextCursor = yield* hydrateFunctionComponent(fiber, vElement, domNode, runtime);
     } else if (vElement.type === "TEXT_ELEMENT") {
       // Text node - adopt the DOM text node
+      yield* checkTextMismatch(vElement, domNode);
       fiber.dom = Option.some(domNode);
       nextCursor = getNextHydratableSibling(domNode);
     } else if (vElement.type === "FRAGMENT") {
@@ -453,6 +434,7 @@ const hydrateElement = (
       }
     } else {
       // Host element - adopt DOM node and hydrate children
+      yield* checkAttributeMismatches(vElement, domNode);
       const el = domNode as HTMLElement | SVGElement;
       fiber.dom = Option.some(el);
 
