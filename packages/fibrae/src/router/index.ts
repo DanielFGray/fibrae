@@ -94,3 +94,7 @@ export {
   getLoaderData,
   getRouteParams,
 } from "./RouterState.js";
+
+// Head component for setting document head elements from any component
+export type { HeadProps, HeadCollectorService } from "../head.js";
+export { Head, HeadCollector, HeadCollectorLive } from "../head.js";
