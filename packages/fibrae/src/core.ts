@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
@@ -9,6 +10,23 @@ import { type VElement } from "./shared.js";
 import { FibraeRuntime, CustomAtomRegistryLayer } from "./runtime.js";
 import { renderFiber, hydrateFiber } from "./fiber-render.js";
 import { HydrationState, HydrationStateLive } from "./hydration-state.js";
+
+// =============================================================================
+// HMR Support (dev only — dead-code eliminated in production builds)
+// =============================================================================
+
+interface FibraeContainerState {
+  fiber: Fiber.RuntimeFiber<unknown, unknown>;
+  registry: AtomRegistry.AtomRegistry["Type"];
+}
+
+const DEV =
+  typeof import.meta !== "undefined" && !!(import.meta as unknown as Record<string, unknown>).hot;
+
+/** Track running renders per container for HMR re-render support. */
+const containerStates: WeakMap<HTMLElement, FibraeContainerState> | undefined = DEV
+  ? new WeakMap()
+  : undefined;
 
 // =============================================================================
 // Internal render logic (requires all services)
@@ -89,21 +107,33 @@ export function render(
 ) {
   const program = (cont: HTMLElement) =>
     Effect.gen(function* () {
+      // HMR: if a previous render is running on this container, interrupt it
+      // and reuse its AtomRegistry so atom state is preserved across hot updates
+      const previousState = containerStates?.get(cont);
+      if (previousState) {
+        yield* Fiber.interrupt(previousState.fiber);
+        cont.innerHTML = "";
+      }
+
       // Auto-detect services from the current context
       const existingRegistry = yield* Effect.serviceOption(AtomRegistry.AtomRegistry);
       const existingHydration = yield* Effect.serviceOption(HydrationState);
 
-      // Use existing AtomRegistry if provided, otherwise create a fresh one
-      const registryLayer = Option.match(existingRegistry, {
-        onNone: () => CustomAtomRegistryLayer,
-        onSome: (reg) => Layer.succeed(AtomRegistry.AtomRegistry, reg),
-      });
+      // Reuse AtomRegistry from previous render (HMR), or use provided, or create fresh
+      const registryLayer = previousState
+        ? Layer.succeed(AtomRegistry.AtomRegistry, previousState.registry)
+        : Option.match(existingRegistry, {
+            onNone: () => CustomAtomRegistryLayer,
+            onSome: (reg) => Layer.succeed(AtomRegistry.AtomRegistry, reg),
+          });
 
-      // Use existing HydrationState if provided, otherwise auto-discover from DOM
-      const hydrationLayer = Option.match(existingHydration, {
-        onNone: () => HydrationStateLive,
-        onSome: (state) => Layer.succeed(HydrationState, state),
-      });
+      // Skip hydration state on HMR re-render (atoms already loaded)
+      const hydrationLayer = previousState
+        ? Layer.succeed(HydrationState, [])
+        : Option.match(existingHydration, {
+            onNone: () => HydrationStateLive,
+            onSome: (state) => Layer.succeed(HydrationState, state),
+          });
 
       // Always create a fresh FibraeRuntime (each render tree has its own fiber state),
       // wired to the chosen AtomRegistry
@@ -112,6 +142,17 @@ export function render(
       // Compose: user layer (if any) feeds from registryLayer, all merge together
       const baseLayer = Layer.mergeAll(runtimeLayer, registryLayer, hydrationLayer);
       const fullLayer = options?.layer ? Layer.provideMerge(options.layer, baseLayer) : baseLayer;
+
+      if (containerStates) {
+        // Dev: fork render and capture fiber handle for HMR re-render
+        const renderWithCapture = Effect.gen(function* () {
+          const registry = yield* AtomRegistry.AtomRegistry;
+          const fiber = yield* Effect.fork(renderCore(element, cont));
+          containerStates.set(cont, { fiber, registry });
+          return yield* Fiber.join(fiber);
+        }).pipe(Effect.provide(fullLayer));
+        return yield* renderWithCapture;
+      }
 
       return yield* renderCore(element, cont).pipe(Effect.provide(fullLayer));
     });

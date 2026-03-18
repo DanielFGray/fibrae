@@ -92,12 +92,35 @@ const collectCss = async (server: ViteDevServer, entryUrl: string): Promise<stri
 
 export const fibrae = (config: FibraeConfig): Plugin => {
   let _resolvedConfig: ResolvedConfig;
+  let clientEntryId: string | undefined;
 
   return {
     name: "fibrae-ssg",
 
     configResolved(resolved) {
       _resolvedConfig = resolved;
+    },
+
+    // Resolve the client entry path so we can match it in transform
+    async resolveId(source) {
+      if (source === config.client) {
+        const resolved = await this.resolve(source);
+        if (resolved) clientEntryId = resolved.id;
+      }
+      return null;
+    },
+
+    // Inject HMR accept into the client entry so Vite re-executes it on changes.
+    // render() detects the previous render via WeakMap and does a clean re-render
+    // with preserved atom state.
+    transform(code, id) {
+      if (_resolvedConfig.command !== "serve") return null;
+      if (!clientEntryId || id !== clientEntryId) return null;
+
+      return {
+        code: code + "\n\nif (import.meta.hot) { import.meta.hot.accept(); }\n",
+        map: null,
+      };
     },
 
     configureServer(server: ViteDevServer) {
