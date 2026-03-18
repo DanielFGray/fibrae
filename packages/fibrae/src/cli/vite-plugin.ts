@@ -97,6 +97,23 @@ export const fibrae = (config: FibraeConfig): Plugin => {
   return {
     name: "fibrae-ssg",
 
+    config() {
+      return {
+        optimizeDeps: {
+          exclude: ["fibrae"],
+        },
+        ssr: {
+          noExternal: ["fibrae"],
+        },
+        server: {
+          watch: {
+            // Watch linked fibrae in node_modules so file changes trigger HMR
+            ignored: ["!**/node_modules/fibrae/**"],
+          },
+        },
+      };
+    },
+
     configResolved(resolved) {
       _resolvedConfig = resolved;
     },
