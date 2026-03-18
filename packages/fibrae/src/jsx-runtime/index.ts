@@ -42,11 +42,46 @@ function normalizeChild(child: unknown): VElement | VElement[] | null {
   return child as VElement;
 }
 
-export function jsx(
-  type: JSXType,
-  props: PropsWithChildren<{ [key: string]: unknown }> | null,
+// --- Overloads for Effect channel propagation ---
+// Overload order matters: function components first (most specific type param),
+// then intrinsic elements. TypeScript tries overloads top-to-bottom.
+
+// Function component returning Effect — preserves E/R
+export function jsx<E, R>(
+  type: (props: Record<string, unknown>) => Effect.Effect<VElement, E, R>,
+  props: Record<string, unknown> | null,
   ...children: VChild[]
-): VElement {
+): Effect.Effect<VElement, E, R>;
+
+// Function component returning Stream — preserves E/R
+export function jsx<E, R>(
+  type: (props: Record<string, unknown>) => Stream.Stream<VElement, E, R>,
+  props: Record<string, unknown> | null,
+  ...children: VChild[]
+): Stream.Stream<VElement, E, R>;
+
+// Function component returning VElement (or any other non-Effect/Stream VNode)
+export function jsx(
+  type: (props: Record<string, unknown>) => VNode,
+  props: Record<string, unknown> | null,
+  ...children: VChild[]
+): VElement;
+
+// Intrinsic/fragment element — always returns VElement at runtime
+// (Effect children are stored in the VElement and resolved by the renderer)
+export function jsx(
+  type: string | typeof Fragment,
+  props: Record<string, unknown> | null,
+  ...children: VChild[]
+): VElement;
+
+// --- Implementation (return type is VElement at runtime; overloads provide
+//     type-level Effect/Stream propagation for the checker) ---
+export function jsx(
+  type: string | typeof Fragment | ((props: Record<string, unknown>) => unknown),
+  props: Record<string, unknown> | null,
+  ...children: unknown[]
+): unknown {
   const normalizedProps = props ?? {};
 
   let finalChildren: VElement[] = [];
@@ -77,10 +112,10 @@ export function jsx(
   };
 }
 
-export const jsxs: typeof jsx = jsx;
+export const jsxs = jsx;
 
 // Development mode JSX transform (used by Bun and other tools)
-export const jsxDEV: typeof jsx = jsx;
+export const jsxDEV = jsx;
 
 // Alias for classic JSX transform (used by esbuild)
 export const h = jsx;
@@ -712,12 +747,11 @@ type SVGElements = {
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
-    // JSX expressions always produce VElement
-    // Component functions are stored in the type field and invoked later by the renderer
+    // JSX expressions produce VElement. Effect/Stream channel propagation
+    // happens through jsx() overload return types, not through Element.
     type Element = VElement;
 
     // What function components can return (TS 5.1+)
-    // This allows components to return Effect<VElement> or Stream<VElement>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     type ElementType = keyof IntrinsicElements | ((props: any) => VNode);
 
