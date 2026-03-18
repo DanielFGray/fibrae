@@ -203,19 +203,16 @@ const renderVElementToString = (
       let childVElement: VElement;
 
       if (isStream(output)) {
-        // For streams, take first emission
-        const first = yield* Stream.runHead(output);
+        // Type-erasure boundary: component's R is erased in VNode
+        const first = yield* Stream.runHead(output as Stream.Stream<VElement>);
         if (Option.isNone(first)) {
           return ""; // Empty stream
         }
         childVElement = first.value;
       } else if (Effect.isEffect(output)) {
-        // Await the effect
-        childVElement = yield* output as Effect.Effect<
-          VElement,
-          unknown,
-          AtomRegistry.AtomRegistry
-        >;
+        // Type-erasure boundary: component's R is erased in VNode, requirements
+        // are satisfied by the render context. Cast is load-bearing.
+        childVElement = yield* output as Effect.Effect<VElement>;
       } else {
         // Plain VElement
         childVElement = output as VElement;

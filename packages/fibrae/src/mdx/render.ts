@@ -36,6 +36,22 @@ import type {
 /** Map of element names to component overrides */
 export type MdxComponents = Partial<Record<string, (props: Record<string, unknown>) => VElement>>;
 
+/**
+ * Resolve a component override or fall back to a plain HTML tag.
+ * MdxComponents constrains overrides to return VElement, so the result
+ * is always VElement regardless of whether a string or function is used.
+ */
+const resolve = (
+  components: MdxComponents,
+  tag: string,
+  props: Record<string, unknown>,
+  children?: VChild[],
+): VElement => {
+  const override = components[tag];
+  if (override) return override({ ...props, children: children ?? [] });
+  return h(tag, props, children ?? []);
+};
+
 /** Shape of a highlighter — matches MdxHighlighter service interface */
 export interface MdxHighlighterShape {
   readonly highlight: (code: string, lang: string, meta?: string) => VElement;
@@ -83,13 +99,11 @@ const renderMdxJsx = (
   const name = node.name;
   if (!name) {
     // Fragment: <>{children}</>
-    return h("FRAGMENT" as any, {}, renderChildren(node.children, components, highlighter));
+    return h("FRAGMENT", {}, renderChildren(node.children, components, highlighter));
   }
   const props = mdxAttrsToProps(node.attributes);
   const children = renderChildren(node.children, components, highlighter);
-  // Look up component override, fall back to HTML tag for lowercase names
-  const type = components[name] ?? name;
-  return h(type as any, props, children);
+  return resolve(components, name, props, children);
 };
 
 // =============================================================================
@@ -139,10 +153,8 @@ const renderCodeBlock = (
   }
   if (node.meta) codeProps["data-meta"] = node.meta;
 
-  const codeEl = h((components["code"] ?? "code") as any, codeProps, [
-    createTextElement(node.value),
-  ]);
-  return h((components["pre"] ?? "pre") as any, {}, [codeEl]);
+  const codeEl = resolve(components, "code", codeProps, [createTextElement(node.value)]);
+  return resolve(components, "pre", {}, [codeEl]);
 };
 
 const renderList = (
@@ -168,12 +180,9 @@ const renderListItem = (
   const children = renderChildren(node.children, components, highlighter);
   if (node.checked != null) {
     const checkbox = h("input", { type: "checkbox", checked: node.checked, disabled: true });
-    return h((components["li"] ?? "li") as any, { class: "task-list-item" }, [
-      checkbox,
-      ...children,
-    ]);
+    return resolve(components, "li", { class: "task-list-item" }, [checkbox, ...children]);
   }
-  return h((components["li"] ?? "li") as any, {}, children);
+  return resolve(components, "li", {}, children);
 };
 
 const renderTable = (
@@ -193,7 +202,7 @@ const renderTable = (
       ),
     );
   }
-  return h((components["table"] ?? "table") as any, {}, children);
+  return resolve(components, "table", {}, children);
 };
 
 const renderTableRow = (
@@ -202,8 +211,9 @@ const renderTableRow = (
   isHeader: boolean,
   highlighter?: MdxHighlighterShape,
 ): VElement =>
-  h(
-    (components["tr"] ?? "tr") as any,
+  resolve(
+    components,
+    "tr",
     {},
     node.children.map((cell) => renderTableCell(cell, components, isHeader, highlighter)),
   );
@@ -243,8 +253,9 @@ const renderNode = (
     case "heading":
       return renderHeading(node as Heading, components, highlighter);
     case "paragraph":
-      return h(
-        (components["p"] ?? "p") as any,
+      return resolve(
+        components,
+        "p",
         {},
         renderChildren((node as Paragraph).children, components, highlighter),
       );
@@ -260,27 +271,22 @@ const renderNode = (
       const n = node as Link;
       const props: Record<string, unknown> = { href: n.url };
       if (n.title) props.title = n.title;
-      return h(
-        (components["a"] ?? "a") as any,
-        props,
-        renderChildren(n.children, components, highlighter),
-      );
+      return resolve(components, "a", props, renderChildren(n.children, components, highlighter));
     }
     case "image": {
       const n = node as Image;
       const props: Record<string, unknown> = { src: n.url, alt: n.alt ?? "" };
       if (n.title) props.title = n.title;
-      return h((components["img"] ?? "img") as any, props);
+      return resolve(components, "img", props);
     }
     case "code":
       return renderCodeBlock(node as Code, components, highlighter);
     case "inlineCode":
-      return h((components["code"] ?? "code") as any, {}, [
-        createTextElement((node as InlineCode).value),
-      ]);
+      return resolve(components, "code", {}, [createTextElement((node as InlineCode).value)]);
     case "blockquote":
-      return h(
-        (components["blockquote"] ?? "blockquote") as any,
+      return resolve(
+        components,
+        "blockquote",
         {},
         renderChildren((node as Blockquote).children, components, highlighter),
       );
@@ -289,7 +295,7 @@ const renderNode = (
     case "listItem":
       return renderListItem(node as ListItem, components, highlighter);
     case "thematicBreak":
-      return h((components["hr"] ?? "hr") as any, {});
+      return resolve(components, "hr", {});
     case "table":
       return renderTable(node as Table, components, highlighter);
     case "tableRow":
@@ -299,7 +305,7 @@ const renderNode = (
     case "html":
       return h("span", { dangerouslySetInnerHTML: (node as Html).value });
     case "break":
-      return h((components["br"] ?? "br") as any, {});
+      return resolve(components, "br", {});
     case "mdxJsxFlowElement":
     case "mdxJsxTextElement":
       return renderMdxJsx(node as unknown as MdxJsxElement, components, highlighter);
