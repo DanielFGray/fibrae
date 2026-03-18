@@ -72,12 +72,12 @@ import { createDom } from "./fiber-commit.js";
  * @typeParam E - Error type for the deferred (use `never` for die mode, stream error type for fail mode)
  */
 export const subscribeComponentStream = <E>(
-  stream: Stream.Stream<VElement, E>,
+  stream: Stream.Stream<VElement | null, E>,
   fiberRef: FiberRefType,
   scope: Scope.Scope,
-): Effect.Effect<Deferred.Deferred<VElement, E>, never, FibraeRuntime> =>
+): Effect.Effect<Deferred.Deferred<VElement | null, E>, never, FibraeRuntime> =>
   Effect.gen(function* () {
-    const firstValueDeferred = yield* Deferred.make<VElement, E>();
+    const firstValueDeferred = yield* Deferred.make<VElement | null, E>();
 
     const subscription = Stream.runForEach(stream, (vElement) =>
       Effect.gen(function* () {
@@ -87,7 +87,9 @@ export const subscribeComponentStream = <E>(
           yield* Deferred.succeed(firstValueDeferred, vElement);
         } else {
           // Subsequent emissions - queue re-render
-          currentFiber.latestStreamValue = Option.some(vElement);
+          // null means "render nothing" — store as Option.none so reconcileChildren gets []
+          currentFiber.latestStreamValue =
+            vElement === null ? Option.none() : Option.some(vElement);
           if (currentFiber.isParked) {
             // Parked under an error boundary — signal recovery
             yield* signalBoundaryRecovery(currentFiber);
@@ -210,15 +212,19 @@ export const updateFunctionComponent = (
         }
         const component = type as (
           props: Record<string, unknown>,
-        ) => VElement | Effect.Effect<VElement> | Stream.Stream<VElement>;
+        ) => VElement | null | Effect.Effect<VElement | null> | Stream.Stream<VElement | null>;
         return Effect.sync(() => component(fiber.props));
       },
     });
 
-    // Fast path: if component returns a plain VElement (not Effect/Stream),
-    // and it's a special element type, just reconcile directly without stream machinery.
-    // This handles wrapper components like Suspense and ErrorBoundary efficiently.
+    // Fast path: if component returns a plain VElement or null (not Effect/Stream),
+    // handle directly without stream machinery.
     if (!Effect.isEffect(output) && !isStream(output)) {
+      // null = render nothing
+      if (output === null) {
+        yield* reconcileChildren(fiber, []);
+        return;
+      }
       const vElement = output;
       if (typeof vElement === "object" && vElement !== null && "type" in vElement) {
         const elementType = vElement.type;
@@ -271,7 +277,7 @@ export const updateFunctionComponent = (
           Effect.gen(function* () {
             const value = yield* Deferred.await(firstValueDeferred);
             const currentFiber = fiberRef.current;
-            currentFiber.latestStreamValue = Option.some(value);
+            currentFiber.latestStreamValue = value === null ? Option.none() : Option.some(value);
             // Subscribe to atom changes — the Effect has completed by now,
             // so accessedAtoms is fully populated from the tracking registry
             yield* subscribeFiberAtoms(currentFiber, accessedAtoms, runtime);
@@ -293,14 +299,15 @@ export const updateFunctionComponent = (
         return;
       } else {
         // Value arrived before threshold - no suspension
-        fiber.latestStreamValue = Option.some(result.value);
-        yield* reconcileChildren(fiber, [result.value]);
+        const v = result.value;
+        fiber.latestStreamValue = v === null ? Option.none() : Option.some(v);
+        yield* reconcileChildren(fiber, v === null ? [] : [v]);
       }
     } else {
       // No threshold (0) - wait indefinitely, no suspension possible
       const firstVElement = yield* Deferred.await(firstValueDeferred);
-      fiber.latestStreamValue = Option.some(firstVElement);
-      yield* reconcileChildren(fiber, [firstVElement]);
+      fiber.latestStreamValue = firstVElement === null ? Option.none() : Option.some(firstVElement);
+      yield* reconcileChildren(fiber, firstVElement === null ? [] : [firstVElement]);
     }
 
     // Subscribe to atom changes

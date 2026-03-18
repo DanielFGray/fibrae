@@ -13,12 +13,18 @@ import { isLiveAtom, type LiveAtom } from "./live/atom.js";
 
 /**
  * Normalize component output to a Stream.
- * Components can return VElement, Effect<VElement, E>, or Stream<VElement, E>.
+ * Components can return VElement, null, Effect<VElement | null, E>, or Stream<VElement, E>.
+ * Null values are preserved through the stream — callers must handle null emissions.
  * Error type is preserved through the conversion.
  */
 export const normalizeToStream = <E>(
-  value: VElement | Effect.Effect<VElement, E, never> | Stream.Stream<VElement, E, never>,
-): Stream.Stream<VElement, E, never> => {
+  value:
+    | VElement
+    | null
+    | Effect.Effect<VElement | null, E, never>
+    | Stream.Stream<VElement | null, E, never>,
+): Stream.Stream<VElement | null, E, never> => {
+  if (value === null) return Stream.succeed(null);
   if (isStream(value)) return value;
   if (Effect.isEffect(value)) return Stream.fromEffect(value);
   return Stream.succeed(value);

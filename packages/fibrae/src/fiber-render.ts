@@ -546,16 +546,15 @@ const hydrateFunctionComponent = (
 
     // Wait for first value
     const childVElement = yield* Deferred.await(firstValueDeferred);
-    fiber.latestStreamValue = Option.some(childVElement);
+    fiber.latestStreamValue = childVElement === null ? Option.none() : Option.some(childVElement);
 
     // Hydrate the child VElement against DOM node
     // Function components render output directly to DOM (no wrapper)
-    const nextCursor = yield* hydrateChildren(
-      fiber,
-      [childVElement],
-      Option.some(domNode),
-      runtime,
-    );
+    // null = render nothing — skip hydration of children
+    const nextCursor =
+      childVElement === null
+        ? Option.some(domNode)
+        : yield* hydrateChildren(fiber, [childVElement], Option.some(domNode), runtime);
 
     // Signal mounted after subtree hydrates
     yield* Deferred.succeed(componentScopeService.mounted, undefined);

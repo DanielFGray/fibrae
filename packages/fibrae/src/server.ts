@@ -200,7 +200,7 @@ const renderVElementToString = (
       const output = yield* outputEffect;
 
       // Normalize to get the VElement
-      let childVElement: VElement;
+      let childVElement: VElement | null;
 
       if (isStream(output)) {
         // Type-erasure boundary: component's R is erased in VNode
@@ -212,11 +212,14 @@ const renderVElementToString = (
       } else if (Effect.isEffect(output)) {
         // Type-erasure boundary: component's R is erased in VNode, requirements
         // are satisfied by the render context. Cast is load-bearing.
-        childVElement = yield* output as Effect.Effect<VElement>;
+        childVElement = yield* output as Effect.Effect<VElement | null>;
       } else {
-        // Plain VElement
-        childVElement = output as VElement;
+        // Plain VElement or null
+        childVElement = output as VElement | null;
       }
+
+      // null = render nothing
+      if (childVElement === null) return "";
 
       // Recursively render the result
       return yield* renderVElementToString(childVElement);
