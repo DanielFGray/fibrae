@@ -80,6 +80,10 @@ export function Link(
     const activeClass = props.activeClass ?? "active";
     const classes = [props.class, isActive ? activeClass : null].filter(Boolean).join(" ");
 
+    // Extract user-provided click handler (lowercase or camelCase)
+    const userOnClick =
+      (props as Record<string, unknown>).onclick ?? (props as Record<string, unknown>).onClick;
+
     // Click handler - prevent default and use Navigator for SPA navigation
     const handleClick = (e: MouseEvent) => {
       // Only intercept left clicks without modifier keys
@@ -87,6 +91,10 @@ export function Link(
         return;
       }
       e.preventDefault();
+      // Call user's onclick handler if provided
+      if (typeof userOnClick === "function") {
+        userOnClick(e);
+      }
       return navigator.go(props.href, {
         search: props.search,
         replace: props.replace,
@@ -109,8 +117,10 @@ export function Link(
       activeClass: _activeClass,
       class: _className,
       children: _children,
+      onclick: _onclick,
+      onClick: _onClick,
       ...anchorProps
-    } = props;
+    } = props as LinkProps & { onclick?: unknown; onClick?: unknown };
 
     return (
       <a {...anchorProps} href={fullHref} class={classes || undefined} onClick={handleClick}>
