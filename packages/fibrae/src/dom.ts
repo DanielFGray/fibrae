@@ -59,6 +59,35 @@ export const isProperty = (key: string) =>
   key !== "dangerouslySetInnerHTML" &&
   !isEvent(key);
 
+/**
+ * Check whether an event prop name is camelCase (e.g. "onClick" vs "onclick").
+ * Any uppercase letter after "on" signals camelCase.
+ */
+const isCamelCaseEvent = (key: string) => /^on[A-Z]/.test(key);
+
+/**
+ * Deduplicate event props that map to the same DOM event type.
+ *
+ * Both `onclick` and `onClick` lower-case to event type `click`. If both
+ * are present, the camelCase variant wins (more idiomatic in JSX).
+ * Returns an array of [propName, handler] pairs with at most one entry per
+ * event type.
+ */
+export const normalizeEventProps = (props: Record<string, unknown>): Array<[string, unknown]> => {
+  // eventType -> [propName, handler] — camelCase entries overwrite lowercase
+  const byType = new Map<string, [string, unknown]>();
+  for (const key of Object.keys(props)) {
+    if (!isEvent(key) || typeof props[key] !== "function") continue;
+    const eventType = key.toLowerCase().substring(2);
+    const existing = byType.get(eventType);
+    // If no existing entry, or new entry is camelCase (preferred), set it
+    if (!existing || isCamelCaseEvent(key)) {
+      byType.set(eventType, [key, props[key]]);
+    }
+  }
+  return Array.from(byType.values());
+};
+
 const unitlessProperties = new Set([
   "animationIterationCount",
   "boxFlex",
@@ -274,19 +303,17 @@ export const attachEventListeners = (
   const store = listenerStore;
   const stored = store?.get(el) ?? {};
 
-  Object.entries(props)
-    .filter(([key, handler]) => isEvent(key) && typeof handler === "function")
-    .forEach(([key, handler]) => {
-      const eventType = key.toLowerCase().substring(2);
-      const wrapper = createEventWrapper(
-        handler as (e: Event) => unknown,
-        eventType,
-        runtime,
-        onError,
-      );
-      el.addEventListener(eventType, wrapper);
-      stored[eventType] = wrapper;
-    });
+  for (const [key, handler] of normalizeEventProps(props)) {
+    const eventType = key.toLowerCase().substring(2);
+    const wrapper = createEventWrapper(
+      handler as (e: Event) => unknown,
+      eventType,
+      runtime,
+      onError,
+    );
+    el.addEventListener(eventType, wrapper);
+    stored[eventType] = wrapper;
+  }
 
   store?.set(el, stored);
 };

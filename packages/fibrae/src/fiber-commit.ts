@@ -16,9 +16,15 @@ import * as Exit from "effect/Exit";
 import * as Deferred from "effect/Deferred";
 
 import type { Fiber } from "./shared.js";
-import { isEvent, isProperty } from "./shared.js";
+import { isProperty } from "./shared.js";
 import { FibraeRuntime } from "./runtime.js";
-import { setDomProperty, createEventWrapper, SVG_NAMESPACE, SVG_TAGS } from "./dom.js";
+import {
+  setDomProperty,
+  createEventWrapper,
+  normalizeEventProps,
+  SVG_NAMESPACE,
+  SVG_TAGS,
+} from "./dom.js";
 import { findDomParent } from "./fiber-tree.js";
 import { handleFiberError } from "./fiber-boundary.js";
 
@@ -145,19 +151,25 @@ export const updateDom = (
     const el = element;
     const stored = stateSnapshot.listenerStore.get(el) ?? {};
 
-    // Remove old event listeners
-    const eventsToRemove = Object.keys(prevProps)
-      .filter(isEvent)
-      .filter((key) => !(key in nextProps) || isNew(prevProps, nextProps)(key));
+    // Normalize event props so onClick and onclick don't create duplicate
+    // listeners for the same DOM event type. CamelCase wins when both exist.
+    const prevEvents = new Map(
+      normalizeEventProps(prevProps).map(([k, v]) => [k.toLowerCase().substring(2), v]),
+    );
+    const nextEvents = new Map(
+      normalizeEventProps(nextProps).map(([k, v]) => [k.toLowerCase().substring(2), v]),
+    );
 
-    eventsToRemove.forEach((name) => {
-      const eventType = name.toLowerCase().substring(2);
-      const wrapper = stored[eventType];
-      if (wrapper) {
-        el.removeEventListener(eventType, wrapper);
-        delete stored[eventType];
+    // Remove old event listeners (removed or changed)
+    for (const [eventType, handler] of prevEvents) {
+      if (!nextEvents.has(eventType) || nextEvents.get(eventType) !== handler) {
+        const wrapper = stored[eventType];
+        if (wrapper) {
+          el.removeEventListener(eventType, wrapper);
+          delete stored[eventType];
+        }
       }
-    });
+    }
 
     // Remove properties that were in prevProps but not in nextProps
     Object.keys(prevProps)
@@ -189,15 +201,11 @@ export const updateDom = (
         }
       });
 
-    // Add new event listeners
-    Object.keys(nextProps)
-      .filter(isEvent)
-      .filter(isNew(prevProps, nextProps))
-      .forEach((name) => {
-        const eventType = name.toLowerCase().substring(2);
-        const handler = nextProps[name] as (event: Event) => unknown;
+    // Add new event listeners (new or changed)
+    for (const [eventType, handler] of nextEvents) {
+      if (!prevEvents.has(eventType) || prevEvents.get(eventType) !== handler) {
         const wrapper = createEventWrapper(
-          handler,
+          handler as (event: Event) => unknown,
           eventType,
           runtime,
           ownerFiber ? (error) => handleFiberError(ownerFiber, error) : undefined,
@@ -209,7 +217,8 @@ export const updateDom = (
         }
         el.addEventListener(eventType, wrapper);
         stored[eventType] = wrapper;
-      });
+      }
+    }
 
     stateSnapshot.listenerStore.set(el, stored);
   });
