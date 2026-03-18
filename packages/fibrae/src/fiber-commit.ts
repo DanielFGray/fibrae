@@ -48,6 +48,33 @@ const getFirstDomNode = (fiber: Fiber): Node | null => {
 };
 
 /**
+ * Collect all direct DOM descendants of a fiber in tree order.
+ * Descends through non-DOM fibers (function components, fragments)
+ * but stops at DOM nodes (those are children of that DOM node, not ours).
+ */
+const collectChildDomNodes = (fiber: Fiber): Node[] => {
+  const result: Node[] = [];
+  const walk = (f: Fiber) => {
+    if (Option.isSome(f.dom)) {
+      result.push(f.dom.value);
+      return; // Don't descend — nested DOM nodes belong to this element
+    }
+    let child = f.child;
+    while (Option.isSome(child)) {
+      walk(child.value);
+      child = child.value.sibling;
+    }
+  };
+  // Walk all children of the given fiber
+  let child = fiber.child;
+  while (Option.isSome(child)) {
+    walk(child.value);
+    child = child.value.sibling;
+  }
+  return result;
+};
+
+/**
  * Find the first DOM node that should come after this fiber in the DOM.
  *
  * Walks the sibling chain looking for a fiber with a DOM node. If no sibling
@@ -74,6 +101,41 @@ const findNextSiblingDom = (fiber: Fiber): Node | null => {
     current = parent;
   }
   return null;
+};
+
+/**
+ * Check whether any child fiber in the sibling chain has a key prop.
+ */
+const hasKeyedChildren = (fiber: Fiber): boolean => {
+  let child = fiber.child;
+  while (Option.isSome(child)) {
+    if (child.value.props.key != null) return true;
+    child = child.value.sibling;
+  }
+  return false;
+};
+
+/**
+ * Reorder DOM children to match fiber order.
+ *
+ * After all child subtrees are committed (props updated, new nodes inserted,
+ * deletions processed), the DOM children may be out of order when keyed
+ * elements have been rearranged. This function walks the child fiber chain
+ * and ensures the DOM children match the expected order.
+ *
+ * Only performs actual DOM mutations for out-of-order nodes.
+ */
+const reorderChildren = (domParent: Node, parentFiber: Fiber): void => {
+  const expectedDoms = collectChildDomNodes(parentFiber);
+  const childNodes = domParent.childNodes;
+
+  for (let i = 0; i < expectedDoms.length; i++) {
+    const expected = expectedDoms[i];
+    if (childNodes[i] !== expected) {
+      // Insert before the node currently at this position, or append
+      domParent.insertBefore(expected, childNodes[i] || null);
+    }
+  }
 };
 
 // =============================================================================
@@ -302,7 +364,7 @@ export const commitWork = (
   runtime: FibraeRuntime,
 ): Effect.Effect<void, never, FibraeRuntime> =>
   Effect.gen(function* () {
-    // KEY INSIGHT: If fiber has no DOM (function component), just process children
+    // Function component / fragment — no DOM node of its own.
     if (Option.isNone(fiber.dom)) {
       if (Option.isSome(fiber.child)) {
         yield* commitWork(fiber.child.value, runtime);
@@ -369,16 +431,6 @@ export const commitWork = (
       );
       if (Option.isSome(fiber.dom)) {
         yield* updateDom(fiber.dom.value, prevProps, fiber.props, fiber, runtime);
-
-        // Keyed fibers matched by key may have changed position.
-        // Reposition DOM node to match the new fiber order.
-        if (fiber.props.key != null) {
-          const refNode = findNextSiblingDom(fiber);
-          domParent.insertBefore(
-            fiber.dom.value,
-            refNode && refNode.parentNode === domParent ? refNode : null,
-          );
-        }
       }
     } else if (tag === "DELETION") {
       yield* commitDeletion(fiber, domParent);
@@ -388,6 +440,14 @@ export const commitWork = (
     // Continue with children and siblings
     if (Option.isSome(fiber.child)) {
       yield* commitWork(fiber.child.value, runtime);
+    }
+
+    // After all children are committed, reorder DOM children if this fiber
+    // has keyed children. This batch approach is correct because it runs
+    // after all child insertions/deletions/updates, avoiding the cascading
+    // DOM mutation issue of per-fiber sequential insertBefore.
+    if (Option.isSome(fiber.dom) && hasKeyedChildren(fiber)) {
+      reorderChildren(fiber.dom.value, fiber);
     }
 
     // After children are committed, apply deferred properties.
