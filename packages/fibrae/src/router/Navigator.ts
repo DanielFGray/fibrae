@@ -16,10 +16,35 @@ import * as Effect from "effect/Effect";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import { Atom, Registry as AtomRegistry } from "@effect-atom/atom";
 import { History, type HistoryLocation } from "./History.js";
 import type { Router } from "./Router.js";
 import { parseSearchParams, buildSearchString, stripBasePath } from "./utils.js";
+
+// =============================================================================
+// Redirect
+// =============================================================================
+
+/**
+ * Tagged error for redirecting from loaders, actions, or middleware.
+ *
+ * Throw this from a loader to redirect before the component renders:
+ * ```typescript
+ * loader: () => Effect.gen(function* () {
+ *   const session = yield* getSession()
+ *   if (!session) return yield* new Redirect({ to: "/login" })
+ *   return yield* fetchData()
+ * })
+ * ```
+ *
+ * The router catches Redirect before the error reaches ErrorBoundary
+ * and navigates to the target path.
+ */
+export class Redirect extends Schema.TaggedError<Redirect>()("Redirect", {
+  to: Schema.String,
+  replace: Schema.optional(Schema.Boolean),
+}) {}
 
 // =============================================================================
 // Types

@@ -59,7 +59,7 @@ export { History as HistoryTag, BrowserHistoryLive, MemoryHistoryLive } from "./
 
 // Re-export Navigator types and service tag
 export type { CurrentRoute, NavigateOptions, NavigatorService } from "./Navigator.js";
-export { Navigator as NavigatorTag, NavigatorLive } from "./Navigator.js";
+export { Navigator as NavigatorTag, NavigatorLive, Redirect } from "./Navigator.js";
 
 // Type registration for module augmentation
 export type { RegisteredRouter, ValidHref, PatternToHref } from "./register.js";

@@ -43,7 +43,7 @@ import * as Context from "effect/Context";
 import * as Schema from "effect/Schema";
 import * as Cause from "effect/Cause";
 import { Registry as AtomRegistry } from "@effect-atom/atom";
-import { Navigator } from "./Navigator.js";
+import { Navigator, Redirect } from "./Navigator.js";
 import { RouterHandlers, type SubmissionState } from "./RouterBuilder.js";
 import { RouterStateAtom, type RouterState } from "./RouterState.js";
 import type { VElement } from "../shared.js";
@@ -236,9 +236,19 @@ export function RouterOutlet(): Stream.Stream<
 
             return element;
           }).pipe(
-            // Catch per-route errors so the stream stays alive for navigation recovery.
-            // Emit a component that re-throws during render — ErrorBoundary catches it.
-            Effect.catchAllCause((cause) => Effect.succeed(ErrorBubble(cause))),
+            // Catch all errors: handle Redirect by navigating, bubble everything else
+            // to ErrorBoundary. Redirect is checked structurally because the loader's
+            // error type is erased to unknown at the type-erasure boundary.
+            Effect.catchAllCause((cause) => {
+              const error = Cause.squash(cause);
+              if (error instanceof Redirect) {
+                return Effect.gen(function* () {
+                  yield* navigator.go(error.to, { replace: error.replace ?? true });
+                  return (<div />) as VElement;
+                });
+              }
+              return Effect.succeed(ErrorBubble(cause));
+            }),
           ),
         ),
       );
