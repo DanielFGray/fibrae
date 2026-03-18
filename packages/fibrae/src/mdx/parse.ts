@@ -24,7 +24,10 @@ export interface MdxHeading {
 export interface ParsedMdx {
   readonly frontmatter: Record<string, unknown>;
   readonly headings: ReadonlyArray<MdxHeading>;
-  readonly render: (components?: MdxComponents, highlighter?: MdxHighlighterShape) => VElement;
+  readonly render: (
+    components?: MdxComponents,
+    highlighter?: MdxHighlighterShape,
+  ) => Effect.Effect<VElement, unknown, unknown>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

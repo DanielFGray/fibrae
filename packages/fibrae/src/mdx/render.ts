@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect";
 import { h, createTextElement } from "../h.js";
 import type { VElement, VChild } from "../shared.js";
 import { getTextContent, slugify } from "./parse.js";
@@ -33,29 +34,49 @@ import type {
 // Types
 // =============================================================================
 
-/** Map of element names to component overrides */
-export type MdxComponents = Partial<Record<string, (props: Record<string, unknown>) => VElement>>;
+/** Map of element names to component overrides (may return VElement or Effect<VElement>) */
+export type MdxComponents = Partial<
+  Record<
+    string,
+    (props: Record<string, unknown>) => VElement | Effect.Effect<VElement, unknown, unknown>
+  >
+>;
+
+/** Shape of a highlighter — matches MdxHighlighter service interface */
+export interface MdxHighlighterShape {
+  readonly highlight: (
+    code: string,
+    lang: string,
+    meta?: string,
+  ) => VElement | Effect.Effect<VElement, unknown, unknown>;
+}
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+/** Normalize a value that may be VElement or Effect<VElement> into Effect<VElement> */
+const normalizeToEffect = (
+  value: VElement | Effect.Effect<VElement, unknown, unknown>,
+): Effect.Effect<VElement, unknown, unknown> =>
+  Effect.isEffect(value) ? value : Effect.succeed(value);
 
 /**
  * Resolve a component override or fall back to a plain HTML tag.
- * MdxComponents constrains overrides to return VElement, so the result
- * is always VElement regardless of whether a string or function is used.
+ * Returns Effect because overrides may return Effect<VElement>.
  */
 const resolve = (
   components: MdxComponents,
   tag: string,
   props: Record<string, unknown>,
   children?: VChild[],
-): VElement => {
+): Effect.Effect<VElement, unknown, unknown> => {
   const override = components[tag];
-  if (override) return override({ ...props, children: children ?? [] });
-  return h(tag, props, children ?? []);
+  if (override) {
+    return normalizeToEffect(override({ ...props, children: children ?? [] }));
+  }
+  return Effect.succeed(h(tag, props, children ?? []));
 };
-
-/** Shape of a highlighter — matches MdxHighlighter service interface */
-export interface MdxHighlighterShape {
-  readonly highlight: (code: string, lang: string, meta?: string) => VElement;
-}
 
 // =============================================================================
 // MDX JSX types (from remark-mdx, defined here to avoid hard dep on mdast-util-mdx-jsx)
@@ -95,15 +116,18 @@ const renderMdxJsx = (
   node: MdxJsxElement,
   components: MdxComponents,
   highlighter?: MdxHighlighterShape,
-): VElement => {
+): Effect.Effect<VElement, unknown, unknown> => {
   const name = node.name;
   if (!name) {
     // Fragment: <>{children}</>
-    return h("FRAGMENT", {}, renderChildren(node.children, components, highlighter));
+    return Effect.map(renderChildren(node.children, components, highlighter), (children) =>
+      h("FRAGMENT", {}, children),
+    );
   }
   const props = mdxAttrsToProps(node.attributes);
-  const children = renderChildren(node.children, components, highlighter);
-  return resolve(components, name, props, children);
+  return Effect.flatMap(renderChildren(node.children, components, highlighter), (children) =>
+    resolve(components, name, props, children),
+  );
 };
 
 // =============================================================================
@@ -114,25 +138,22 @@ const renderChildren = (
   children: ReadonlyArray<RootContent>,
   components: MdxComponents,
   highlighter?: MdxHighlighterShape,
-): VChild[] =>
-  children.reduce<VChild[]>((acc, child) => {
-    const el = renderNode(child, components, highlighter);
-    if (el !== null) acc.push(el);
-    return acc;
-  }, []);
+): Effect.Effect<VChild[], unknown, unknown> =>
+  Effect.map(
+    Effect.forEach(children, (child) => renderNode(child, components, highlighter)),
+    (results) => results.filter((el): el is VElement => el !== null),
+  );
 
 const renderHeading = (
   node: Heading,
   components: MdxComponents,
   highlighter?: MdxHighlighterShape,
-): VElement => {
+): Effect.Effect<VElement, unknown, unknown> => {
   const tag = `h${node.depth}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
   const text = getTextContent(node);
   const slug = slugify(text);
-  return h(
-    (components[tag] ?? tag) as any,
-    { id: slug },
-    renderChildren(node.children, components, highlighter),
+  return Effect.map(renderChildren(node.children, components, highlighter), (children) =>
+    h((components[tag] ?? tag) as any, { id: slug }, children),
   );
 };
 
@@ -140,10 +161,10 @@ const renderCodeBlock = (
   node: Code,
   components: MdxComponents,
   highlighter?: MdxHighlighterShape,
-): VElement => {
+): Effect.Effect<VElement, unknown, unknown> => {
   // User component overrides take priority over highlighter
   if (!components["pre"] && !components["code"] && highlighter && node.lang) {
-    return highlighter.highlight(node.value, node.lang, node.meta ?? undefined);
+    return normalizeToEffect(highlighter.highlight(node.value, node.lang, node.meta ?? undefined));
   }
 
   const codeProps: Record<string, unknown> = {};
@@ -153,22 +174,22 @@ const renderCodeBlock = (
   }
   if (node.meta) codeProps["data-meta"] = node.meta;
 
-  const codeEl = resolve(components, "code", codeProps, [createTextElement(node.value)]);
-  return resolve(components, "pre", {}, [codeEl]);
+  return Effect.flatMap(
+    resolve(components, "code", codeProps, [createTextElement(node.value)]),
+    (codeEl) => resolve(components, "pre", {}, [codeEl]),
+  );
 };
 
 const renderList = (
   node: List,
   components: MdxComponents,
   highlighter?: MdxHighlighterShape,
-): VElement => {
+): Effect.Effect<VElement, unknown, unknown> => {
   const tag = node.ordered ? "ol" : "ul";
   const props: Record<string, unknown> = {};
   if (node.ordered && node.start != null && node.start !== 1) props.start = node.start;
-  return h(
-    (components[tag] ?? tag) as any,
-    props,
-    renderChildren(node.children, components, highlighter),
+  return Effect.flatMap(renderChildren(node.children, components, highlighter), (children) =>
+    resolve(components, tag, props, children),
   );
 };
 
@@ -176,33 +197,34 @@ const renderListItem = (
   node: ListItem,
   components: MdxComponents,
   highlighter?: MdxHighlighterShape,
-): VElement => {
-  const children = renderChildren(node.children, components, highlighter);
-  if (node.checked != null) {
-    const checkbox = h("input", { type: "checkbox", checked: node.checked, disabled: true });
-    return resolve(components, "li", { class: "task-list-item" }, [checkbox, ...children]);
-  }
-  return resolve(components, "li", {}, children);
-};
+): Effect.Effect<VElement, unknown, unknown> =>
+  Effect.flatMap(renderChildren(node.children, components, highlighter), (children) => {
+    if (node.checked != null) {
+      const checkbox = h("input", { type: "checkbox", checked: node.checked, disabled: true });
+      return resolve(components, "li", { class: "task-list-item" }, [checkbox, ...children]);
+    }
+    return resolve(components, "li", {}, children);
+  });
 
 const renderTable = (
   node: Table,
   components: MdxComponents,
   highlighter?: MdxHighlighterShape,
-): VElement => {
+): Effect.Effect<VElement, unknown, unknown> => {
   const [headerRow, ...bodyRows] = node.children;
-  const thead = h("thead", {}, [renderTableRow(headerRow!, components, true, highlighter)]);
-  const children: VChild[] = [thead];
-  if (bodyRows.length > 0) {
-    children.push(
-      h(
-        "tbody",
-        {},
-        bodyRows.map((row) => renderTableRow(row, components, false, highlighter)),
-      ),
+  return Effect.flatMap(renderTableRow(headerRow!, components, true, highlighter), (theadRow) => {
+    const thead = h("thead", {}, [theadRow]);
+    if (bodyRows.length === 0) {
+      return resolve(components, "table", {}, [thead]);
+    }
+    return Effect.flatMap(
+      Effect.forEach(bodyRows, (row) => renderTableRow(row, components, false, highlighter)),
+      (tbodyRows) => {
+        const tbody = h("tbody", {}, tbodyRows);
+        return resolve(components, "table", {}, [thead, tbody]);
+      },
     );
-  }
-  return resolve(components, "table", {}, children);
+  });
 };
 
 const renderTableRow = (
@@ -210,12 +232,12 @@ const renderTableRow = (
   components: MdxComponents,
   isHeader: boolean,
   highlighter?: MdxHighlighterShape,
-): VElement =>
-  resolve(
-    components,
-    "tr",
-    {},
-    node.children.map((cell) => renderTableCell(cell, components, isHeader, highlighter)),
+): Effect.Effect<VElement, unknown, unknown> =>
+  Effect.flatMap(
+    Effect.forEach(node.children, (cell) =>
+      renderTableCell(cell, components, isHeader, highlighter),
+    ),
+    (cells) => resolve(components, "tr", {}, cells),
   );
 
 const renderTableCell = (
@@ -223,12 +245,10 @@ const renderTableCell = (
   components: MdxComponents,
   isHeader: boolean,
   highlighter?: MdxHighlighterShape,
-): VElement => {
+): Effect.Effect<VElement, unknown, unknown> => {
   const tag = isHeader ? "th" : "td";
-  return h(
-    (components[tag] ?? tag) as any,
-    {},
-    renderChildren(node.children, components, highlighter),
+  return Effect.map(renderChildren(node.children, components, highlighter), (children) =>
+    h((components[tag] ?? tag) as any, {}, children),
   );
 };
 
@@ -237,8 +257,10 @@ const inline = (
   children: ReadonlyArray<RootContent>,
   components: MdxComponents,
   highlighter?: MdxHighlighterShape,
-): VElement =>
-  h((components[tag] ?? tag) as any, {}, renderChildren(children, components, highlighter));
+): Effect.Effect<VElement, unknown, unknown> =>
+  Effect.map(renderChildren(children, components, highlighter), (resolved) =>
+    h((components[tag] ?? tag) as any, {}, resolved),
+  );
 
 // =============================================================================
 // MDAST main dispatch
@@ -248,19 +270,17 @@ const renderNode = (
   node: RootContent,
   components: MdxComponents,
   highlighter?: MdxHighlighterShape,
-): VElement | null => {
+): Effect.Effect<VElement | null, unknown, unknown> => {
   switch (node.type) {
     case "heading":
       return renderHeading(node as Heading, components, highlighter);
     case "paragraph":
-      return resolve(
-        components,
-        "p",
-        {},
+      return Effect.flatMap(
         renderChildren((node as Paragraph).children, components, highlighter),
+        (children) => resolve(components, "p", {}, children),
       );
     case "text":
-      return createTextElement((node as Text).value);
+      return Effect.succeed(createTextElement((node as Text).value));
     case "emphasis":
       return inline("em", (node as Emphasis).children, components, highlighter);
     case "strong":
@@ -271,7 +291,9 @@ const renderNode = (
       const n = node as Link;
       const props: Record<string, unknown> = { href: n.url };
       if (n.title) props.title = n.title;
-      return resolve(components, "a", props, renderChildren(n.children, components, highlighter));
+      return Effect.flatMap(renderChildren(n.children, components, highlighter), (children) =>
+        resolve(components, "a", props, children),
+      );
     }
     case "image": {
       const n = node as Image;
@@ -284,11 +306,9 @@ const renderNode = (
     case "inlineCode":
       return resolve(components, "code", {}, [createTextElement((node as InlineCode).value)]);
     case "blockquote":
-      return resolve(
-        components,
-        "blockquote",
-        {},
+      return Effect.flatMap(
         renderChildren((node as Blockquote).children, components, highlighter),
+        (children) => resolve(components, "blockquote", {}, children),
       );
     case "list":
       return renderList(node as List, components, highlighter);
@@ -303,7 +323,7 @@ const renderNode = (
     case "tableCell":
       return renderTableCell(node as TableCell, components, false, highlighter);
     case "html":
-      return h("span", { dangerouslySetInnerHTML: (node as Html).value });
+      return Effect.succeed(h("span", { dangerouslySetInnerHTML: (node as Html).value }));
     case "break":
       return resolve(components, "br", {});
     case "mdxJsxFlowElement":
@@ -313,23 +333,23 @@ const renderNode = (
     case "mdxTextExpression":
     case "mdxjsEsm":
       // JS expressions and import/export — skip (would require eval)
-      return null;
+      return Effect.succeed(null);
     case "yaml":
     case "definition":
     case "footnoteDefinition":
     case "footnoteReference":
     case "linkReference":
     case "imageReference":
-      return null;
+      return Effect.succeed(null);
     default: {
       // Custom node types from remark plugins (e.g. math, inlineMath)
       // Type-erasure boundary: remark plugins can add arbitrary node types not in RootContent
       const unknownNode = node as unknown as { type: string };
       const customComponent = components[unknownNode.type];
       if (customComponent) {
-        return customComponent(node as unknown as Record<string, unknown>);
+        return normalizeToEffect(customComponent(node as unknown as Record<string, unknown>));
       }
-      return null;
+      return Effect.succeed(null);
     }
   }
 };
@@ -344,7 +364,10 @@ export const renderMdast = (
   tree: Root,
   components: MdxComponents = {},
   highlighter?: MdxHighlighterShape,
-): VElement => h("FRAGMENT" as any, {}, renderChildren(tree.children, components, highlighter));
+): Effect.Effect<VElement, unknown, unknown> =>
+  Effect.map(renderChildren(tree.children, components, highlighter), (children) =>
+    h("FRAGMENT" as any, {}, children),
+  );
 
 // =============================================================================
 // HAST Rendering
@@ -387,29 +410,30 @@ const renderHastChildren = (
   children: ReadonlyArray<HastRootContent>,
   components: MdxComponents,
   highlighter?: MdxHighlighterShape,
-): VChild[] =>
-  children.reduce<VChild[]>((acc, child) => {
-    const el = renderHastNode(child, components, highlighter);
-    if (el !== null) acc.push(el);
-    return acc;
-  }, []);
+): Effect.Effect<VChild[], unknown, unknown> =>
+  Effect.map(
+    Effect.forEach(children, (child) => renderHastNode(child, components, highlighter)),
+    (results) => results.filter((el): el is VElement => el !== null),
+  );
 
 const renderHastNode = (
   node: HastRootContent,
   components: MdxComponents,
   highlighter?: MdxHighlighterShape,
-): VElement | null => {
+): Effect.Effect<VElement | null, unknown, unknown> => {
   switch (node.type) {
     case "text":
-      return createTextElement(node.value);
+      return Effect.succeed(createTextElement(node.value));
     case "comment":
-      return null;
+      return Effect.succeed(null);
     case "element": {
       // Code block highlighting — user overrides take priority
       if (!components["pre"] && !components["code"] && highlighter) {
         const codeBlock = detectCodeBlock(node);
         if (codeBlock) {
-          return highlighter.highlight(codeBlock.code, codeBlock.lang, codeBlock.meta);
+          return normalizeToEffect(
+            highlighter.highlight(codeBlock.code, codeBlock.lang, codeBlock.meta),
+          );
         }
       }
 
@@ -427,11 +451,12 @@ const renderHastNode = (
         }
       }
 
-      const children = renderHastChildren(node.children, components, highlighter);
-      return h((components[tag] ?? tag) as any, props, children);
+      return Effect.map(renderHastChildren(node.children, components, highlighter), (children) =>
+        h((components[tag] ?? tag) as any, props, children),
+      );
     }
     default:
-      return null;
+      return Effect.succeed(null);
   }
 };
 
@@ -445,4 +470,7 @@ export const renderHast = (
   tree: HastRoot,
   components: MdxComponents = {},
   highlighter?: MdxHighlighterShape,
-): VElement => h("FRAGMENT" as any, {}, renderHastChildren(tree.children, components, highlighter));
+): Effect.Effect<VElement, unknown, unknown> =>
+  Effect.map(renderHastChildren(tree.children, components, highlighter), (children) =>
+    h("FRAGMENT" as any, {}, children),
+  );

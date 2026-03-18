@@ -88,8 +88,13 @@ export class MdxHighlighter extends Context.Tag("fibrae/MdxHighlighter")<
   MdxHighlighterShape
 >() {
   /** Create a highlighter from a highlight function */
-  static readonly make = (highlight: (code: string, lang: string, meta?: string) => VElement) =>
-    Layer.succeed(MdxHighlighter, { highlight });
+  static readonly make = (
+    highlight: (
+      code: string,
+      lang: string,
+      meta?: string,
+    ) => VElement | Effect.Effect<VElement, unknown, unknown>,
+  ) => Layer.succeed(MdxHighlighter, { highlight });
 }
 
 // =============================================================================
@@ -185,5 +190,5 @@ export const MDX = ({ content, components }: MDXProps) =>
     const merged: MdxComponents = { ...serviceComponents, ...components };
 
     const parsed = processor.parse(content);
-    return parsed.render(merged, Option.getOrUndefined(highlighterOption));
+    return yield* parsed.render(merged, Option.getOrUndefined(highlighterOption));
   });
