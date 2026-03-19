@@ -431,6 +431,14 @@ export const commitWork = (
       );
       if (Option.isSome(fiber.dom)) {
         yield* updateDom(fiber.dom.value, prevProps, fiber.props, fiber, runtime);
+
+        // Handle ref changes: clean up old ref, apply new ref
+        const prevRef = (prevProps as Record<string, unknown>).ref;
+        const nextRef = fiber.props.ref;
+        if (prevRef !== nextRef) {
+          if (prevRef) setRef(prevRef, null);
+          if (nextRef) setRef(nextRef, fiber.dom.value);
+        }
       }
     } else if (tag === "DELETION") {
       yield* commitDeletion(fiber, domParent);
