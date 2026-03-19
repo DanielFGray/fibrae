@@ -22,7 +22,8 @@ export type { VElement as VNode } from "./shared.js";
 export { RenderError, StreamError, EventHandlerError, type ComponentError } from "./shared.js";
 
 // Component lifecycle
-export { ComponentScope } from "./shared.js";
+export { ComponentScope, createRef } from "./shared.js";
+export type { Ref } from "./shared.js";
 
 // Hydration state service
 export { HydrationState, HydrationStateLive, HydrationStateEmpty } from "./hydration-state.js";

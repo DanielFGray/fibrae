@@ -304,9 +304,12 @@ type NarrowedEventNames = keyof NarrowedEventHandlers<HTMLElement>;
  * typed event handlers, and narrowed form-element events.
  * Narrowed events override the generic ones to avoid union parameter types.
  */
-type HTMLElementProps<E extends HTMLElement> = BaseHTMLProps &
+type HTMLElementProps<E extends HTMLElement> = Omit<BaseHTMLProps, "ref"> &
   Omit<EventHandlerProps, NarrowedEventNames> &
-  NarrowedEventHandlers<E>;
+  NarrowedEventHandlers<E> & {
+    /** Ref narrowed to the specific element type */
+    ref?: ((el: E) => void) | { current: E | null };
+  };
 
 /**
  * Element-specific attribute types for elements with unique properties.
@@ -731,7 +734,11 @@ type BaseSVGProps = {
  * SVG element props = common SVG attributes + event handlers.
  * All SVG elements share the same prop type — no per-element specialization needed.
  */
-type SVGElementProps = BaseSVGProps & EventHandlerProps;
+type SVGElementProps<E extends SVGElement = SVGElement> = Omit<BaseSVGProps, "ref"> &
+  EventHandlerProps & {
+    /** Ref narrowed to the specific SVG element type */
+    ref?: ((el: E) => void) | { current: E | null };
+  };
 
 /**
  * SVG elements derived from SVGElementTagNameMap.
@@ -740,7 +747,9 @@ type SVGElementProps = BaseSVGProps & EventHandlerProps;
  * JSX users expect in practice.
  */
 type SVGElements = {
-  [K in Exclude<keyof SVGElementTagNameMap, keyof HTMLElementTagNameMap>]: SVGElementProps;
+  [K in Exclude<keyof SVGElementTagNameMap, keyof HTMLElementTagNameMap>]: SVGElementProps<
+    SVGElementTagNameMap[K]
+  >;
 };
 
 // Provide properly typed JSX namespace

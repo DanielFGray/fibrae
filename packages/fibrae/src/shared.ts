@@ -29,7 +29,7 @@ export type { Cause, Types };
  * const JsonEditor = () =>
  *   Effect.gen(function* () {
  *     const { scope, mounted } = yield* ComponentScope;
- *     const containerRef = { current: null as HTMLDivElement | null };
+ *     const containerRef = createRef<HTMLDivElement>();
  *
  *     // Fork an effect that waits for mount, then initializes
  *     yield* pipe(
@@ -42,7 +42,7 @@ export type { Cause, Types };
  *       Scope.extend(scope)
  *     );
  *
- *     return <div ref={el => containerRef.current = el} />;
+ *     return <div ref={containerRef} />;
  *   });
  * ```
  *
@@ -67,6 +67,42 @@ export class ComponentScope extends Context.Tag("fibrae/ComponentScope")<
   ComponentScope,
   { scope: Scope.Scope; mounted: Deferred.Deferred<void> }
 >() {}
+
+// =============================================================================
+// Ref
+// =============================================================================
+
+/**
+ * Mutable ref container for DOM elements.
+ *
+ * Type parameter `E` is inferred from JSX context:
+ * - `<div ref={ref}>` expects `Ref<HTMLDivElement>`
+ * - `<input ref={ref}>` expects `Ref<HTMLInputElement>`
+ * - `<svg ref={ref}>` expects `Ref<SVGSVGElement>`
+ *
+ * @example
+ * ```tsx
+ * const MyComponent = () =>
+ *   Effect.gen(function* () {
+ *     const divRef = createRef<HTMLDivElement>();
+ *     return <div ref={divRef}>hello</div>;
+ *   });
+ * ```
+ */
+export interface Ref<E extends Element = Element> {
+  current: E | null;
+}
+
+/**
+ * Create a typed ref. The type parameter is inferred when passed to JSX:
+ *
+ * ```tsx
+ * const ref = createRef<HTMLDivElement>();
+ * <div ref={ref} />  // OK
+ * <span ref={ref} /> // Type error: HTMLSpanElement is not HTMLDivElement
+ * ```
+ */
+export const createRef = <E extends Element = Element>(): Ref<E> => ({ current: null });
 
 /**
  * Primitive element types: HTML tags, text nodes, fragments, suspense, or boundary

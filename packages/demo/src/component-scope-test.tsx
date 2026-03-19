@@ -6,7 +6,7 @@ import * as Logger from "effect/Logger";
 import * as LogLevel from "effect/LogLevel";
 import * as BrowserPlatform from "@effect/platform-browser";
 import { pipe } from "effect/Function";
-import { Atom, AtomRegistry, ComponentScope, render } from "fibrae";
+import { Atom, AtomRegistry, ComponentScope, createRef, render } from "fibrae";
 
 // Expose cleanup tracking to window for Cypress
 declare global {
@@ -100,8 +100,8 @@ const MultiFinalizer = () =>
 const MountedComponent = () =>
   Effect.gen(function* () {
     const { scope, mounted } = yield* ComponentScope;
-    // Object ref pattern (function refs also supported)
-    const containerRef: { current: HTMLDivElement | null } = { current: null };
+    // Typed ref — narrowed to HTMLDivElement via createRef
+    const containerRef = createRef<HTMLDivElement>();
 
     // Fork an effect that waits for mount, then checks DOM is available
     yield* pipe(
