@@ -42,4 +42,8 @@ export {
 // Component-scoped atom utilities
 export { mountAtom, subscribeAtom } from "./atom-utils.js";
 
+// Transition service
+export type { TransitionService } from "./transition.js";
+export { Transition, TransitionLive } from "./transition.js";
+
 // Router available via "fibrae/router" import

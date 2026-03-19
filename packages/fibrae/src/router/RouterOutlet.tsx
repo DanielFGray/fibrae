@@ -46,6 +46,7 @@ import { Registry as AtomRegistry } from "@effect-atom/atom";
 import { Navigator, Redirect } from "./Navigator.js";
 import { RouterHandlers, type SubmissionState } from "./RouterBuilder.js";
 import { RouterStateAtom, type RouterState } from "./RouterState.js";
+import { Transition } from "../transition.js";
 import type { VElement } from "../shared.js";
 
 /**
@@ -113,143 +114,162 @@ export function RouterOutlet(): Stream.Stream<
       // Check if we have hydrated state from SSR
       const hydratedState = registry.get(RouterStateAtom);
 
+      // Transition service (optional) — provides isPending signal
+      const transitionOpt = yield* Effect.serviceOption(Transition);
+
       // Create a stream from the currentRoute atom (navigation trigger)
       const routeStream = AtomRegistry.toStream(registry, navigator.currentRoute);
 
       // Map route changes to rendered VElements.
+      // switchMap cancels the previous route's loader when a new route arrives,
+      // preventing stale loaders from running concurrently on rapid navigation.
       // Errors are caught per-route so the stream stays alive for navigation recovery.
       // A failing route emits a component that re-throws during render, allowing
       // ErrorBoundary to catch it while keeping this stream alive for the next route.
       return routeStream.pipe(
-        Stream.mapEffect((currentRoute) =>
-          Effect.gen(function* () {
-            // Reset action state on navigation
-            actionData = Option.none();
-            submissionState = { _tag: "Idle" };
+        Stream.flatMap(
+          (currentRoute) =>
+            Stream.fromEffect(
+              Effect.gen(function* () {
+                // Reset action state on navigation
+                actionData = Option.none();
+                submissionState = { _tag: "Idle" };
 
-            if (Option.isNone(currentRoute)) {
-              // No route matched - clear router state and render 404
-              registry.set(RouterStateAtom, Option.none());
-              return <div>404 - Not Found</div>;
-            }
+                if (Option.isNone(currentRoute)) {
+                  // No route matched - clear router state and render 404
+                  registry.set(RouterStateAtom, Option.none());
+                  return <div>404 - Not Found</div>;
+                }
 
-            const { routeName, params, searchParams, layouts } = currentRoute.value;
+                const { routeName, params, searchParams, layouts } = currentRoute.value;
 
-            // Check if we should render a layout or the route component
-            if (currentDepth < layouts.length) {
-              // Render the layout at this depth
-              const layoutName = layouts[currentDepth];
-              const layoutHandler = routerHandlers.getLayoutHandler(layoutName);
+                // Check if we should render a layout or the route component
+                if (currentDepth < layouts.length) {
+                  // Render the layout at this depth
+                  const layoutName = layouts[currentDepth];
+                  const layoutHandler = routerHandlers.getLayoutHandler(layoutName);
 
-              if (Option.isNone(layoutHandler)) {
-                return <div>No layout handler for: {layoutName}</div>;
-              }
+                  if (Option.isNone(layoutHandler)) {
+                    return <div>No layout handler for: {layoutName}</div>;
+                  }
 
-              return layoutHandler.value.component();
-            }
+                  return layoutHandler.value.component();
+                }
 
-            // At the deepest level - render the actual route component
-            const handler = routerHandlers.getHandler(routeName);
-            if (Option.isNone(handler)) {
-              registry.set(RouterStateAtom, Option.none());
-              return <div>No handler for route: {routeName}</div>;
-            }
+                // At the deepest level - render the actual route component
+                const handler = routerHandlers.getHandler(routeName);
+                if (Option.isNone(handler)) {
+                  registry.set(RouterStateAtom, Option.none());
+                  return <div>No handler for route: {routeName}</div>;
+                }
 
-            let loaderData: unknown;
-            let routerState: RouterState;
+                let loaderData: unknown;
+                let routerState: RouterState;
 
-            // Check if we should use hydrated SSR state
-            const shouldUseHydratedState =
-              isFirstRender &&
-              Option.isSome(hydratedState) &&
-              hydratedState.value.routeName === routeName;
+                // Check if we should use hydrated SSR state
+                const shouldUseHydratedState =
+                  isFirstRender &&
+                  Option.isSome(hydratedState) &&
+                  hydratedState.value.routeName === routeName;
 
-            if (shouldUseHydratedState) {
-              // Use SSR-hydrated state
-              routerState = hydratedState.value;
-              loaderData = routerState.loaderData;
-            } else {
-              // Run the loader
-              const loaderCtx = { path: params, searchParams };
-              loaderData = yield* handler.value.loader(loaderCtx);
+                if (shouldUseHydratedState) {
+                  // Use SSR-hydrated state
+                  routerState = hydratedState.value;
+                  loaderData = routerState.loaderData;
+                } else {
+                  // Signal transition pending while loader runs
+                  if (Option.isSome(transitionOpt)) {
+                    registry.set(transitionOpt.value.isPending, true);
+                  }
 
-              // Build the new router state
-              routerState = {
-                routeName,
-                params,
-                searchParams,
-                loaderData,
-              };
+                  // Run the loader
+                  const loaderCtx = { path: params, searchParams };
+                  loaderData = yield* handler.value.loader(loaderCtx);
 
-              // Update RouterStateAtom (for DI access by other components)
-              registry.set(RouterStateAtom, Option.some(routerState));
-            }
+                  // Transition complete — new content is ready
+                  if (Option.isSome(transitionOpt)) {
+                    registry.set(transitionOpt.value.isPending, false);
+                  }
 
-            // Mark first render complete
-            isFirstRender = false;
+                  // Build the new router state
+                  routerState = {
+                    routeName,
+                    params,
+                    searchParams,
+                    loaderData,
+                  };
 
-            // Build formAction — decodes payload via action schema and invokes action handler.
-            // If route has no action, formAction returns a failing Effect.
-            const formAction = (
-              payload: Record<string, unknown>,
-            ): Effect.Effect<unknown, unknown> =>
-              Option.match(handler.value.action, {
-                onNone: () =>
-                  Effect.fail({
-                    _tag: "ActionError",
-                    message: `No action defined for route: ${routeName}`,
-                  }),
-                onSome: (routeAction) =>
-                  (
-                    Schema.decodeUnknown(routeAction.schema)(payload) as Effect.Effect<
-                      unknown,
-                      unknown
-                    >
-                  ).pipe(
-                    Effect.flatMap((decoded) => routeAction.handler({ payload: decoded })),
-                    Effect.tap((result) =>
-                      Effect.sync(() => {
-                        actionData = Option.some(result);
-                        submissionState = { _tag: "Success", data: result };
+                  // Update RouterStateAtom (for DI access by other components)
+                  registry.set(RouterStateAtom, Option.some(routerState));
+                }
+
+                // Mark first render complete
+                isFirstRender = false;
+
+                // Build formAction — decodes payload via action schema and invokes action handler.
+                // If route has no action, formAction returns a failing Effect.
+                const formAction = (
+                  payload: Record<string, unknown>,
+                ): Effect.Effect<unknown, unknown> =>
+                  Option.match(handler.value.action, {
+                    onNone: () =>
+                      Effect.fail({
+                        _tag: "ActionError",
+                        message: `No action defined for route: ${routeName}`,
                       }),
-                    ),
-                    Effect.tapErrorCause((cause) =>
-                      Effect.sync(() => {
-                        submissionState = { _tag: "Failure", error: Cause.squash(cause) };
-                      }),
-                    ),
-                  ),
-              });
+                    onSome: (routeAction) =>
+                      (
+                        Schema.decodeUnknown(routeAction.schema)(payload) as Effect.Effect<
+                          unknown,
+                          unknown
+                        >
+                      ).pipe(
+                        Effect.flatMap((decoded) => routeAction.handler({ payload: decoded })),
+                        Effect.tap((result) =>
+                          Effect.sync(() => {
+                            actionData = Option.some(result);
+                            submissionState = { _tag: "Success", data: result };
+                          }),
+                        ),
+                        Effect.tapErrorCause((cause) =>
+                          Effect.sync(() => {
+                            submissionState = { _tag: "Failure", error: Cause.squash(cause) };
+                          }),
+                        ),
+                      ),
+                  });
 
-            // Render the component with both props patterns:
-            // 1. Traditional props (loaderData, path, searchParams)
-            // 2. Action context (actionData, formAction, submissionState)
-            // 3. Components can also access via RouterStateAtom/RouterStateService
-            const element = handler.value.component({
-              loaderData,
-              path: params,
-              searchParams,
-              actionData,
-              formAction,
-              submissionState,
-            });
-
-            return element;
-          }).pipe(
-            // Catch all errors: handle Redirect by navigating, bubble everything else
-            // to ErrorBoundary. Redirect is checked structurally because the loader's
-            // error type is erased to unknown at the type-erasure boundary.
-            Effect.catchAllCause((cause) => {
-              const error = Cause.squash(cause);
-              if (error instanceof Redirect) {
-                return Effect.gen(function* () {
-                  yield* navigator.go(error.to, { replace: error.replace ?? true });
-                  return (<div />) as VElement;
+                // Render the component with both props patterns:
+                // 1. Traditional props (loaderData, path, searchParams)
+                // 2. Action context (actionData, formAction, submissionState)
+                // 3. Components can also access via RouterStateAtom/RouterStateService
+                const element = handler.value.component({
+                  loaderData,
+                  path: params,
+                  searchParams,
+                  actionData,
+                  formAction,
+                  submissionState,
                 });
-              }
-              return Effect.succeed(ErrorBubble(cause));
-            }),
-          ),
+
+                return element;
+              }).pipe(
+                // Catch all errors: handle Redirect by navigating, bubble everything else
+                // to ErrorBoundary. Redirect is checked structurally because the loader's
+                // error type is erased to unknown at the type-erasure boundary.
+                Effect.catchAllCause((cause) => {
+                  const error = Cause.squash(cause);
+                  if (error instanceof Redirect) {
+                    return Effect.gen(function* () {
+                      yield* navigator.go(error.to, { replace: error.replace ?? true });
+                      return (<div />) as VElement;
+                    });
+                  }
+                  return Effect.succeed(ErrorBubble(cause));
+                }),
+              ),
+            ),
+          { switch: true },
         ),
       );
     }),

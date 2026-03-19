@@ -98,3 +98,7 @@ export {
 // Head component for setting document head elements from any component
 export type { HeadProps, HeadCollectorService } from "../head.js";
 export { Head, HeadCollector, HeadCollectorLive } from "../head.js";
+
+// Transition service for navigation-aware rendering
+export type { TransitionService } from "../transition.js";
+export { Transition, TransitionLive } from "../transition.js";

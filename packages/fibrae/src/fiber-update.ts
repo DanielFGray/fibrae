@@ -21,6 +21,7 @@ import * as Schema from "effect/Schema";
 import * as RcMap from "effect/RcMap";
 
 import { Atom, Registry as AtomRegistry, Result } from "@effect-atom/atom";
+import { Transition } from "./transition.js";
 import {
   type VElement,
   type Fiber,
@@ -255,8 +256,19 @@ export const updateFunctionComponent = (
       componentScopeService.scope,
     );
 
-    // Get threshold from nearest Suspense boundary
-    const threshold = getSuspenseThreshold(fiber);
+    // Get threshold from nearest Suspense boundary.
+    // During an active transition, bypass the threshold entirely to prevent
+    // Suspense fallback flash — old content stays visible while loading.
+    const rawThreshold = getSuspenseThreshold(fiber);
+    const inTransition = yield* Effect.serviceOption(Transition).pipe(
+      Effect.map(
+        Option.match({
+          onNone: () => false,
+          onSome: (t) => runtime.registry.get(t.isPending),
+        }),
+      ),
+    );
+    const threshold = inTransition ? 0 : rawThreshold;
 
     if (threshold > 0) {
       // Race first value vs threshold
